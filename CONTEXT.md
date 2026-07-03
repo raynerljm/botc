@@ -23,6 +23,18 @@ A character ability (flagged `setup: true`) that changes the bag's composition b
 **Stand-in**:
 The Townsfolk token placed in the bag to represent the Drunk. The player who draws it believes they are that Townsfolk; the grimoire records them as the Drunk.
 
+**Seat**:
+A player's position in the circle. Seat order defines token layout and matters mechanically (neighbour-reading abilities like Empath).
+
+**Bag draw**:
+The pass-the-device ritual: shuffled face-down tokens on screen, each player taps one, privately reveals, hides, and passes on. The digital equivalent of drawing from the cloth bag.
+
+**Night list**:
+The ordered todo list of ability entries for the current night (first night and other nights differ), derived from official night-order numbers, filtered to in-play characters, with check-off state persisted in the game document.
+
+**Acts as**:
+A marker on a player's token that they resolve another character's ability (Philosopher, Alchemist, Boffin). Inserts a night-list entry at the target character's position, attributed to that player; a first-night-only target on a later night is inserted for that night only.
+
 **Game document**:
 The single serializable JSON object holding one game's entire state, identified by a `schemaVersion`. It is the unit of persistence (localStorage) and of export.
 _Avoid_: save file, session
