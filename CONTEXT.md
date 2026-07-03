@@ -4,6 +4,13 @@ A storyteller-facing digital grimoire for running in-person Blood on the Clockto
 
 ## Language
 
+**Script**:
+The list of characters available for a given game, expressed in the official script-tool JSON format (bare character IDs and/or full homebrew character objects, with an optional `_meta` entry). The three base editions are just built-in scripts.
+_Avoid_: set, edition (except for the three official ones)
+
+**Script library**:
+The curated collection of scripts bundled with the app and versioned in the repo, shown in the script picker. Distinct from scripts uploaded at runtime on one device.
+
 **Game document**:
 The single serializable JSON object holding one game's entire state, identified by a `schemaVersion`. It is the unit of persistence (localStorage) and of export.
 _Avoid_: save file, session
