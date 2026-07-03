@@ -42,6 +42,18 @@ The three not-in-play good characters the storyteller shows the Demon on the fir
 The character a player is currently presenting themselves as, good or evil. One current claim per player; no claim history.
 _Avoid_: bluff (reserved for Demon bluffs)
 
+**Ghost vote**:
+The single vote a dead player retains for the rest of the game. Spent when used; the app tracks spent/unspent per dead player.
+
+**Nomination**:
+A living player proposing another player for execution. One made per living player per day; each player may be nominated once per day. Tracked for the current day only — no history.
+
+**On the block**:
+The player currently due for execution today: their nomination tally met the execution threshold (`ceil(living players / 2)`) and strictly beat the previous block-holder's tally. An exact tie clears the block.
+
+**Exile**:
+The Traveller equivalent of an execution. Threshold is `ceil(all players / 2)` (dead included) and ghost votes are not spent on it.
+
 **Game document**:
 The single serializable JSON object holding one game's entire state, identified by a `schemaVersion`. It is the unit of persistence (localStorage) and of export.
 _Avoid_: save file, session
