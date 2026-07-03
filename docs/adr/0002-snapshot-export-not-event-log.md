@@ -1,0 +1,3 @@
+# Game export is a snapshot document, not an event log
+
+Finished games are exported as a single versioned JSON snapshot (script, players with starting/final character and alignment, deaths, bluffs, winner, timestamps, notes). We deliberately do not record a night-by-night event log (kills, poisonings, ability uses): capturing it would require event-sourcing the whole grimoire, and the stats we care about (win rates per player/character/script) don't need it. Consequence: per-night stats (e.g. "how often do I die night 1") will never be computable for games played before an event log exists, and we accept that.
