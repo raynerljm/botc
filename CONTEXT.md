@@ -35,6 +35,13 @@ The ordered todo list of ability entries for the current night (first night and 
 **Acts as**:
 A marker on a player's token that they resolve another character's ability (Philosopher, Alchemist, Boffin). Inserts a night-list entry at the target character's position, attributed to that player; a first-night-only target on a later night is inserted for that night only.
 
+**Demon bluffs**:
+The three not-in-play good characters the storyteller shows the Demon on the first night. Exactly three slots, script-wide, not per-player.
+
+**Claim**:
+The character a player is currently presenting themselves as, good or evil. One current claim per player; no claim history.
+_Avoid_: bluff (reserved for Demon bluffs)
+
 **Game document**:
 The single serializable JSON object holding one game's entire state, identified by a `schemaVersion`. It is the unit of persistence (localStorage) and of export.
 _Avoid_: save file, session
