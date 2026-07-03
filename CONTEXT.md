@@ -11,6 +11,18 @@ _Avoid_: set, edition (except for the three official ones)
 **Script library**:
 The curated collection of scripts bundled with the app and versioned in the repo, shown in the script picker. Distinct from scripts uploaded at runtime on one device.
 
+**Bag**:
+The set of character tokens players draw from during setup — one token per player, assembled from the script's characters.
+
+**Target counts**:
+The per-team token counts the bag should contain for the chosen player count, after applying setup modifiers. Advisory, never enforced.
+
+**Setup modifier**:
+A character ability (flagged `setup: true`) that changes the bag's composition before play, e.g. Baron `[+2 Outsiders]`.
+
+**Stand-in**:
+The Townsfolk token placed in the bag to represent the Drunk. The player who draws it believes they are that Townsfolk; the grimoire records them as the Drunk.
+
 **Game document**:
 The single serializable JSON object holding one game's entire state, identified by a `schemaVersion`. It is the unit of persistence (localStorage) and of export.
 _Avoid_: save file, session
