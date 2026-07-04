@@ -18,7 +18,9 @@ From open issues labeled `ready-for-agent`, drop any that:
 
 Of the remainder, take the lowest-numbered issue whose title does not start with `[Stretch]`. Pick a `[Stretch]` issue only when no core issue remains — stretch always yields to core, regardless of number.
 
-Done when exactly one issue is chosen, or the frontier is empty — then report why (all blocked, all claimed, or backlog empty) and stop.
+If the frontier comes up empty only because every candidate is blocked or claimed — not because the backlog has no `ready-for-agent` issues at all — it isn't dead, just not ready yet. Don't stop: wait and recheck (schedule a check-in, growing the interval if it's still empty, or resume the moment an event signals a blocker closed) until something clears, then proceed to claim it as usual.
+
+Done when exactly one issue is chosen, or the backlog genuinely has no `ready-for-agent` issues at all — then report that the backlog is empty and stop.
 
 ## 2. Claim
 
@@ -42,4 +44,6 @@ Tests passing is not done. Done means build, lint, typecheck, and the full test 
 
 Run `/code-review` against `main` with the issue as the spec; act on the findings. Push and open a PR against `main` with `Closes #<n>`, describing what you built, the decisions from step 3, and how you verified.
 
-The slice isn't delivered while the PR is open: subscribe to PR activity if your harness supports it, fix CI failures, and answer review comments until the PR is merged or closed. Do not start a second issue in the same session unless asked.
+The slice isn't delivered while the PR is open: subscribe to PR activity if your harness supports it, fix CI failures, and answer review comments until the PR is merged or closed. Treat Copilot's and Cursor's automated review comments like a human reviewer's — if neither has posted yet, give them a few minutes and check again, then resolve every issue either one raises.
+
+Once CI is green and every Copilot and Cursor review issue is resolved, squash and merge the PR yourself — don't wait to be asked. If the merge is blocked by conflicts, rebase onto the latest `main`, resolve them, push, and retry the squash-merge; repeat until it lands. Do not start a second issue in the same session unless asked.
