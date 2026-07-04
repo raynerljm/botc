@@ -9,7 +9,7 @@ The backlog lives in GitHub issues, each a vertical slice with a `## Blocked by`
 1. List open issues labeled `ready-for-agent`.
 2. Discard any whose `## Blocked by` section references an issue that is still open.
 3. Discard any that is assigned, has a `claimed` label, or has an open PR referencing it.
-4. Take the lowest-numbered issue that remains.
+4. Of the remainder, take the lowest-numbered issue whose title does **not** start with `[Stretch]`. Only pick a `[Stretch]` issue when no non-stretch issue remains — stretch goals always yield to core work, regardless of issue number.
 
 Before starting work, **claim it**: add the `claimed` label and comment that you're taking it (include your session/branch name). If you stop without finishing, remove the label and comment what state you left things in.
 
