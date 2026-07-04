@@ -40,6 +40,20 @@ const RELAXED_VALIDATION_IDS = new Set(["legion", "riot", "atheist", "summoner"]
 // requires the King already be in the bag).
 const AUTO_ADD_TARGET_ID: Record<string, string> = { huntsman: "damsel" };
 
+// Expands a selection with every auto-add target whose trigger is present —
+// shared by a direct toggle and by Randomize, so a trigger ending up in the
+// bag always brings its target along regardless of how it got selected.
+function applyAutoAdds(ids: Set<string>): Set<string> {
+  let next = ids;
+  for (const [triggerId, targetId] of Object.entries(AUTO_ADD_TARGET_ID)) {
+    if (next.has(triggerId) && !next.has(targetId)) {
+      if (next === ids) next = new Set(ids);
+      next.add(targetId);
+    }
+  }
+  return next;
+}
+
 const DRUNK_ID = "drunk";
 
 const OFFICIAL_TEAMS = new Set<Team>([
@@ -207,11 +221,10 @@ export function BagBuilder({ characters }: BagBuilderProps) {
       if (next.has(character.id)) {
         next.delete(character.id);
         if (autoAddId) next.delete(autoAddId);
-      } else {
-        next.add(character.id);
-        if (autoAddId) next.add(autoAddId);
+        return next;
       }
-      return next;
+      next.add(character.id);
+      return applyAutoAdds(next);
     });
     // A modifier choice or extra-copies count only makes sense for the
     // selection it was made under — clear it so re-selecting the character
@@ -250,6 +263,9 @@ export function BagBuilder({ characters }: BagBuilderProps) {
           : adjustedCountsFor(current)[team as keyof TeamCounts];
       current = randomizeBagSelection(pool, { [team]: target }, current);
     }
+    // Randomize can pick a trigger character (e.g. Huntsman) the same as a
+    // direct toggle can — bring its auto-add target along either way.
+    current = applyAutoAdds(current);
     setSelectedIds(current);
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.

@@ -312,6 +312,27 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
       screen.getByText("Huntsman needs Damsel in the bag."),
     ).toBeInTheDocument();
   });
+
+  it("brings the Damsel along when Randomize itself picks the Huntsman", async () => {
+    // Huntsman is the only Townsfolk candidate here, so Randomize's
+    // Townsfolk fill is guaranteed to pick it deterministically.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Randomize/ }));
+
+    expect(screen.getByRole("button", { name: /^Huntsman/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.queryByText("Huntsman needs Damsel in the bag."),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("special flow: Choirboy requires the King (AC4)", () => {

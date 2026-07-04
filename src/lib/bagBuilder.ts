@@ -165,11 +165,14 @@ export function randomizeBagSelection(
 }
 
 // Extra Outsiders/Minions always come at Townsfolk's expense — the total
-// (excluding Travellers) stays equal to the player count. Neither team can
-// be driven below 0 (e.g. Godfather's default "-1 Outsider" at a player
-// count whose base Outsider target is already 0) — a negative target has
-// no in-game meaning and would otherwise flip the counter to a spurious
-// "over" state at 0 selected.
+// (excluding Travellers) stays equal to the player count. No team can be
+// driven below 0: Outsider/Minion individually (e.g. Godfather's default
+// "-1 Outsider" at a player count whose base Outsider target is already 0),
+// and Townsfolk as the remainder (multiple stacked +Outsider/+Minion
+// deltas — plausible with homebrew, or several official characters
+// selected together — could otherwise push Outsider+Minion past
+// playerCount-Demon). A negative target has no in-game meaning and would
+// otherwise flip a counter to a spurious "over" state at 0 selected.
 export function applySetupDeltas(
   playerCount: number,
   deltas: Pick<SetupModifierOption, "outsiderDelta" | "minionDelta">[],
@@ -184,6 +187,6 @@ export function applySetupDeltas(
     base.minion + deltas.reduce((sum, d) => sum + d.minionDelta, 0),
   );
   const demon = base.demon;
-  const townsfolk = playerCount - outsider - minion - demon;
+  const townsfolk = Math.max(0, playerCount - outsider - minion - demon);
   return { townsfolk, outsider, minion, demon };
 }

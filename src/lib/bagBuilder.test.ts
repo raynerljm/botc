@@ -132,6 +132,20 @@ describe("applying setup deltas to the base targets", () => {
       demon: 1,
     });
   });
+
+  it("never drives Townsfolk below 0 when stacked deltas push Outsiders+Minions past the player count", () => {
+    // 5p base is 3 Townsfolk / 0 Outsiders / 1 Minion / 1 Demon. Three
+    // stacked +2-Outsider deltas would otherwise compute Townsfolk as
+    // 5 - 6 - 1 - 1 = -3.
+    const baron = parseSetupModifier(getCharacter("baron")!.ability)!;
+    const bigDelta = baron.options[0];
+    expect(applySetupDeltas(5, [bigDelta, bigDelta, bigDelta])).toEqual({
+      townsfolk: 0,
+      outsider: 6,
+      minion: 1,
+      demon: 1,
+    });
+  });
 });
 
 describe("randomizing the remaining bag slots", () => {
