@@ -268,6 +268,35 @@ describe("special flow: Drunk stand-in (AC4)", () => {
 
     expect(standIn).toHaveDisplayValue("Choose a stand-in…");
   });
+
+  it("warns, but never blocks, when the Drunk has no stand-in picked yet (ADR 0003)", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+
+    expect(
+      screen.getByText(/Drunk needs a stand-in/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    ).not.toBeDisabled();
+
+    await user.selectOptions(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+
+    expect(
+      screen.queryByText(/Drunk needs a stand-in/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {

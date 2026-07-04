@@ -219,6 +219,13 @@ export function BagBuilder({ characters, scriptId, scriptName }: BagBuilderProps
       ? []
       : [`${character.name} needs ${parsed.requiresCharacterName} in the bag.`];
   });
+  // Without a stand-in, the Drunk's slot produces no physical token at all
+  // (buildBagTokens skips it), leaving one seat permanently unfillable.
+  if (selectedIds.has(DRUNK_ID) && !standInId) {
+    requirementWarnings.push(
+      "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
+    );
+  }
 
   function toggleCharacter(character: Character) {
     setSelectedIds((prev) => {

@@ -141,6 +141,75 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     expect(finalGame.players[1].characterId).toBe(secondDrawn.id);
   });
 
+  it("keeps every already-drawn seat's identity hidden while another seat is mid-draw", async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("baron")!,
+    ];
+    const game = makeGame({ playerCount: 3, selectedCharacters: candidates });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Keep this token" }));
+
+    // Capture whichever character seat 1 actually drew.
+    const seat1Character = candidates.find((c) =>
+      screen.queryByRole("heading", { name: c.name }),
+    )!;
+    expect(seat1Character).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Seat 1 is fully drawn and revealed by now — but seat 2 is mid-draw,
+    // holding the device, so seat 1's identity must not leak anywhere on
+    // the screen (not just inside the draw region).
+    expect(screen.queryByText(seat1Character.name)).not.toBeInTheDocument();
+  });
+
+  it("recovers gracefully if the pending token gets manually assigned to another seat first", async () => {
+    const user = userEvent.setup();
+    // A single official token so seat 2's manual-assign dropdown and seat
+    // 1's pending draw are racing over the exact same token.
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("washerwoman")!],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    expect(screen.getByText("Keep this token?")).toBeInTheDocument();
+
+    // Before confirming, the storyteller manually grabs the same (only)
+    // token for the other seat instead.
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Washerwoman",
+    );
+
+    // Confirming a token that's since vanished must not leave the dialog
+    // stuck — it falls back to choosing from whatever's left.
+    await user.click(screen.getByRole("button", { name: "Keep this token" }));
+
+    expect(screen.queryByText("Keep this token?")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Keep this token" }),
+    ).not.toBeInTheDocument();
+
+    const reloaded = loadGame()!;
+    expect(reloaded.players[0].characterId).toBeNull();
+    expect(reloaded.players[1].characterId).toBe("washerwoman");
+    expect(reloaded.bag).toHaveLength(0);
+  });
+
   it("lets the storyteller choose again before committing to a token", async () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);

@@ -41,6 +41,12 @@
   color: var(--foreground);
 }
 
+.assignedPlaceholder {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
 .assignedCharacter {
   display: flex;
   align-items: center;

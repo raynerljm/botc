@@ -77,10 +77,9 @@ export interface BuiltBagTokens {
   travellerTokens: BagToken[];
 }
 
-// Expands a bag *selection* (one entry per distinct character) into the
-// physical tokens it produces: extra copies become repeated tokens, and the
-// Drunk never gets a token of its own — its slot is filled by an extra
-// stand-in token labelled as the chosen Townsfolk instead.
+// The Drunk never gets a physical token of its own — the player believes
+// they are the stand-in Townsfolk, so that character's extra token fills
+// the Drunk's slot instead (CONTEXT.md: Stand-in).
 export function buildBagTokens({
   selectedCharacters,
   standIn,

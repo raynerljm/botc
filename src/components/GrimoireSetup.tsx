@@ -29,7 +29,7 @@ interface DrawState {
   revealedCharacterId?: string;
   // Shuffled once per seat's turn — tokens are face-down either way, but
   // this keeps faith with the physical bag-draw ritual (issue #12 AC).
-  tokenOrder: string[];
+  tokenOrder: BagToken[];
 }
 
 export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
@@ -59,13 +59,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     saveGame(next);
   }
 
+  function updatePlayer(playerId: string, patch: Partial<Player>) {
+    return game.players.map((player) =>
+      player.id === playerId ? { ...player, ...patch } : player,
+    );
+  }
+
+  // A token landing on a seat always sets the same two fields, whether it
+  // got there by draw or by manual assignment.
+  function tokenAssignmentPatch(
+    token: BagToken,
+  ): Pick<Player, "characterId" | "isDrunk"> {
+    return { characterId: token.characterId, isDrunk: token.isDrunkStandIn };
+  }
+
   function renamePlayer(playerId: string, name: string) {
-    update({
-      ...game,
-      players: game.players.map((player) =>
-        player.id === playerId ? { ...player, name } : player,
-      ),
-    });
+    update({ ...game, players: updatePlayer(playerId, { name }) });
   }
 
   function startDraw() {
@@ -73,7 +82,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     setDraw({
       seatId: nextUnassignedSeat.id,
       stage: "choosing",
-      tokenOrder: shuffleTokens(game.bag).map((t) => t.id),
+      tokenOrder: shuffleTokens(game.bag),
     });
   }
 
@@ -94,20 +103,24 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   function keepToken() {
     if (!draw?.chosenTokenId) return;
     const token = game.bag.find((t) => t.id === draw.chosenTokenId);
-    if (!token) return;
+    // The chosen token can vanish from the bag if it was manually assigned
+    // to a different seat while this one was still confirming — fall back
+    // to choosing again from what's actually left rather than leaving the
+    // confirm dialog stuck on a token that no longer exists.
+    if (!token) {
+      setDraw({
+        ...draw,
+        stage: "choosing",
+        chosenTokenId: undefined,
+        tokenOrder: shuffleTokens(game.bag),
+      });
+      return;
+    }
 
     update({
       ...game,
       bag: game.bag.filter((t) => t.id !== token.id),
-      players: game.players.map((player) =>
-        player.id === draw.seatId
-          ? {
-              ...player,
-              characterId: token.characterId,
-              isDrunk: token.isDrunkStandIn,
-            }
-          : player,
-      ),
+      players: updatePlayer(draw.seatId, tokenAssignmentPatch(token)),
     });
     setDraw({
       ...draw,
@@ -132,15 +145,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       setDraw({
         seatId: nextUnassignedSeat.id,
         stage: "choosing",
-        tokenOrder: shuffleTokens(game.bag).map((t) => t.id),
+        tokenOrder: shuffleTokens(game.bag),
       });
     } else {
       setDraw(null);
     }
   }
 
-  // Assigns any seat directly from the remaining bag, pulling from the same
-  // pool the draw flow uses — no reveal, no privacy guard, storyteller-driven.
+  // Shares the draw's own bag, so a token taken here can't also be drawn.
   function assignManually(playerId: string, tokenId: string) {
     const token = game.bag.find((t) => t.id === tokenId);
     if (!token) return;
@@ -148,15 +160,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({
       ...game,
       bag: game.bag.filter((t) => t.id !== token.id),
-      players: game.players.map((player) =>
-        player.id === playerId
-          ? {
-              ...player,
-              characterId: token.characterId,
-              isDrunk: token.isDrunkStandIn,
-            }
-          : player,
-      ),
+      players: updatePlayer(playerId, tokenAssignmentPatch(token)),
     });
     if (draw?.seatId === playerId) setDraw(null);
   }
@@ -199,12 +203,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const revealedCharacter: Character | undefined = draw?.revealedCharacterId
     ? characterById.get(draw.revealedCharacterId)
     : undefined;
-  const bagById = new Map(game.bag.map((t) => [t.id, t] as const));
-  const shuffledBag: BagToken[] = draw
-    ? draw.tokenOrder
-        .map((id) => bagById.get(id))
-        .filter((t): t is BagToken => t !== undefined)
-    : [];
   // Every seat filled — the setup screens give way to the grimoire itself.
   const setupComplete =
     game.players.length > 0 &&
@@ -232,7 +230,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 {drawingSeat.name}, tap a token to draw
               </p>
               <ul className={styles.tokenGrid}>
-                {shuffledBag.map((token, index) => (
+                {draw.tokenOrder.map((token, index) => (
                   <li key={token.id}>
                     <button
                       type="button"
@@ -362,7 +360,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                     renamePlayer(player.id, event.target.value)
                   }
                 />
-                {character && (
+                {character && draw && (
+                  // A draw session is on-screen for a *different* seat right
+                  // now, which means the device is mid pass-around — every
+                  // other seat's already-revealed identity has to stay
+                  // hidden too, not just the seat currently drawing.
+                  <p className={styles.assignedPlaceholder}>Assigned</p>
+                )}
+                {character && !draw && (
                   <div className={styles.assignedCharacter}>
                     <CharacterToken character={character} />
                     <span>{character.name}</span>
