@@ -41,6 +41,9 @@ export interface GrimoireBoardProps {
   onMoveReminder: (reminderId: string, position: PlayerPosition) => void;
   onRemoveReminder: (reminderId: string) => void;
   onRestoreReminder: (reminder: ReminderToken) => void;
+  // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
+  // when there's nothing for it to show, so no button renders.
+  onOpenSetupWalkthrough?: () => void;
 }
 
 const MIN_TOKEN_REM = 1.9;
@@ -101,6 +104,7 @@ export function GrimoireBoard({
   onMoveReminder,
   onRemoveReminder,
   onRestoreReminder,
+  onOpenSetupWalkthrough,
 }: GrimoireBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -287,6 +291,11 @@ export function GrimoireBoard({
         {!hidden && !picker && (
           <button type="button" onClick={() => setPicker({ base: null })}>
             Add reminder
+          </button>
+        )}
+        {!hidden && onOpenSetupWalkthrough && (
+          <button type="button" onClick={onOpenSetupWalkthrough}>
+            Setup walkthrough
           </button>
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 
 import type { Character } from "@/lib/characters";
 import {
@@ -12,13 +12,16 @@ import {
   type Player,
   type PlayerPosition,
   type ReminderToken,
+  type SetupWalkthroughStepStatus,
 } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
+import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireSetup.module.css";
+import { SetupWalkthrough } from "./SetupWalkthrough";
 
 export interface GrimoireSetupProps {
   game: GameDocument;
@@ -38,15 +41,28 @@ interface DrawState {
 
 export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const [game, setGame] = useState(initialGame);
+  // Mirrors `game`, updated synchronously by every update() call — lets a
+  // handler that fires more than once per click (the setup walkthrough's
+  // Confirm can add two reminders, then resolve the step) build each next
+  // state off the previous call's result instead of the `game` this render
+  // closed over, without moving the saveGame() side effect (which
+  // synchronously dispatches a DOM event) inside a setState updater, which
+  // would fire while React is still rendering (React warns and can tear).
+  const gameRef = useRef(initialGame);
   const [draw, setDraw] = useState<DrawState | null>(null);
   const [travellerFormOpen, setTravellerFormOpen] = useState(false);
   const [travellerTokenId, setTravellerTokenId] = useState("");
   const [travellerAlignment, setTravellerAlignment] =
     useState<Alignment>("good");
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
     [game.characterPool],
+  );
+  const walkthroughSteps = useMemo(
+    () => buildSetupWalkthroughSteps(game),
+    [game],
   );
 
   // Travellers (added later, task #6) don't come from this bag draw.
@@ -59,6 +75,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   );
 
   function update(next: GameDocument) {
+    gameRef.current = next;
     setGame(next);
     saveGame(next);
   }
@@ -130,13 +147,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // Builds off gameRef.current (not the `game` this render closed over)
+  // because the setup walkthrough can call onAddReminder more than once —
+  // and then onResolveStep — from a single click handler (e.g. Washerwoman's
+  // two reminders, or Confirm following either). update() refreshes
+  // gameRef.current synchronously, so each call in that chain sees what the
+  // previous one just committed instead of clobbering it.
   function addReminder(input: {
     characterId: string | null;
     label: string;
     position: PlayerPosition;
   }) {
     const reminder: ReminderToken = { id: crypto.randomUUID(), ...input };
-    update({ ...game, reminders: [...game.reminders, reminder] });
+    update({
+      ...gameRef.current,
+      reminders: [...gameRef.current.reminders, reminder],
+    });
   }
 
   function moveReminder(reminderId: string, position: PlayerPosition) {
@@ -162,6 +188,25 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // idempotent by id, so a rapid double-tap on Undo can't duplicate it.
   function restoreReminder(reminder: ReminderToken) {
     update({ ...game, reminders: withRestoredReminder(game.reminders, reminder) });
+  }
+
+  // The auto-offer is shown once (Start or Skip both count as "handled") —
+  // re-entering the walkthrough afterwards is always available from the
+  // grimoire board's own button regardless of this flag (issue #26 AC).
+  function dismissWalkthroughOffer() {
+    update({ ...game, setupWalkthroughOffered: true });
+  }
+
+  // Builds off gameRef.current for the same reason as addReminder above —
+  // this always follows one or more addReminder calls from the same click.
+  function resolveWalkthroughStep(stepId: string, status: SetupWalkthroughStepStatus) {
+    update({
+      ...gameRef.current,
+      setupWalkthroughSteps: {
+        ...gameRef.current.setupWalkthroughSteps,
+        [stepId]: status,
+      },
+    });
   }
 
   function startDraw() {
@@ -429,24 +474,68 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {setupComplete ? (
-        <div role="region" aria-label="Grimoire circle">
-          <GrimoireBoard
+        showWalkthrough ? (
+          <SetupWalkthrough
+            steps={walkthroughSteps}
+            stepStatuses={game.setupWalkthroughSteps}
             players={game.players}
-            characterById={characterById}
-            almanacUrl={game.almanacUrl}
-            reminders={game.reminders}
-            onRename={renamePlayer}
-            onMove={movePlayer}
-            onReCircle={reCircle}
-            onReorderSeat={reorderSeat}
-            onToggleDead={toggleDead}
-            onToggleGhostVote={toggleGhostVote}
+            characterPool={game.characterPool}
             onAddReminder={addReminder}
-            onMoveReminder={moveReminder}
-            onRemoveReminder={removeReminder}
-            onRestoreReminder={restoreReminder}
+            onResolveStep={resolveWalkthroughStep}
+            onClose={() => setShowWalkthrough(false)}
           />
-        </div>
+        ) : (
+          <>
+            {walkthroughSteps.length > 0 && !game.setupWalkthroughOffered && (
+              <div
+                role="region"
+                aria-label="Setup walkthrough offer"
+                className={styles.walkthroughOffer}
+              >
+                <p>
+                  {walkthroughSteps.length} setup decision
+                  {walkthroughSteps.length === 1 ? "" : "s"} to make before the
+                  first night.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissWalkthroughOffer();
+                    setShowWalkthrough(true);
+                  }}
+                >
+                  Start walkthrough
+                </button>
+                <button type="button" onClick={dismissWalkthroughOffer}>
+                  Skip
+                </button>
+              </div>
+            )}
+            <div role="region" aria-label="Grimoire circle">
+              <GrimoireBoard
+                players={game.players}
+                characterById={characterById}
+                almanacUrl={game.almanacUrl}
+                reminders={game.reminders}
+                onRename={renamePlayer}
+                onMove={movePlayer}
+                onReCircle={reCircle}
+                onReorderSeat={reorderSeat}
+                onToggleDead={toggleDead}
+                onToggleGhostVote={toggleGhostVote}
+                onAddReminder={addReminder}
+                onMoveReminder={moveReminder}
+                onRemoveReminder={removeReminder}
+                onRestoreReminder={restoreReminder}
+                onOpenSetupWalkthrough={
+                  walkthroughSteps.length > 0
+                    ? () => setShowWalkthrough(true)
+                    : undefined
+                }
+              />
+            </div>
+          </>
+        )
       ) : (
         !screenObscured && (
           <ul className={styles.seats} aria-label="Seats">

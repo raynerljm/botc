@@ -631,3 +631,188 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders).toHaveLength(1);
   });
 });
+
+describe("post-draw setup walkthrough (issue #26)", () => {
+  async function completedFortuneTellerBoard(user: ReturnType<typeof userEvent.setup>) {
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [
+        getCharacter("fortuneteller")!,
+        getCharacter("imp")!,
+        getCharacter("chef")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Fortune Teller",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 3 manually"),
+      "Chef",
+    );
+  }
+
+  it("offers the walkthrough automatically once a decision is needed", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+
+    expect(
+      screen.getByRole("region", { name: "Setup walkthrough offer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Grimoire circle" }),
+    ).toBeInTheDocument();
+  });
+
+  it("never offers the walkthrough when no in-play character needs one", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("imp")!, getCharacter("chef")!],
+    });
+    render(<GrimoireSetup game={game} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Imp",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Chef",
+    );
+
+    expect(
+      screen.queryByRole("region", { name: "Setup walkthrough offer" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("declining the offer is one tap and doesn't show it again", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+
+    await user.click(screen.getByRole("button", { name: /skip/i }));
+
+    expect(
+      screen.queryByRole("region", { name: "Setup walkthrough offer" }),
+    ).not.toBeInTheDocument();
+    expect((loadGame() as GameDocument).setupWalkthroughOffered).toBe(true);
+  });
+
+  it("starting the walkthrough replaces the grimoire view with it", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Setup walkthrough" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Grimoire circle" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resolving the Fortune Teller step places the red herring reminder and persists progress", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", {
+      name: /fortune teller/i,
+    });
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toContainEqual(
+      expect.objectContaining({ characterId: "fortuneteller", label: "Red herring" }),
+    );
+    const fortuneTellerPlayer = reloaded.players.find(
+      (p) => p.characterId === "fortuneteller",
+    )!;
+    expect(reloaded.setupWalkthroughSteps[fortuneTellerPlayer.id]).toBe("answered");
+  });
+
+  it("reopens from the grimoire board, still showing a resolved step", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", { name: /fortune teller/i });
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+    await user.click(within(dialog).getByRole("button", { name: /close/i }));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /setup walkthrough/i }),
+    );
+
+    const reopened = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const reopenedStep = within(reopened).getByRole("group", {
+      name: /fortune teller/i,
+    });
+    expect(within(reopenedStep).getByText(/answered/i)).toBeInTheDocument();
+  });
+
+  it("persists both reminders from a characterAndTwoPlayers step in one Confirm (code review: stale-closure clobber)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        getCharacter("chef")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 3 manually"),
+      "Chef",
+    );
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", { name: /washerwoman/i });
+    await user.selectOptions(within(step).getByLabelText("Character"), "Chef");
+    await user.selectOptions(
+      within(step).getByLabelText(/shown as townsfolk/i),
+      "Player 2",
+    );
+    await user.selectOptions(
+      within(step).getByLabelText(/shown as wrong/i),
+      "Player 3",
+    );
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toHaveLength(2);
+    expect(reloaded.reminders).toContainEqual(
+      expect.objectContaining({ characterId: "washerwoman", label: "Townsfolk" }),
+    );
+    expect(reloaded.reminders).toContainEqual(
+      expect.objectContaining({ characterId: "washerwoman", label: "Wrong" }),
+    );
+    const washerwomanPlayer = reloaded.players.find(
+      (p) => p.characterId === "washerwoman",
+    )!;
+    expect(reloaded.setupWalkthroughSteps[washerwomanPlayer.id]).toBe("answered");
+  });
+});

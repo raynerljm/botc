@@ -1,10 +1,11 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-// Bumped for issue #14: GameDocument gained the required `reminders` field
-// — a document saved under the old shape must be rejected by gameStorage's
-// version check rather than loaded with it silently undefined.
-export const GAME_SCHEMA_VERSION = 3;
+// Bumped for issue #26: GameDocument gained the required
+// `setupWalkthroughOffered`/`setupWalkthroughSteps` fields — a document
+// saved under the old shape must be rejected by gameStorage's version check
+// rather than loaded with them silently undefined.
+export const GAME_SCHEMA_VERSION = 4;
 
 export type Alignment = "good" | "evil";
 
@@ -44,6 +45,14 @@ export interface ReminderToken {
   position: PlayerPosition;
 }
 
+// Progress bookkeeping for the post-draw setup walkthrough (issue #26). The
+// decisions themselves (red herring, grandchild, twin, ...) live only as
+// ordinary ReminderTokens — this is just which steps the storyteller has
+// already resolved, keyed by the holding player's id (stable across
+// re-renders since each step is derived fresh from players/characterPool
+// every time). Absence of a key means "not yet visited."
+export type SetupWalkthroughStepStatus = "answered" | "skipped";
+
 export interface Player {
   id: string;
   seat: number;
@@ -74,6 +83,13 @@ export interface GameDocument {
   // this app digitizes; reminder tokens are the physical ones storytellers
   // park next to players, but nothing here ties a reminder to a player id).
   reminders: ReminderToken[];
+  // Whether the auto-offer to start the setup walkthrough has already been
+  // shown & resolved once (Start or Decline) — prevents it from popping up
+  // again on every visit to an already-set-up game (issue #26 AC: "declining
+  // it is one tap"). Re-entering the walkthrough later is always available
+  // regardless of this flag.
+  setupWalkthroughOffered: boolean;
+  setupWalkthroughSteps: Record<string, SetupWalkthroughStepStatus>;
   // Undrawn/unassigned tokens, kept separate so a Traveller added later
   // never competes with the official-team draw pool (CONTEXT.md: Bag).
   bag: BagToken[];
@@ -274,6 +290,8 @@ export function createGame({
     scriptName,
     players,
     reminders: [],
+    setupWalkthroughOffered: false,
+    setupWalkthroughSteps: {},
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,
