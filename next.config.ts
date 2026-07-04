@@ -8,6 +8,9 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const nextConfig: NextConfig = {
   output: "export",
   basePath,
+  // Directory-style URLs (scripts/tb/index.html) load correctly on any
+  // static host without extensionless-path rewrite rules.
+  trailingSlash: true,
   images: {
     // Static export has no image optimization server.
     unoptimized: true,
