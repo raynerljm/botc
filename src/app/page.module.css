@@ -77,3 +77,15 @@
     justify-content: center;
   }
 }
+
+.librarySection {
+  margin-top: 2.5rem;
+}
+
+.sectionHeading {
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
