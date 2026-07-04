@@ -12,6 +12,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     seat: 1,
     name: "Alice",
     characterId: null,
+    startingCharacterId: null,
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,

@@ -455,6 +455,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       dead: false,
       ghostVoteSpent: false,
       position: null,
+      claim: null,
     };
 
     update({

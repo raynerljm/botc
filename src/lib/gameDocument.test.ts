@@ -30,6 +30,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     dead: false,
     ghostVoteSpent: false,
     position: null,
+    claim: null,
     ...overrides,
   };
 }
