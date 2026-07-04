@@ -93,6 +93,17 @@ describe("generic setup-modifier parsing", () => {
       isFreeform: true,
     });
   });
+
+  it("displays a signed-zero delta as '0', not '-0' (Hermit: -0 or -1 Outsider)", () => {
+    expect(parseSetupModifier(getCharacter("hermit")!.ability)).toEqual({
+      bracketText: "-0 or -1 Outsider",
+      options: [
+        { label: "0 Outsiders", outsiderDelta: 0, minionDelta: 0 },
+        { label: "-1 Outsider", outsiderDelta: -1, minionDelta: 0 },
+      ],
+      isFreeform: false,
+    });
+  });
 });
 
 describe("applying setup deltas to the base targets", () => {
@@ -110,6 +121,16 @@ describe("applying setup deltas to the base targets", () => {
 
   it("applies no adjustment when no deltas are given", () => {
     expect(applySetupDeltas(8, [])).toEqual(officialTargetCounts(8));
+  });
+
+  it("never drives a team's target below 0 (Godfather's default -1 Outsider at 5p, whose base is already 0)", () => {
+    const godfather = parseSetupModifier(getCharacter("godfather")!.ability)!;
+    expect(applySetupDeltas(5, [godfather.options[0]])).toEqual({
+      townsfolk: 3,
+      outsider: 0,
+      minion: 1,
+      demon: 1,
+    });
   });
 });
 

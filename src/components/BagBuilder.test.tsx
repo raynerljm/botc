@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -47,6 +47,30 @@ describe("player count and official target counts", () => {
     await user.type(travellerCountInput, "2");
 
     expect(screen.getByText("Travellers 0/2")).toBeInTheDocument();
+  });
+
+  it("doesn't crash on a fractional player count — it rounds instead", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "8.5");
+
+    // Rounds to 9p (5 Townsfolk / 2 Outsiders / 1 Minion / 1 Demon) instead
+    // of throwing on a player count the distribution table doesn't have.
+    expect(screen.getByText("Townsfolk 0/5")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 0/2")).toBeInTheDocument();
+  });
+
+  it("lets the player count field go blank while editing instead of snapping to 0", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+
+    expect(playerCountInput).toHaveValue(null);
   });
 });
 
@@ -206,6 +230,38 @@ describe("special flow: Drunk stand-in (AC4)", () => {
       screen.queryByLabelText(/Pick the Drunk's stand-in/),
     ).not.toBeInTheDocument();
   });
+
+  it("only offers this script's own Townsfolk as stand-ins, not the whole dataset", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+
+    const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
+    expect(
+      within(standIn).getByRole("option", { name: "Washerwoman" }),
+    ).toBeInTheDocument();
+    // Professor is an official Townsfolk, but not part of this script.
+    expect(
+      within(standIn).queryByRole("option", { name: "Professor" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clears the chosen stand-in once that character is separately selected into the bag", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
+    await user.selectOptions(standIn, "Washerwoman");
+    expect(standIn).toHaveDisplayValue("Washerwoman");
+
+    // Washerwoman is now claimed as the stand-in; selecting her for real
+    // (a plain, unrestricted action) should give up that stand-in slot.
+    await user.click(screen.getByRole("button", { name: /^Washerwoman/ }));
+
+    expect(standIn).toHaveDisplayValue("Choose a stand-in…");
+  });
 });
 
 describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
@@ -221,6 +277,40 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
 
     const damsel = screen.getByRole("button", { name: /^Damsel/ });
     expect(damsel).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("removes the auto-added Damsel when the Huntsman is deselected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman")} />);
+
+    const huntsman = screen.getByRole("button", { name: /^Huntsman/ });
+    await user.click(huntsman);
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(huntsman);
+
+    expect(
+      screen.queryByRole("button", { name: /^Damsel/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("warns again if the auto-added Damsel is manually deselected while the Huntsman stays selected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    expect(
+      screen.queryByText("Huntsman needs Damsel in the bag."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+
+    expect(
+      screen.getByText("Huntsman needs Damsel in the bag."),
+    ).toBeInTheDocument();
   });
 });
 
@@ -277,6 +367,20 @@ describe("special flow: Legion/Riot/Atheist/Summoner relax validation (AC4)", ()
     const townsfolkCounter = screen.getByText(/^Townsfolk \d+\/\d+$/);
     expect(townsfolkCounter).not.toHaveAttribute("data-state");
   });
+
+  it("also relaxes validation for a freeform setup character not on the hardcoded list (Xaan)", async () => {
+    // Xaan's "[X Outsiders]" bracket can't resolve to a fixed delta, the
+    // same shape as Legion/Atheist/Summoner's brackets — it should relax
+    // validation for the same reason, without needing its id hardcoded too.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("xaan", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Xaan/ }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(/On night X/);
+    const townsfolkCounter = screen.getByText(/^Townsfolk \d+\/\d+$/);
+    expect(townsfolkCounter).not.toHaveAttribute("data-state");
+  });
 });
 
 describe("active jinxes among selected characters (AC5)", () => {
@@ -330,9 +434,33 @@ describe("randomize fills remaining slots to the adjusted targets (AC7)", () => 
       "aria-pressed",
       "true",
     );
-    // Default 5p targets: 3 Townsfolk / 0 Outsiders / 1 Minion / 1 Demon.
-    expect(screen.getByText("Townsfolk 3/3")).toBeInTheDocument();
-    expect(screen.getByText("Outsiders 0/0")).toBeInTheDocument();
+    // Whichever Minion Randomize happens to pick could itself be a setup
+    // modifier (TB's Baron carries "+2 Outsiders"), which legitimately
+    // shifts the Outsider/Townsfolk targets — so this asserts the actual
+    // guarantee (every official team reaches its own target) rather than
+    // hardcoding the un-adjusted 5p numbers, which only Baron-free runs
+    // would satisfy.
+    for (const label of ["Townsfolk", "Outsiders", "Minions", "Demons"]) {
+      const counter = screen.getByText(new RegExp(`^${label} \\d+/\\d+$`));
+      expect(counter).toHaveAttribute("data-state", "met");
+    }
+  });
+
+  it("still reaches every target when the random fill picks a setup-modifier character", async () => {
+    // Force Baron ("+2 Outsiders") into the bag before randomizing, so this
+    // run deterministically exercises the case the test above only hits
+    // sometimes: a shrunk Townsfolk target and a grown Outsider target.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} />);
+
+    await user.click(screen.getByRole("button", { name: /^Baron/ }));
+    await user.click(screen.getByRole("button", { name: /^Randomize/ }));
+
+    // 5p base is 3 Townsfolk/0 Outsiders/1 Minion/1 Demon; Baron's
+    // +2 Outsiders comes out of Townsfolk, so the adjusted targets are
+    // 1 Townsfolk / 2 Outsiders / 1 Minion / 1 Demon.
+    expect(screen.getByText("Townsfolk 1/1")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 2/2")).toBeInTheDocument();
     expect(screen.getByText("Minions 1/1")).toBeInTheDocument();
     expect(screen.getByText("Demons 1/1")).toBeInTheDocument();
   });

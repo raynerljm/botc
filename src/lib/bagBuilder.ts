@@ -112,9 +112,13 @@ export function parseSetupModifier(ability: string): ParsedSetupModifier | null 
       (d): d is string => d !== undefined,
     );
     const options = deltas.map((delta) => {
-      const n = Number(delta);
+      // Number("-0") is -0: normalize to plain 0 so neither the displayed
+      // label nor the stored delta ever carries a spurious sign (Hermit's
+      // "[-0 or -1 Outsider]" would otherwise show and store "-0 Outsiders").
+      const n = Number(delta) === 0 ? 0 : Number(delta);
+      const displayDelta = n === 0 ? "0" : delta;
       return {
-        label: `${delta} ${pluralizedTeamLabel(team, n)}`,
+        label: `${displayDelta} ${pluralizedTeamLabel(team, n)}`,
         outsiderDelta: team === "outsider" ? n : 0,
         minionDelta: team === "minion" ? n : 0,
       };
@@ -161,16 +165,24 @@ export function randomizeBagSelection(
 }
 
 // Extra Outsiders/Minions always come at Townsfolk's expense — the total
-// (excluding Travellers) stays equal to the player count.
+// (excluding Travellers) stays equal to the player count. Neither team can
+// be driven below 0 (e.g. Godfather's default "-1 Outsider" at a player
+// count whose base Outsider target is already 0) — a negative target has
+// no in-game meaning and would otherwise flip the counter to a spurious
+// "over" state at 0 selected.
 export function applySetupDeltas(
   playerCount: number,
   deltas: Pick<SetupModifierOption, "outsiderDelta" | "minionDelta">[],
 ): TeamCounts {
   const base = officialTargetCounts(playerCount);
-  const outsider =
-    base.outsider + deltas.reduce((sum, d) => sum + d.outsiderDelta, 0);
-  const minion =
-    base.minion + deltas.reduce((sum, d) => sum + d.minionDelta, 0);
+  const outsider = Math.max(
+    0,
+    base.outsider + deltas.reduce((sum, d) => sum + d.outsiderDelta, 0),
+  );
+  const minion = Math.max(
+    0,
+    base.minion + deltas.reduce((sum, d) => sum + d.minionDelta, 0),
+  );
   const demon = base.demon;
   const townsfolk = playerCount - outsider - minion - demon;
   return { townsfolk, outsider, minion, demon };
