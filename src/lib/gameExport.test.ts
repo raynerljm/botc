@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "./characters";
 import { createGame, type GameDocument, type Player } from "./gameDocument";
 import {
   buildGameSnapshot,
+  downloadGameSnapshot,
   gameSnapshotFilename,
   serializeGameSnapshot,
 } from "./gameExport";
@@ -172,5 +173,37 @@ describe("gameSnapshotFilename", () => {
         makeGame({ endedAt: "2026-07-05T10:00:00.000Z" }),
       ),
     ).toBe("botc-trouble-brewing-2026-07-05.json");
+  });
+});
+
+describe("downloadGameSnapshot", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("clicks a temporary anchor and defers revoking the object URL", () => {
+    const createObjectURL = vi.fn(() => "blob:fake-url");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    vi.useFakeTimers();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    downloadGameSnapshot(makeGame());
+
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    // The anchor is removed from the DOM right away…
+    expect(document.querySelector("a[download]")).toBeNull();
+    // …but the object URL isn't revoked in the same tick (Safari can cancel
+    // the download if it is).
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+
+    vi.runAllTimers();
+
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:fake-url");
   });
 });

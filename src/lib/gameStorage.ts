@@ -5,6 +5,10 @@ import { GAME_SCHEMA_VERSION, type GameDocument } from "./gameDocument";
 // independently serializable document (ADR 0001); the wrapper just lets more
 // than one coexist on a device (issue #21: the games list).
 const STORAGE_KEY = "botc:games";
+// Pre-#21 key: a single game document, with none of `id`/`winner`/`endedAt`/
+// `notes` (all added by this slice). Migrated into the new store below so an
+// in-progress game from before the games list doesn't silently vanish.
+const LEGACY_STORAGE_KEY = "botc:game";
 const CHANGE_EVENT = "botc:game-changed";
 
 interface GamesStore {
@@ -37,8 +41,38 @@ function parseStore(raw: string | null): GamesStore {
   }
 }
 
+// Runs once per device: if the new store has never been written but a
+// pre-#21 single-game document exists, promote it into the new shape (as the
+// sole, active game) and remove the old key. A no-op on every later read.
+function migrateLegacyGame(): void {
+  if (window.localStorage.getItem(STORAGE_KEY) !== null) return;
+  const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!legacyRaw) return;
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+
+  try {
+    const legacy = JSON.parse(legacyRaw) as Partial<GameDocument> | null;
+    if (!legacy || legacy.schemaVersion !== GAME_SCHEMA_VERSION) return;
+
+    const game: GameDocument = {
+      ...legacy,
+      id: legacy.id ?? crypto.randomUUID(),
+      winner: legacy.winner ?? null,
+      endedAt: legacy.endedAt ?? null,
+      notes: legacy.notes ?? "",
+    } as GameDocument;
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ activeId: game.id, games: [game] }),
+    );
+  } catch {
+    // Malformed legacy data — nothing usable to migrate.
+  }
+}
+
 function readStore(): GamesStore {
   if (!hasStorage()) return EMPTY_STORE;
+  migrateLegacyGame();
   return parseStore(window.localStorage.getItem(STORAGE_KEY));
 }
 
@@ -86,6 +120,7 @@ export function deleteGame(id: string): void {
 export function clearGames(): void {
   if (!hasStorage()) return;
   window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(LEGACY_STORAGE_KEY);
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
@@ -97,6 +132,7 @@ let cachedStore: GamesStore = EMPTY_STORE;
 
 function currentStore(): GamesStore {
   if (!hasStorage()) return cachedStore;
+  migrateLegacyGame();
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (raw === cachedRaw) return cachedStore;
   cachedRaw = raw;

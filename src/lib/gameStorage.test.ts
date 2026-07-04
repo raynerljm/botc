@@ -122,6 +122,82 @@ describe("games list", () => {
   });
 });
 
+describe("legacy migration (pre-#21 single-game key)", () => {
+  // Pre-#21 shape: no `id`/`winner`/`endedAt`/`notes` — those were added by
+  // this slice, so a genuinely old save has none of them.
+  function legacyDocument(overrides: Record<string, unknown> = {}) {
+    const full = makeGame("Legacy Game") as Record<string, unknown>;
+    const legacy = Object.fromEntries(
+      Object.entries(full).filter(
+        ([key]) => !["id", "winner", "endedAt", "notes"].includes(key),
+      ),
+    );
+    return { ...legacy, ...overrides };
+  }
+
+  it("promotes an existing botc:game document into the games list as the active game", () => {
+    window.localStorage.setItem(
+      "botc:game",
+      JSON.stringify(legacyDocument()),
+    );
+
+    const game = loadGame();
+    expect(game).not.toBeNull();
+    expect(game?.scriptName).toBe("Legacy Game");
+    expect(listGames()).toHaveLength(1);
+  });
+
+  it("backfills winner/endedAt/notes defaults and mints an id", () => {
+    window.localStorage.setItem(
+      "botc:game",
+      JSON.stringify(legacyDocument()),
+    );
+
+    const game = loadGame()!;
+    expect(game.id).toBeTruthy();
+    expect(game.winner).toBeNull();
+    expect(game.endedAt).toBeNull();
+    expect(game.notes).toBe("");
+  });
+
+  it("removes the legacy key once migrated", () => {
+    window.localStorage.setItem(
+      "botc:game",
+      JSON.stringify(legacyDocument()),
+    );
+
+    loadGame();
+
+    expect(window.localStorage.getItem("botc:game")).toBeNull();
+  });
+
+  it("does nothing when there's no legacy key", () => {
+    expect(loadGame()).toBeNull();
+    expect(listGames()).toHaveLength(0);
+  });
+
+  it("ignores legacy data from a different schema version", () => {
+    window.localStorage.setItem(
+      "botc:game",
+      JSON.stringify(legacyDocument({ schemaVersion: 999 })),
+    );
+
+    expect(loadGame()).toBeNull();
+  });
+
+  it("never overwrites an already-migrated (or freshly saved) games store", () => {
+    const current = makeGame("Current Game");
+    saveGame(current);
+    window.localStorage.setItem(
+      "botc:game",
+      JSON.stringify(legacyDocument()),
+    );
+
+    expect(loadGame()?.scriptName).toBe("Current Game");
+    expect(listGames()).toHaveLength(1);
+  });
+});
+
 describe("snapshots (for useSyncExternalStore)", () => {
   it("reflects the active game and the full list in their snapshots", () => {
     const game = makeGame();

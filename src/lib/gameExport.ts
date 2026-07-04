@@ -123,6 +123,11 @@ export function downloadGameSnapshot(game: GameDocument): void {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = gameSnapshotFilename(game);
+  // Some browsers (notably Safari) need the anchor in the DOM to honor the
+  // download, and can cancel it if the object URL is revoked synchronously —
+  // so remove the anchor and defer the revoke past this tick instead.
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
