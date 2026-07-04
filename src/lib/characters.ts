@@ -91,7 +91,10 @@ export function groupByTeam(characters: Character[]): TeamGroup[] {
 }
 
 export function wikiUrl(character: Character): string {
-  return `https://wiki.bloodontheclocktower.com/${encodeURI(
+  // encodeURIComponent leaves apostrophes unescaped (they're in its
+  // unreserved set), so "Devil's Advocate" needs an explicit replace too.
+  const encoded = encodeURIComponent(
     character.name.replace(/ /g, "_"),
-  )}`;
+  ).replace(/'/g, "%27");
+  return `https://wiki.bloodontheclocktower.com/${encoded}`;
 }

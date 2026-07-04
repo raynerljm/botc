@@ -64,7 +64,7 @@ export default async function CharacterSheetPage({ params }: Props) {
                     <a
                       href={wikiUrl(character)}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className={styles.wikiLink}
                     >
                       {character.name} on the wiki ↗

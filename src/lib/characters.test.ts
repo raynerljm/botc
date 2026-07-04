@@ -91,4 +91,10 @@ describe("official wiki links", () => {
       "https://wiki.bloodontheclocktower.com/Fortune_Teller",
     );
   });
+
+  it("percent-encodes apostrophes so the link isn't broken", () => {
+    expect(wikiUrl(getCharacter("devilsadvocate")!)).toBe(
+      "https://wiki.bloodontheclocktower.com/Devil%27s_Advocate",
+    );
+  });
 });
