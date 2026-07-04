@@ -259,6 +259,52 @@ describe("createGame", () => {
     expect(game.almanacUrl).toBeNull();
   });
 
+  it("carries the script's night-order overrides onto the game document when provided", () => {
+    const game = createGame({
+      scriptId: "custom-script",
+      scriptName: "Custom Script",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+      firstNightOrder: ["dusk", "washerwoman", "dawn"],
+      otherNightOrder: ["dusk", "dawn"],
+    });
+
+    expect(game.firstNightOrder).toEqual(["dusk", "washerwoman", "dawn"]);
+    expect(game.otherNightOrder).toEqual(["dusk", "dawn"]);
+  });
+
+  it("defaults the night-order overrides to null when the script doesn't provide them", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.firstNightOrder).toBeNull();
+    expect(game.otherNightOrder).toBeNull();
+  });
+
+  it("starts with no night open and every night-list field empty", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.night).toBe(0);
+    expect(game.nightOpen).toBe(false);
+    expect(game.nightChecked).toEqual([]);
+    expect(game.nightUnskipped).toEqual([]);
+  });
+
   it("stamps the schema version, script, and creation time", () => {
     const game = createGame({
       scriptId: "tb",

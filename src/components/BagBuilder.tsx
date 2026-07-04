@@ -113,6 +113,8 @@ export interface BagBuilderProps {
   scriptId?: string;
   scriptName?: string;
   almanacUrl?: string;
+  firstNightOrder?: string[];
+  otherNightOrder?: string[];
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -134,6 +136,8 @@ export function BagBuilder({
   scriptId,
   scriptName,
   almanacUrl,
+  firstNightOrder,
+  otherNightOrder,
 }: BagBuilderProps) {
   const router = useRouter();
   const [playerCount, setPlayerCount] = useState<number | "">(MIN_PLAYERS);
@@ -313,6 +317,8 @@ export function BagBuilder({
       standIn: standInId ? (poolById.get(standInId) ?? null) : null,
       extraCopies,
       almanacUrl,
+      firstNightOrder,
+      otherNightOrder,
     });
     saveGame(game);
     router.push("/game");

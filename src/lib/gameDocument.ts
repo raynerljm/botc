@@ -1,11 +1,13 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-// Bumped for issue #14 (GameDocument gained the required `reminders` field)
-// and issue #15 (Player gained startingCharacterId, GameDocument gained
-// activeFabled) — a document saved under the old shape must be rejected by
-// gameStorage's version check rather than loaded with those fields silently
-// undefined.
+// Bumped for issue #14 (GameDocument gained the required `reminders` field),
+// issue #15 (Player gained startingCharacterId, GameDocument gained
+// activeFabled), and issue #16 (GameDocument gained the night-list fields:
+// night, nightOpen, nightChecked, nightUnskipped, firstNightOrder,
+// otherNightOrder) — a document saved under an older shape must be rejected
+// by gameStorage's version check rather than loaded with any of those
+// fields silently undefined.
 export const GAME_SCHEMA_VERSION = 3;
 
 export type Alignment = "good" | "evil";
@@ -98,6 +100,13 @@ export interface GameDocument {
   // Fabled currently in play (character ids), shown outside the circle —
   // they're storyteller aids, not held by any player (issue #15).
   activeFabled: string[];
+  // The script's own night-order overrides (script-tool _meta.firstNight/
+  // otherNight): ordered lists of character ids and the special tokens
+  // "dusk"/"minioninfo"/"demoninfo"/"dawn". Null when the script didn't
+  // provide one, in which case the night list falls back to the vendored
+  // dataset's per-character night positions (CONTEXT.md: Night list).
+  firstNightOrder: string[] | null;
+  otherNightOrder: string[] | null;
   createdAt: string;
   // End-game state (issue #21). Null winner / null endedAt means the game is
   // still in progress; both are set together when the storyteller declares a
@@ -105,6 +114,17 @@ export interface GameDocument {
   winner: Alignment | null;
   endedAt: string | null;
   notes: string;
+  // Nights fully completed (0 before the first night ever starts). While
+  // `nightOpen` is true, the storyteller is currently walking night
+  // `night + 1`'s checklist.
+  night: number;
+  nightOpen: boolean;
+  // Check-off/un-skip state for the currently open night only — reset to
+  // empty every time a new night starts, so a fresh night always begins with
+  // every box unchecked (issue #16 AC: "Start night" opens with boxes
+  // cleared).
+  nightChecked: string[];
+  nightUnskipped: string[];
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -237,6 +257,8 @@ export interface CreateGameInput {
   standIn: Character | null;
   extraCopies: Record<string, number>;
   almanacUrl?: string | null;
+  firstNightOrder?: string[] | null;
+  otherNightOrder?: string[] | null;
   createdAt?: string;
   newId?: () => string;
 }
@@ -249,6 +271,8 @@ export function createGame({
   standIn,
   extraCopies,
   almanacUrl = null,
+  firstNightOrder = null,
+  otherNightOrder = null,
   createdAt = new Date().toISOString(),
   newId = defaultNewId,
 }: CreateGameInput): GameDocument {
@@ -294,10 +318,16 @@ export function createGame({
     characterPool,
     almanacUrl,
     activeFabled: [],
+    firstNightOrder,
+    otherNightOrder,
     createdAt,
     winner: null,
     endedAt: null,
     notes: "",
+    night: 0,
+    nightOpen: false,
+    nightChecked: [],
+    nightUnskipped: [],
   };
 }
 
