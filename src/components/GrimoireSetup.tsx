@@ -25,6 +25,7 @@ import { saveGame } from "@/lib/gameStorage";
 import { CharacterToken } from "./CharacterToken";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
+import { NightList } from "./NightList";
 import styles from "./GrimoireSetup.module.css";
 import { ShareScriptButton } from "./ShareScriptButton";
 
@@ -648,29 +649,32 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {setupComplete ? (
-        <div role="region" aria-label="Grimoire circle">
-          <GrimoireBoard
-            players={game.players}
-            characterById={characterById}
-            almanacUrl={game.almanacUrl}
-            reminders={game.reminders}
-            activeFabled={game.activeFabled}
-            onRename={renamePlayer}
-            onMove={movePlayer}
-            onReCircle={reCircle}
-            onReorderSeat={reorderSeat}
-            onToggleDead={toggleDead}
-            onToggleGhostVote={toggleGhostVote}
-            onAddReminder={addReminder}
-            onMoveReminder={moveReminder}
-            onRemoveReminder={removeReminder}
-            onRestoreReminder={restoreReminder}
-            onSwapCharacter={swapCharacter}
-            onRemovePlayer={removePlayer}
-            onRevealDrunk={revealDrunk}
-            onAddFabled={addFabled}
-            onRemoveFabled={removeFabled}
-          />
+        <div className={styles.circleLayout}>
+          <div role="region" aria-label="Grimoire circle">
+            <GrimoireBoard
+              players={game.players}
+              characterById={characterById}
+              almanacUrl={game.almanacUrl}
+              reminders={game.reminders}
+              activeFabled={game.activeFabled}
+              onRename={renamePlayer}
+              onMove={movePlayer}
+              onReCircle={reCircle}
+              onReorderSeat={reorderSeat}
+              onToggleDead={toggleDead}
+              onToggleGhostVote={toggleGhostVote}
+              onAddReminder={addReminder}
+              onMoveReminder={moveReminder}
+              onRemoveReminder={removeReminder}
+              onRestoreReminder={restoreReminder}
+              onSwapCharacter={swapCharacter}
+              onRemovePlayer={removePlayer}
+              onRevealDrunk={revealDrunk}
+              onAddFabled={addFabled}
+              onRemoveFabled={removeFabled}
+            />
+          </div>
+          <NightList game={game} characterById={characterById} onChange={update} />
         </div>
       ) : (
         !screenObscured && (
