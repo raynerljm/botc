@@ -22,6 +22,18 @@ export interface ScriptMeta {
   otherNight?: string[];
 }
 
+// meta.almanac comes from user-provided script JSON (upload/paste), so any
+// consumer rendering it as a link href must check this first — otherwise a
+// javascript: URL could be persisted and executed on click.
+export function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export interface ActiveJinx {
   characterId: string;
   targetId: string;

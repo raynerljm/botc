@@ -8,6 +8,7 @@ import {
   type Player,
   type PlayerPosition,
 } from "@/lib/gameDocument";
+import { isHttpUrl } from "@/lib/scriptParser";
 
 import { CharacterToken } from "./CharacterToken";
 import styles from "./GrimoireBoard.module.css";
@@ -52,6 +53,8 @@ interface DragState {
   startX: number;
   startY: number;
   dragged: boolean;
+  boardRect: DOMRect;
+  lastPosition: PlayerPosition;
 }
 
 export function GrimoireBoard({
@@ -69,6 +72,15 @@ export function GrimoireBoard({
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
+  // The dragged token's position while a gesture is in progress — updated
+  // every pointermove for smooth visual feedback, but never persisted until
+  // the drag ends (see handlePointerUp). Persisting per pointermove would
+  // mean dozens of full-document localStorage writes a second on a real
+  // touch drag, which is the opposite of "must feel good on an iPad."
+  const [liveDrag, setLiveDrag] = useState<{
+    playerId: string;
+    position: PlayerPosition;
+  } | null>(null);
 
   const sorted = useMemo(
     () => [...players].sort((a, b) => a.seat - b.seat),
@@ -81,38 +93,63 @@ export function GrimoireBoard({
     event: ReactPointerEvent<HTMLElement>,
     playerId: string,
   ) {
+    const board = boardRef.current;
+    if (!board) return;
+    // A second pointer touching a different token mid-drag must not clobber
+    // the gesture already in progress — its own pointerup/pointermove would
+    // then fail the pointerId check below and the first drag would never
+    // resolve.
+    if (dragRef.current && dragRef.current.playerId !== playerId) return;
     dragRef.current = {
       playerId,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       dragged: false,
+      // Captured once per gesture — the board doesn't reflow mid-drag, so
+      // re-querying layout on every pointermove is wasted work.
+      boardRect: board.getBoundingClientRect(),
+      lastPosition: { x: 0, y: 0 },
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
     const drag = dragRef.current;
-    const board = boardRef.current;
-    if (!drag || !board || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== event.pointerId) return;
 
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
     if (!drag.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     drag.dragged = true;
 
-    const rect = board.getBoundingClientRect();
-    onMove(drag.playerId, {
-      x: clampPct(((event.clientX - rect.left) / rect.width) * 100),
-      y: clampPct(((event.clientY - rect.top) / rect.height) * 100),
-    });
+    const { boardRect } = drag;
+    const position = {
+      x: clampPct(((event.clientX - boardRect.left) / boardRect.width) * 100),
+      y: clampPct(((event.clientY - boardRect.top) / boardRect.height) * 100),
+    };
+    drag.lastPosition = position;
+    // Local state only, for smooth visual feedback — the game document is
+    // written once, in handlePointerUp, not on every frame of the drag.
+    setLiveDrag({ playerId: drag.playerId, position });
   }
 
   function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (drag.dragged) justDraggedRef.current = drag.playerId;
+    if (drag.dragged) {
+      justDraggedRef.current = drag.playerId;
+      onMove(drag.playerId, drag.lastPosition);
+    }
     dragRef.current = null;
+    setLiveDrag(null);
+  }
+
+  function handlePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setLiveDrag(null);
   }
 
   // <summary> toggles open on click by default — after an actual drag, that
@@ -153,8 +190,15 @@ export function GrimoireBoard({
             const character = player.characterId
               ? characterById.get(player.characterId)
               : undefined;
-            const position = player.position ?? circlePosition(index, total);
-            const official = character ? Boolean(getCharacter(character.id)) : false;
+            const position =
+              liveDrag?.playerId === player.id
+                ? liveDrag.position
+                : (player.position ?? circlePosition(index, total));
+            // Reference equality against the vendored dataset, not just an
+            // id match — a homebrew character can reuse an official id with
+            // a different name/ability, and that reskin isn't the official
+            // character the wiki link would point to.
+            const official = character ? getCharacter(character.id) === character : false;
 
             return (
               <div
@@ -170,6 +214,7 @@ export function GrimoireBoard({
                     onPointerDown={(event) => handlePointerDown(event, player.id)}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerCancel}
                     onClick={(event) => handleSummaryClick(event, player.id)}
                     // The character art is an <img>, which browsers make
                     // natively draggable — without this, the OS's own
@@ -201,9 +246,11 @@ export function GrimoireBoard({
                   </summary>
 
                   <div className={styles.menuBody}>
-                    <label className={styles.field}>
+                    <label className={styles.field} htmlFor={`token-name-${player.id}`}>
+                      <span className={styles.srOnly}>Seat {player.seat} </span>
                       Player name
                       <input
+                        id={`token-name-${player.id}`}
                         type="text"
                         value={player.name}
                         onChange={(event) => onRename(player.id, event.target.value)}
@@ -244,7 +291,7 @@ export function GrimoireBoard({
                             Official wiki page
                           </a>
                         ) : (
-                          almanacUrl && (
+                          almanacUrl && isHttpUrl(almanacUrl) && (
                             <a href={almanacUrl} target="_blank" rel="noreferrer">
                               Script almanac
                             </a>

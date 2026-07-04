@@ -1,7 +1,11 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-export const GAME_SCHEMA_VERSION = 1;
+// Bumped for issue #13: Player/GameDocument gained new required fields
+// (dead, ghostVoteSpent, position, almanacUrl) — a document saved under the
+// old shape must be rejected by gameStorage's version check rather than
+// loaded with those fields silently undefined.
+export const GAME_SCHEMA_VERSION = 2;
 
 export type Alignment = "good" | "evil";
 

@@ -210,6 +210,57 @@ describe("token menu", () => {
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
   });
+
+  it("doesn't render a javascript: almanac link", async () => {
+    const user = userEvent.setup();
+    const homebrew = {
+      ...getCharacter("washerwoman")!,
+      id: "custom-oracle",
+      name: "Custom Oracle",
+    };
+    const byId = new Map([["custom-oracle", homebrew]]);
+    render(
+      <GrimoireBoard
+        players={[makePlayer({ characterId: "custom-oracle" })]}
+        characterById={byId}
+        almanacUrl="javascript:alert(1)"
+        {...noop}
+      />,
+    );
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByText(/character detail/i));
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("links to the almanac, not the wiki, for a homebrew character reusing an official id", async () => {
+    const user = userEvent.setup();
+    // A custom script can define its own object for an id that also exists
+    // in the vendored dataset (e.g. a reskinned "imp") — it must not be
+    // mistaken for the real official character.
+    const reskinned = {
+      ...getCharacter("imp")!,
+      name: "Totally Different Demon",
+      ability: "A homebrew ability, not the real Imp's.",
+    };
+    const byId = new Map([["imp", reskinned]]);
+    render(
+      <GrimoireBoard
+        players={[makePlayer({ characterId: "imp" })]}
+        characterById={byId}
+        almanacUrl="https://example.com/almanac"
+        {...noop}
+      />,
+    );
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByText(/character detail/i));
+
+    expect(screen.getByText(reskinned.ability)).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /almanac/i });
+    expect(link).toHaveAttribute("href", "https://example.com/almanac");
+  });
 });
 
 describe("ghost votes", () => {
@@ -282,11 +333,7 @@ describe("re-circle", () => {
 });
 
 describe("drag", () => {
-  it("reports a new position once the pointer moves past the drag threshold", () => {
-    const { container, onMove } = renderBoard([makePlayer()]);
-    const summary = container.querySelector(
-      "[data-player-id='p1'] summary",
-    ) as HTMLElement;
+  function mockBoardRect(container: HTMLElement) {
     const board = container.querySelector("[data-board]") as HTMLElement;
     vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
       left: 0,
@@ -299,11 +346,57 @@ describe("drag", () => {
       y: 0,
       toJSON() {},
     });
+  }
+
+  it("moves the token visually once the pointer moves past the drag threshold, without saving yet", () => {
+    const { container, onMove } = renderBoard([makePlayer()]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
 
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
 
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 35, y: 45 });
+    expect(wrap.style.left).toBe("35%");
+    expect(wrap.style.top).toBe("45%");
+    // Persisting on every pointermove would mean dozens of full-document
+    // localStorage writes a second during a real touch drag.
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("saves the final position once, on pointerup", () => {
+    const { container, onMove } = renderBoard([makePlayer()]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 200 }));
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 50 });
+  });
+
+  it("discards the in-progress move if the gesture is cancelled", () => {
+    const { container, onMove } = renderBoard([makePlayer()]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const originalLeft = wrap.style.left;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(summary, pointerEvent("pointercancel", { pointerId: 1, clientX: 140, clientY: 180 }));
+
+    expect(onMove).not.toHaveBeenCalled();
+    expect(wrap.style.left).toBe(originalLeft);
   });
 
   it("doesn't move for tiny pointer jitter under the drag threshold", () => {
