@@ -1,6 +1,6 @@
 ---
 name: next-issue
-description: Pick up and deliver the next unblocked issue from the backlog, end to end — select, claim, implement test-first, verify, PR. Use when asked to work on, pick, or grab the next issue.
+description: Pick up and deliver the next unblocked issue from the backlog, end to end — select, claim, implement test-first, verify, PR. Use when asked to "work on the next issue", or to pick or grab the next issue.
 ---
 
 # Next Issue
