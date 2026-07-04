@@ -113,6 +113,11 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
                   type="checkbox"
                   aria-label={accessibleName}
                   checked={checkedIds.has(entry.id)}
+                  // A skipped (dead, not un-skipped) entry isn't part of
+                  // tonight's checklist — un-skip it first to act on it,
+                  // rather than letting it silently check off "done" state
+                  // for something the storyteller never actually did.
+                  disabled={entry.skipped}
                   onChange={() => toggleChecked(entry.id)}
                 />
                 <span className={styles.entryToken}>

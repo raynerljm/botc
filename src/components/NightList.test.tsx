@@ -138,6 +138,36 @@ describe("Night list: dead players", () => {
     const imp = getCharacter("imp")!;
     expect(screen.getByText(imp.name)).toBeInTheDocument();
     expect(screen.getByText(/\(skipped\)/)).toBeInTheDocument();
+    // A skipped entry can't silently check off "done" for something the
+    // storyteller never did — un-skip it first to act on it.
+    expect(
+      screen.getByRole("checkbox", { name: `${imp.name} — Seat 2` }),
+    ).toBeDisabled();
+  });
+
+  it("re-enables the checkbox once a skipped entry is un-skipped", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
+    const dead: GameDocument = {
+      ...game,
+      players: game.players.map((p) =>
+        p.characterId === "imp" ? { ...p, dead: true } : p,
+      ),
+    };
+    let latest = dead;
+    const { rerender } = renderNightList(dead, (next) => {
+      latest = next;
+    });
+
+    const imp = getCharacter("imp")!;
+    await user.click(screen.getByRole("button", { name: "Un-skip" }));
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: `${imp.name} — Seat 2` }),
+    ).toBeEnabled();
   });
 
   it("un-skips a dead player's entry on request", async () => {

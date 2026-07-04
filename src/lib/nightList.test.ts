@@ -124,8 +124,8 @@ describe("computeNightList: fixed entries", () => {
 
 describe("computeNightList: character entries and ordering", () => {
   it("orders acting characters by their dataset night position", () => {
-    // Washerwoman (32) acts before Poisoner (17)? use real dataset values —
-    // assert relative order matches the characters' own firstNight numbers.
+    // Don't hardcode an expected order — derive it from the real dataset's
+    // own firstNight numbers (lower acts first) and assert against that.
     const game = gameWith(["poisoner", "washerwoman", "imp"]);
     const chars = characterById(game);
     const entries = computeNightList({
