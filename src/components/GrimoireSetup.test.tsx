@@ -581,6 +581,16 @@ describe("end game and export (issue #21)", () => {
   });
 });
 
+describe("share the script via QR from the grimoire (issue #22)", () => {
+  it("offers to share the game's script", () => {
+    render(<GrimoireSetup game={makeGame({ playerCount: 5 })} />);
+
+    expect(
+      screen.getByRole("button", { name: /share via qr/i }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("reminder tokens (issue #14)", () => {
   async function completedBoard(user: ReturnType<typeof userEvent.setup>) {
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);

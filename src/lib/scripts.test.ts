@@ -37,6 +37,10 @@ describe("getScriptById", () => {
     expect(script?.characters.map((c) => c.id)).toContain("imp");
   });
 
+  it("carries its display name in meta.name too, for consumers that only read meta (e.g. sharing)", () => {
+    expect(getScriptById("tb")?.meta.name).toBe("Trouble Brewing");
+  });
+
   it("resolves a library script by its filename-derived id, meta and jinxes included", () => {
     const script = getScriptById("sample-homebrew");
     expect(script?.name).toBe("Sample Homebrew Script");
@@ -77,5 +81,18 @@ describe("listValidLibraryScripts: base edition id collision", () => {
     const ids = listValidLibraryScripts(dir).map((s) => s.id);
     expect(ids).not.toContain("tb");
     expect(ids).toContain("my-script");
+  });
+
+  it("carries its filename-derived display name in meta.name too, when the script's own JSON has no _meta.name", () => {
+    fs.writeFileSync(
+      path.join(dir, "no-meta-name.json"),
+      JSON.stringify(["imp"]),
+    );
+
+    const script = listValidLibraryScripts(dir).find(
+      (s) => s.id === "no-meta-name",
+    );
+    expect(script?.name).toBe("no-meta-name");
+    expect(script?.meta.name).toBe("no-meta-name");
   });
 });
