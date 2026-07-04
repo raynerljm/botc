@@ -1,29 +1,29 @@
-.main {
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 1.5rem 1.5rem 1rem;
-}
-
-.header {
+.meta {
   display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  padding: 0.5rem 0 1.5rem;
-}
-
-.back {
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   color: var(--muted);
   font-size: 0.95rem;
-  padding: 0.5rem 0.5rem 0.5rem 0;
+  margin-bottom: 1rem;
 }
 
-.back:hover {
-  color: var(--foreground);
-}
-
-.title {
-  font-size: 1.75rem;
+.almanacLink {
   color: var(--accent);
+}
+
+.almanacLink:hover {
+  text-decoration: underline;
+}
+
+.bootlegger {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 2rem;
+  white-space: pre-line;
+  line-height: 1.5;
 }
 
 .teamSection {
@@ -128,4 +128,32 @@
 
 .wikiLink:hover {
   text-decoration: underline;
+}
+
+.jinxes {
+  margin-bottom: 2rem;
+}
+
+.jinxList {
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.jinx {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.85rem;
+}
+
+.jinxNames {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.jinxReason {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
 }

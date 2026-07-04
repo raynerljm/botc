@@ -2,21 +2,23 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import CharacterSheetPage, { generateStaticParams } from "./page";
+import ScriptSheetPage, { generateStaticParams } from "./page";
 
-async function renderSheet(editionId: string) {
-  render(
-    await CharacterSheetPage({ params: Promise.resolve({ editionId }) }),
-  );
+async function renderSheet(scriptId: string) {
+  render(await ScriptSheetPage({ params: Promise.resolve({ scriptId }) }));
 }
 
-describe("character sheet", () => {
-  it("is pre-rendered for exactly the three base editions", async () => {
-    expect(await generateStaticParams()).toEqual([
-      { editionId: "tb" },
-      { editionId: "bmr" },
-      { editionId: "snv" },
-    ]);
+describe("script sheet", () => {
+  it("is pre-rendered for the three base editions and every library script", async () => {
+    const params = await generateStaticParams();
+    expect(params).toEqual(
+      expect.arrayContaining([
+        { scriptId: "tb" },
+        { scriptId: "bmr" },
+        { scriptId: "snv" },
+        { scriptId: "sample-homebrew" },
+      ]),
+    );
   });
 
   it("groups the script's characters by team in sheet order", async () => {
@@ -73,5 +75,35 @@ describe("character sheet", () => {
       "src",
       expect.stringContaining("/icons/washerwoman.webp"),
     );
+  });
+
+  it("renders a library script's meta, homebrew character, and active jinxes", async () => {
+    await renderSheet("sample-homebrew");
+
+    expect(
+      screen.getByRole("heading", { name: "Sample Homebrew Script" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("By BotC Grimoire")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Demonstrates the script library/),
+    ).toBeInTheDocument();
+
+    expect(screen.getByText("Custom Seer")).toBeInTheDocument();
+    // Homebrew characters have no official wiki page.
+    await userEvent
+      .setup()
+      .click(screen.getByText("Custom Seer", { selector: "summary *" }));
+    expect(
+      screen.queryByRole("link", { name: /Custom Seer on the wiki/i }),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole("heading", { name: "Jinxes" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Alchemist & Wraith")).toBeInTheDocument();
+  });
+
+  it("404s for an unknown script id", async () => {
+    await expect(renderSheet("does-not-exist")).rejects.toThrow();
   });
 });

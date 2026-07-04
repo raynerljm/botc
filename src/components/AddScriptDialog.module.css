@@ -1,0 +1,58 @@
+.dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.summary {
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--accent);
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.form {
+  padding: 0 1rem 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.textarea {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.6rem;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  resize: vertical;
+}
+
+.errors {
+  color: var(--team-demon);
+  font-size: 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.submit {
+  justify-self: start;
+  padding: 0.5rem 1.25rem;
+  background: var(--accent);
+  color: var(--background);
+  border-radius: 0.5rem;
+  font-weight: 500;
+}

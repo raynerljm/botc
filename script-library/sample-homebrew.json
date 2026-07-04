@@ -1,0 +1,33 @@
+[
+  {
+    "id": "_meta",
+    "name": "Sample Homebrew Script",
+    "author": "BotC Grimoire",
+    "almanac": "https://wiki.bloodontheclocktower.com/",
+    "bootlegger": "Demonstrates the script library: official characters, a homebrew character, and an active jinx (Alchemist / Wraith)."
+  },
+  "washerwoman",
+  "librarian",
+  "investigator",
+  "chef",
+  "empath",
+  "alchemist",
+  { "id": "slayer" },
+  "soldier",
+  "butler",
+  "drunk",
+  "poisoner",
+  "spy",
+  "wraith",
+  "imp",
+  {
+    "id": "custom-seer",
+    "name": "Custom Seer",
+    "team": "townsfolk",
+    "ability": "Each night, you learn a number of evil players equal to the number of times you have used this ability.",
+    "firstNight": 0,
+    "otherNight": 45,
+    "otherNightReminder": "Show the Custom Seer the number of evil players equal to their use count.",
+    "reminders": ["Used"]
+  }
+]
