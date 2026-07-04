@@ -84,7 +84,12 @@ export function buildGameSnapshot(game: GameDocument): GameSnapshot {
     schemaVersion: EXPORT_SCHEMA_VERSION,
     script: {
       name: game.scriptName,
-      characters: game.characterPool.map((c) => c.id),
+      // The full script pool, not just characterPool (in-play) — a claim or
+      // Demon bluff can reference a not-in-play character (CONTEXT.md:
+      // Script is "the list of characters available", not "in play"), and
+      // the snapshot would otherwise reference ids missing from its own
+      // script.characters list.
+      characters: game.scriptCharacters.map((c) => c.id),
     },
     playerCount: seatedPlayerCount(game),
     players,

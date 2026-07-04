@@ -82,6 +82,25 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.script.characters).toContain("baron");
   });
 
+  it("lists the full script pool, not just in-play characters, so a not-in-play claim or bluff always resolves against it", () => {
+    const game = makeGame({
+      scriptCharacters: [
+        getCharacter("imp")!,
+        getCharacter("washerwoman")!,
+        getCharacter("librarian")!,
+        getCharacter("baron")!,
+        // Not selected into this game's bag/characterPool.
+        getCharacter("chef")!,
+      ],
+      demonBluffs: ["chef", null, null],
+    });
+
+    const snapshot = buildGameSnapshot(game);
+
+    expect(snapshot.script.characters).toContain("chef");
+    expect(snapshot.demonBluffs).toContain("chef");
+  });
+
   it("records each player's starting and final character (equal until a swap slice lands)", () => {
     const snapshot = buildGameSnapshot(makeGame());
     const rayner = snapshot.players.find((p) => p.name === "Rayner")!;
