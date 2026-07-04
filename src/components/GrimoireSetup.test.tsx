@@ -774,17 +774,16 @@ describe("the first visible grimoire (issue #12)", () => {
     );
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    const wraps = circle.querySelectorAll("[data-player-id]");
-    const seat1 = (wraps[0] as HTMLElement).querySelector(
-      "details > summary",
-    ) as HTMLElement;
-    const seat2 = (wraps[1] as HTMLElement).querySelector(
-      "details > summary",
-    ) as HTMLElement;
-    expect(within(seat1).getByText("Player 1")).toBeInTheDocument();
-    expect(within(seat2).getByText("Player 2")).toBeInTheDocument();
-    expect(within(seat1).getByText("Washerwoman")).toBeInTheDocument();
-    expect(within(seat2).getByText("Imp")).toBeInTheDocument();
+    // Each token's own menu also offers every script character as both a
+    // swap-character and a claim option (including whichever character is
+    // already on-token), so text matches must skip <option> text to stay
+    // unambiguous.
+    const named = (text: string) =>
+      within(circle).getByText(text, { ignore: "option" });
+    expect(named("Player 1")).toBeInTheDocument();
+    expect(named("Player 2")).toBeInTheDocument();
+    expect(named("Washerwoman")).toBeInTheDocument();
+    expect(named("Imp")).toBeInTheDocument();
     // The setup controls (draw/manual-assign) are gone — there's nothing
     // left to assign.
     expect(

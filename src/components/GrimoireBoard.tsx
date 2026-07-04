@@ -35,6 +35,9 @@ import styles from "./GrimoireBoard.module.css";
 export interface GrimoireBoardProps {
   players: Player[];
   characterById: Map<string, Character>;
+  // The script's full character list, offered as claim options — a claim
+  // isn't limited to in-play characters (CONTEXT.md: Claim).
+  claimOptions: Character[];
   almanacUrl?: string | null;
   reminders?: ReminderToken[];
   activeFabled: string[];
@@ -57,6 +60,7 @@ export interface GrimoireBoardProps {
   onRevealDrunk: (playerId: string) => void;
   onAddFabled: (characterId: string) => void;
   onRemoveFabled: (characterId: string) => void;
+  onSetClaim: (playerId: string, characterId: string | null) => void;
 }
 
 const MIN_TOKEN_REM = 1.9;
@@ -105,6 +109,7 @@ function reminderDropPosition(base: PlayerPosition | null): PlayerPosition {
 export function GrimoireBoard({
   players,
   characterById,
+  claimOptions,
   almanacUrl,
   reminders = [],
   activeFabled,
@@ -123,7 +128,15 @@ export function GrimoireBoard({
   onRevealDrunk,
   onAddFabled,
   onRemoveFabled,
+  onSetClaim,
 }: GrimoireBoardProps) {
+  const claimById = useMemo(
+    () => new Map(claimOptions.map((c) => [c.id, c] as const)),
+    [claimOptions],
+  );
+  // Every player's menu offers the identical grouped list — computed once
+  // per board render rather than once per token.
+  const claimGroups = useMemo(() => groupByTeam(claimOptions), [claimOptions]);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
@@ -425,6 +438,11 @@ export function GrimoireBoard({
                     {player.isTraveller && (
                       <span className={styles.note}>{player.travellerAlignment}</span>
                     )}
+                    {player.claim && (
+                      <span className={styles.claimBadge}>
+                        Claims {claimById.get(player.claim)?.name ?? player.claim}
+                      </span>
+                    )}
                   </summary>
 
                   <div className={styles.menuBody}>
@@ -488,6 +506,28 @@ export function GrimoireBoard({
                         Add reminder
                       </button>
                     )}
+
+                    <label className={styles.field} htmlFor={`token-claim-${player.id}`}>
+                      Claim
+                      <select
+                        id={`token-claim-${player.id}`}
+                        value={player.claim ?? ""}
+                        onChange={(event) =>
+                          onSetClaim(player.id, event.target.value || null)
+                        }
+                      >
+                        <option value="">No claim</option>
+                        {claimGroups.map((group) => (
+                          <optgroup key={group.team} label={teamNames[group.team]}>
+                            {group.characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
 
                     <div className={styles.seatControls}>
                       <button

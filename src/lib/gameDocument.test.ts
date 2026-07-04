@@ -441,4 +441,47 @@ describe("createGame", () => {
 
     expect(game.characterPool).toContainEqual(homebrewCharacter);
   });
+
+  it("starts with three empty Demon bluff slots and no player claims", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman", "imp"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.demonBluffs).toEqual([null, null, null]);
+    expect(game.players.every((p) => p.claim === null)).toBe(true);
+  });
+
+  it("captures the script's full character list for later not-in-play lookups (e.g. Demon bluffs)", () => {
+    const scriptCharacters = characters("washerwoman", "librarian", "imp");
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman", "imp"),
+      standIn: null,
+      extraCopies: {},
+      scriptCharacters,
+    });
+
+    expect(game.scriptCharacters).toEqual(scriptCharacters);
+  });
+
+  it("falls back to the selected characters as the script pool when the full list isn't given", () => {
+    const selected = characters("washerwoman", "imp");
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: selected,
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.scriptCharacters).toEqual(selected);
+  });
 });
