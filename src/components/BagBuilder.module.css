@@ -33,7 +33,8 @@
   color: var(--foreground);
 }
 
-.randomize {
+.randomize,
+.continue {
   align-self: flex-end;
   padding: 0.6rem 1.1rem;
   background: var(--accent);

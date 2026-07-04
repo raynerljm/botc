@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import {
@@ -9,6 +10,8 @@ import {
   type Character,
   type Team,
 } from "@/lib/characters";
+import { createGame } from "@/lib/gameDocument";
+import { saveGame } from "@/lib/gameStorage";
 import { computeActiveJinxes, normalizeCharacterId } from "@/lib/scriptParser";
 import {
   MAX_PLAYERS,
@@ -107,6 +110,8 @@ function isRelaxedCharacter(
 
 export interface BagBuilderProps {
   characters: Character[];
+  scriptId?: string;
+  scriptName?: string;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -123,7 +128,8 @@ function omitKey(
   return next;
 }
 
-export function BagBuilder({ characters }: BagBuilderProps) {
+export function BagBuilder({ characters, scriptId, scriptName }: BagBuilderProps) {
+  const router = useRouter();
   const [playerCount, setPlayerCount] = useState<number | "">(MIN_PLAYERS);
   const [travellerCount, setTravellerCount] = useState<number | "">(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -272,6 +278,20 @@ export function BagBuilder({ characters }: BagBuilderProps) {
     if (standInId && current.has(standInId)) setStandInId(null);
   }
 
+  function handleContinue() {
+    if (!scriptId || !scriptName) return;
+    const game = createGame({
+      scriptId,
+      scriptName,
+      playerCount: effectivePlayerCount,
+      selectedCharacters,
+      standIn: standInId ? (poolById.get(standInId) ?? null) : null,
+      extraCopies,
+    });
+    saveGame(game);
+    router.push("/game");
+  }
+
   // The four official teams plus Travellers always get a counter row, even
   // when the script has no characters of that team — the target count
   // (from the distribution table or the traveller field) still applies.
@@ -352,6 +372,15 @@ export function BagBuilder({ characters }: BagBuilderProps) {
         >
           Randomize
         </button>
+        {scriptId && scriptName && (
+          <button
+            type="button"
+            className={styles.continue}
+            onClick={handleContinue}
+          >
+            Continue to seating →
+          </button>
+        )}
       </div>
 
       {relaxedCharacters.length > 0 && (

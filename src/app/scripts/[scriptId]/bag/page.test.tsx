@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import BagBuilderPage, { generateStaticParams } from "./page";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 async function renderBagPage(scriptId: string) {
   render(await BagBuilderPage({ params: Promise.resolve({ scriptId }) }));
