@@ -759,6 +759,18 @@ describe("swap character", () => {
     expect(options.some((o) => o.textContent === "Angel")).toBe(false);
   });
 
+  it("never offers a Traveller character — swapping to one wouldn't set isTraveller/travellerAlignment", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const options = within(
+      screen.getByLabelText(/swap character/i),
+    ).getAllByRole("option");
+
+    expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
+  });
+
   it("lists the script's own characters first within each team group", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer()]);

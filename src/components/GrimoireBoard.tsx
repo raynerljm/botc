@@ -13,6 +13,7 @@ import {
   getCharacter,
   groupByTeam,
   isOfficialCharacter,
+  SEAT_HOLDING_TEAMS,
   teamNames,
   wikiUrl,
   type Character,
@@ -134,13 +135,18 @@ export function GrimoireBoard({
     () => [...characterById.values()],
     [characterById],
   );
-  // Fabled/Loric are storyteller aids never held by a player (they get their
-  // own Fabled slot below) — a swap must not be able to hand one to a seat.
+  // Restricted the same way as the mid-game "Add character" flow: Fabled/
+  // Loric are never held by a player (they get their own Fabled slot below),
+  // and a Traveller's alignment is a separate explicit field a plain swap
+  // can't set — swapping one in here would leave isTraveller/
+  // travellerAlignment stale and the export unable to derive an alignment.
+  // Correcting a traveller's character goes through remove-and-re-add
+  // instead, which sets both properly.
   const swapOptions = useMemo(
     () =>
       groupByTeam(
-        characterPickerPool(scriptPool).filter(
-          (c) => c.team !== "fabled" && c.team !== "loric",
+        characterPickerPool(scriptPool).filter((c) =>
+          SEAT_HOLDING_TEAMS.includes(c.team),
         ),
       ),
     [scriptPool],

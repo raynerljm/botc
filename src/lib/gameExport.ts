@@ -8,8 +8,10 @@ import {
 
 // The export is its own versioned format (ADR 0002), independent of the game
 // document's schema version (ADR 0001) — a document-schema bump must not
-// silently restamp exports whose shape hasn't changed.
-export const EXPORT_SCHEMA_VERSION = 1;
+// silently restamp exports whose shape hasn't changed. Bumped to 2 for issue
+// #15's activeFabled field, an addition to the snapshot shape itself (unlike
+// claim/demonBluffs, which were already part of v1's shape as placeholders).
+export const EXPORT_SCHEMA_VERSION = 2;
 
 // The exported snapshot shape (ADR 0002: a snapshot, not an event log). Fields
 // that later slices fill in — claim and demonBluffs (#18) — are present now

@@ -101,6 +101,20 @@ export function groupByTeam(characters: Character[]): TeamGroup[] {
     .filter((group) => group.characters.length > 0);
 }
 
+// Teams a single seat can actually hold. Travellers carry their own explicit
+// alignment field rather than deriving it from a character's team, so
+// swapping a non-traveller seat to one would leave isTraveller/
+// travellerAlignment unset and the export unable to derive an alignment at
+// all; Fabled/Loric are storyteller aids never held by any player. Shared by
+// the mid-game "Add character" flow and the "Swap character" picker (issue
+// #15) so both stay in sync.
+export const SEAT_HOLDING_TEAMS: Team[] = [
+  "townsfolk",
+  "outsider",
+  "minion",
+  "demon",
+];
+
 // The "script's characters first, then everything in the dataset" picker
 // pool (issue #15: swap, mid-game add, Fabled) — a script's own characters
 // (including homebrew ones with no vendored entry) take priority so the

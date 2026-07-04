@@ -712,6 +712,43 @@ describe("mid-game token management (issue #15)", () => {
     expect(reloaded.players.find((p) => p.name === "Player 1")!.seat).toBe(1);
     expect(reloaded.players.find((p) => p.name === "Player 3")!.seat).toBe(3);
   });
+
+  async function removeMiddleSeat(extraCharacters: NonNullable<ReturnType<typeof getCharacter>>[] = []) {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+      ...extraCharacters,
+    ]);
+
+    const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
+    await user.click(within(seat2Wrap).getByText("Player 2"));
+    await user.click(
+      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
+    );
+    confirmSpy.mockRestore();
+    return user;
+  }
+
+  it("defaults the 'Add character' seat position to the true end, not the player count, after a removal left a gap", async () => {
+    const user = await removeMiddleSeat();
+
+    // The select is never touched — its default value on open must already
+    // be the true end (seat 4), not players.length + 1 (seat 3, which would
+    // collide with the existing seat-3 player).
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+
+    expect(screen.getByLabelText("Seat position")).toHaveValue("4");
+  });
+
+  it("defaults the 'Add traveller' seat position to the true end, not the player count, after a removal left a gap", async () => {
+    const user = await removeMiddleSeat([getCharacter("scapegoat")!]);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+
+    expect(screen.getByLabelText("Seat position")).toHaveValue("4");
+  });
 });
 
 describe("the first visible grimoire (issue #12)", () => {

@@ -5,8 +5,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import {
   characterPickerPool,
   getCharacter,
+  SEAT_HOLDING_TEAMS,
   type Character,
-  type Team,
 } from "@/lib/characters";
 import {
   DRUNK_ID,
@@ -34,11 +34,6 @@ export interface GrimoireSetupProps {
 
 type DrawStage = "choosing" | "confirming" | "revealed" | "hidden";
 
-// A mid-game "Add character" token is a seat someone actually holds —
-// travellers (their own alignment-choosing flow) and Fabled/Loric (not held
-// by any player) are added through their own dedicated controls instead.
-const SEAT_HOLDING_TEAMS: Team[] = ["townsfolk", "outsider", "minion", "demon"];
-
 interface DrawState {
   seatId: string;
   stage: DrawStage;
@@ -49,6 +44,14 @@ interface DrawState {
   tokenOrder: BagToken[];
 }
 
+// Seat numbers aren't necessarily contiguous — removing a player (issue #15)
+// leaves a gap — so "the end" is the highest seat number in play, not the
+// player count, everywhere that needs it (the picker below and each add
+// flow's default).
+function lastSeat(players: Player[]): number {
+  return players.reduce((max, player) => Math.max(max, player.seat), 0);
+}
+
 // The "insert before this seat, or at the end" choice offered whenever a new
 // seat joins the circle mid-game — seat order matters mechanically
 // (CONTEXT.md: Seat), so every add flow lets the storyteller place it rather
@@ -57,16 +60,12 @@ function seatPositionOptions(
   players: Player[],
 ): { seat: number; label: string }[] {
   const bySeat = [...players].sort((a, b) => a.seat - b.seat);
-  // Seat numbers aren't necessarily contiguous — removing a player (issue
-  // #15) leaves a gap — so "the end" is the highest seat number in play, not
-  // the player count.
-  const lastSeat = bySeat.at(-1)?.seat ?? 0;
   return [
     ...bySeat.map((player) => ({
       seat: player.seat,
       label: `Before ${player.name}`,
     })),
-    { seat: lastSeat + 1, label: "At the end" },
+    { seat: lastSeat(players) + 1, label: "At the end" },
   ];
 }
 
@@ -380,7 +379,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   function openTravellerForm() {
     setTravellerTokenId(game.travellerBag[0]?.id ?? "");
     setTravellerAlignment("good");
-    setTravellerSeat(game.players.length + 1);
+    setTravellerSeat(lastSeat(game.players) + 1);
     setTravellerFormOpen(true);
   }
 
@@ -417,7 +416,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   function openTokenForm() {
     setTokenCharacterId(addTokenOptions[0]?.id ?? "");
-    setTokenSeat(game.players.length + 1);
+    setTokenSeat(lastSeat(game.players) + 1);
     setTokenFormOpen(true);
   }
 

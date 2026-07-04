@@ -5,6 +5,7 @@ import { createGame, type GameDocument, type Player } from "./gameDocument";
 import {
   buildGameSnapshot,
   downloadGameSnapshot,
+  EXPORT_SCHEMA_VERSION,
   gameSnapshotFilename,
   serializeGameSnapshot,
 } from "./gameExport";
@@ -68,7 +69,7 @@ describe("buildGameSnapshot", () => {
   it("stamps schema version, script, and player count (travellers excluded)", () => {
     const snapshot = buildGameSnapshot(makeGame());
 
-    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.schemaVersion).toBe(EXPORT_SCHEMA_VERSION);
     expect(snapshot.script.name).toBe("Trouble Brewing");
     expect(snapshot.playerCount).toBe(3);
   });
