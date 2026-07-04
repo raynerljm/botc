@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { getCharacter, wikiUrl, type Character } from "@/lib/characters";
+import { isOfficialCharacter, wikiUrl, type Character } from "@/lib/characters";
 import {
   circlePosition,
   type Player,
@@ -95,11 +95,11 @@ export function GrimoireBoard({
   ) {
     const board = boardRef.current;
     if (!board) return;
-    // A second pointer touching a different token mid-drag must not clobber
-    // the gesture already in progress — its own pointerup/pointermove would
-    // then fail the pointerId check below and the first drag would never
-    // resolve.
-    if (dragRef.current && dragRef.current.playerId !== playerId) return;
+    // A second pointer touching any token (even the same one already being
+    // dragged) must not clobber the gesture in progress — its own
+    // pointerup/pointermove would then fail the pointerId check below and
+    // the first drag would never resolve.
+    if (dragRef.current) return;
     dragRef.current = {
       playerId,
       pointerId: event.pointerId,
@@ -165,14 +165,35 @@ export function GrimoireBoard({
     }
   }
 
+  // Re-circling or hiding the board while a drag is still in progress must
+  // discard that in-progress gesture — otherwise its stale local position
+  // either overrides the freshly re-circled layout, or resurfaces at an
+  // unsaved coordinate once the board is shown again.
+  function cancelActiveDrag() {
+    dragRef.current = null;
+    setLiveDrag(null);
+  }
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls}>
-        <button type="button" onClick={onReCircle}>
+        <button
+          type="button"
+          onClick={() => {
+            cancelActiveDrag();
+            onReCircle();
+          }}
+        >
           Re-circle
         </button>
         {!hidden && (
-          <button type="button" onClick={() => setHidden(true)}>
+          <button
+            type="button"
+            onClick={() => {
+              cancelActiveDrag();
+              setHidden(true);
+            }}
+          >
             Hide grimoire
           </button>
         )}
@@ -194,11 +215,7 @@ export function GrimoireBoard({
               liveDrag?.playerId === player.id
                 ? liveDrag.position
                 : (player.position ?? circlePosition(index, total));
-            // Reference equality against the vendored dataset, not just an
-            // id match — a homebrew character can reuse an official id with
-            // a different name/ability, and that reskin isn't the official
-            // character the wiki link would point to.
-            const official = character ? getCharacter(character.id) === character : false;
+            const official = character ? isOfficialCharacter(character) : false;
 
             return (
               <div

@@ -330,6 +330,38 @@ describe("re-circle", () => {
 
     expect(handlers.onReCircle).toHaveBeenCalled();
   });
+
+  it("discards an in-progress drag so it can't override the re-circled layout", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer({ position: { x: 10, y: 10 } })]);
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 400,
+      right: 400,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    expect(wrap.style.left).toBe("35%");
+
+    await user.click(screen.getByRole("button", { name: /re-circle/i }));
+    // The stale in-progress drag position must not resurface on the next
+    // pointermove for the same (now-abandoned) gesture.
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
+
+    expect(wrap.style.left).not.toBe("35%");
+  });
 });
 
 describe("drag", () => {
@@ -399,6 +431,24 @@ describe("drag", () => {
     expect(wrap.style.left).toBe(originalLeft);
   });
 
+  it("ignores a second pointer touching the same token mid-drag, so the first pointer's drag still resolves", () => {
+    const { container, onMove } = renderBoard([makePlayer()]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    // A second finger rests on the same token while pointer 1 is still down.
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 2, clientX: 105, clientY: 105 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 200 }));
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 50 });
+  });
+
   it("doesn't move for tiny pointer jitter under the drag threshold", () => {
     const { container, onMove } = renderBoard([makePlayer()]);
     const summary = container.querySelector(
@@ -444,5 +494,36 @@ describe("hide grimoire", () => {
     await user.click(screen.getByRole("button", { name: /show grimoire/i }));
     expect(board).toHaveAttribute("data-hidden", "false");
     expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("discards an in-progress drag, so the token isn't left at a stale unsaved position once re-shown", async () => {
+    const user = userEvent.setup();
+    const { container, onMove } = renderBoard([makePlayer()]);
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 400,
+      right: 400,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+
+    await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
+    await user.click(screen.getByRole("button", { name: /show grimoire/i }));
+
+    // The abandoned gesture never reached pointerup, so it must never save.
+    expect(onMove).not.toHaveBeenCalled();
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap.style.left).not.toBe("35%");
   });
 });
