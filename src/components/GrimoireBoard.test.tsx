@@ -702,3 +702,90 @@ describe("reminders (issue #14)", () => {
     expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
   });
 });
+
+describe("info tokens (issue #19)", () => {
+  it("opens the info token library from the pad", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+
+    expect(screen.getByRole("dialog", { name: "Info tokens" })).toBeInTheDocument();
+  });
+
+  it("walks picking a standard card, attaching a token, and showing it full-screen", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer({ characterId: "imp" })]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    const group = within(screen.getByRole("group", { name: "Demons" }));
+    await user.click(group.getByRole("button", { name: "Imp" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+
+    expect(screen.queryByRole("dialog", { name: "Info tokens" })).not.toBeInTheDocument();
+    const showMode = screen.getByRole("dialog", { name: "This is the Demon" });
+    expect(within(showMode).getByText("Imp")).toBeInTheDocument();
+  });
+
+  it("never leaks the board behind it — no player name or control renders while showing", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Re-circle" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to the board when the storyteller is done showing the card", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "Did you nominate today?" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Did you nominate today?" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the pad's info tokens trigger while the reminder picker is open, and vice versa", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+
+    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    expect(
+      within(controls).queryByRole("button", { name: "Info tokens" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    expect(
+      within(controls).queryByRole("button", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the info tokens trigger when the grimoire is hidden", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    expect(
+      within(controls).queryByRole("button", { name: "Info tokens" }),
+    ).not.toBeInTheDocument();
+  });
+});

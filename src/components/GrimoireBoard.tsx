@@ -18,6 +18,8 @@ import {
 import { isHttpUrl } from "@/lib/scriptParser";
 
 import { CharacterToken } from "./CharacterToken";
+import { InfoTokenLibrary } from "./InfoTokenLibrary";
+import { InfoTokenShowMode } from "./InfoTokenShowMode";
 import { ReminderChip } from "./ReminderChip";
 import { ReminderPicker } from "./ReminderPicker";
 import styles from "./GrimoireBoard.module.css";
@@ -125,6 +127,11 @@ export function GrimoireBoard({
     null,
   );
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [infoTokenLibraryOpen, setInfoTokenLibraryOpen] = useState(false);
+  const [infoTokenShowing, setInfoTokenShowing] = useState<{
+    text: string;
+    characterIds: string[];
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -256,6 +263,22 @@ export function GrimoireBoard({
     setLiveDrag(null);
   }
 
+  // Full-screen show mode replaces the board outright rather than layering
+  // on top of it — a fixed overlay alone would still leave player names and
+  // controls mounted (and tab-reachable) underneath, which is exactly the
+  // leak issue #19 rules out.
+  if (infoTokenShowing) {
+    return (
+      <InfoTokenShowMode
+        text={infoTokenShowing.text}
+        characters={infoTokenShowing.characterIds
+          .map((id) => characterById.get(id))
+          .filter((character): character is Character => character !== undefined)}
+        onClose={() => setInfoTokenShowing(null)}
+      />
+    );
+  }
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls} data-controls>
@@ -267,6 +290,7 @@ export function GrimoireBoard({
             // open time — re-circling can move that player, so the stale
             // parked position has to be discarded along with the drag.
             setPicker(null);
+            setInfoTokenLibraryOpen(false);
             onReCircle();
           }}
         >
@@ -278,15 +302,21 @@ export function GrimoireBoard({
             onClick={() => {
               cancelActiveDrag();
               setPicker(null);
+              setInfoTokenLibraryOpen(false);
               setHidden(true);
             }}
           >
             Hide grimoire
           </button>
         )}
-        {!hidden && !picker && (
+        {!hidden && !picker && !infoTokenLibraryOpen && (
           <button type="button" onClick={() => setPicker({ base: null })}>
             Add reminder
+          </button>
+        )}
+        {!hidden && !picker && !infoTokenLibraryOpen && (
+          <button type="button" onClick={() => setInfoTokenLibraryOpen(true)}>
+            Info tokens
           </button>
         )}
       </div>
@@ -297,6 +327,17 @@ export function GrimoireBoard({
           inPlayCharacterIds={inPlayCharacterIds}
           onAdd={handleAddReminder}
           onCancel={() => setPicker(null)}
+        />
+      )}
+
+      {!hidden && infoTokenLibraryOpen && (
+        <InfoTokenLibrary
+          characterById={characterById}
+          onShow={(input) => {
+            setInfoTokenShowing(input);
+            setInfoTokenLibraryOpen(false);
+          }}
+          onCancel={() => setInfoTokenLibraryOpen(false)}
         />
       )}
 
@@ -390,7 +431,7 @@ export function GrimoireBoard({
                       {player.dead ? "Mark alive" : "Mark dead"}
                     </button>
 
-                    {!picker && (
+                    {!picker && !infoTokenLibraryOpen && (
                       <button
                         type="button"
                         onClick={() => setPicker({ base: position })}
