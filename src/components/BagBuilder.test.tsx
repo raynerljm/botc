@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
-import { clearGame, loadGame } from "@/lib/gameStorage";
+import { createGame } from "@/lib/gameDocument";
+import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
 
 import { BagBuilder } from "./BagBuilder";
 
@@ -524,7 +525,7 @@ describe("randomize fills remaining slots to the adjusted targets (AC7)", () => 
 
 describe("continue to seating hands off into a new game (issue #12)", () => {
   beforeEach(() => {
-    clearGame();
+    clearGames();
     push.mockClear();
   });
 
@@ -568,5 +569,40 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
     expect(
       screen.getByRole("button", { name: /Continue to seating/i }),
     ).not.toBeDisabled();
+  });
+
+  it("confirms before starting another game while one is in progress", async () => {
+    const user = userEvent.setup();
+    saveGame(
+      createGame({
+        scriptId: "tb",
+        scriptName: "Existing game",
+        playerCount: 5,
+        selectedCharacters: [getCharacter("imp")!],
+        standIn: null,
+        extraCopies: {},
+      }),
+    );
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    // Cancelled: no new game, no navigation, the existing game is untouched.
+    expect(confirm).toHaveBeenCalled();
+    expect(loadGame()?.scriptName).toBe("Existing game");
+    expect(push).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(loadGame()?.scriptName).toBe("Trouble Brewing");
+    expect(push).toHaveBeenCalledWith("/game");
   });
 });

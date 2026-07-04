@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CustomScriptsSection } from "@/components/CustomScriptsSection";
+import { GamesList } from "@/components/GamesList";
 import { listScriptSummaries } from "@/lib/scripts";
 
 import styles from "./page.module.css";
@@ -16,8 +17,11 @@ export default function Home() {
     <main className={styles.main}>
       <header className={styles.header}>
         <h1 className={styles.title}>BotC Grimoire</h1>
-        <p className={styles.subtitle}>Pick a script</p>
+        <p className={styles.subtitle}>Pick a script to start a new game</p>
       </header>
+
+      <GamesList />
+
       <ul className={styles.scriptList}>
         {baseEditions.map((script) => (
           <li key={script.id}>

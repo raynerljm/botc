@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
-import { clearGame, saveGame } from "@/lib/gameStorage";
+import { clearGames, saveGame } from "@/lib/gameStorage";
 
 import GamePage from "./page";
 
@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearGame();
+  clearGames();
 });
 
 describe("game page", () => {
