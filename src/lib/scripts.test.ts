@@ -82,4 +82,17 @@ describe("listValidLibraryScripts: base edition id collision", () => {
     expect(ids).not.toContain("tb");
     expect(ids).toContain("my-script");
   });
+
+  it("carries its filename-derived display name in meta.name too, when the script's own JSON has no _meta.name", () => {
+    fs.writeFileSync(
+      path.join(dir, "no-meta-name.json"),
+      JSON.stringify(["imp"]),
+    );
+
+    const script = listValidLibraryScripts(dir).find(
+      (s) => s.id === "no-meta-name",
+    );
+    expect(script?.name).toBe("no-meta-name");
+    expect(script?.meta.name).toBe("no-meta-name");
+  });
 });

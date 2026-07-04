@@ -79,10 +79,14 @@ export function listValidLibraryScripts(dir?: string): ScriptDetail[] {
     if (!entry.result.ok) continue;
     if (baseEditionIds.has(entry.id)) continue;
     const { meta, characters, jinxes } = entry.result.script;
+    const name = meta.name ?? entry.id;
     scripts.push({
       id: entry.id,
-      name: meta.name ?? entry.id,
-      meta,
+      name,
+      // meta.name mirrors the resolved name (see baseEditionScript above)
+      // so consumers that only read meta — e.g. sharing a script — don't
+      // lose the display name when the library JSON has no _meta.name.
+      meta: { ...meta, name },
       characters,
       jinxes,
     });

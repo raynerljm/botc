@@ -64,7 +64,7 @@ describe("script sheet", () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: /share via qr/i }));
-    const shareUrl = screen.getByText(/\/share#/).textContent!;
+    const shareUrl = screen.getByText(/\/share\/#/).textContent!;
     const encoded = shareUrl.split("#")[1];
 
     const result = decodeScriptForShare(encoded);

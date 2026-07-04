@@ -130,10 +130,17 @@ export function exceedsQrCapacity(url: string): boolean {
 // this stays a pure, easily testable function — callers pass
 // NEXT_PUBLIC_BASE_PATH, the same variable next.config.ts uses, since a raw
 // string URL (unlike next/link) isn't auto-prefixed with it.
+//
+// The trailing slash before the fragment matters: next.config.ts sets
+// trailingSlash: true, so the static export's real file is
+// share/index.html — every other link in this app gets that slash for
+// free via next/link, but this hand-built string doesn't, and GitHub
+// Pages (where this app deploys) doesn't reliably resolve the
+// slash-less directory path.
 export function buildShareUrl(
   origin: string,
   basePath: string,
   encoded: string,
 ): string {
-  return `${origin}${basePath}/share#${encoded}`;
+  return `${origin}${basePath}/share/#${encoded}`;
 }

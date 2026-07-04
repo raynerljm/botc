@@ -69,6 +69,7 @@ function ShareScriptModal({
       setCopied(true);
       setCopyFailed(false);
     } catch {
+      setCopied(false);
       setCopyFailed(true);
     }
   }

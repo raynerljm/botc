@@ -132,11 +132,12 @@ describe("encodeScriptForShare / decodeScriptForShare", () => {
 });
 
 describe("isTooLargeForReliableQr", () => {
-  it("is false for a small script's encoded form", () => {
+  it("is false for a small script's full share URL", () => {
     const encoded = encodeScriptForShare({ name: "Small" }, [
       resolveCharacterId("imp")!,
     ]);
-    expect(isTooLargeForReliableQr(encoded)).toBe(false);
+    const url = buildShareUrl("https://example.com", "", encoded);
+    expect(isTooLargeForReliableQr(url)).toBe(false);
   });
 
   it("is true once the encoded string exceeds the reliable-scan threshold", () => {
@@ -156,15 +157,15 @@ describe("exceedsQrCapacity", () => {
 });
 
 describe("buildShareUrl", () => {
-  it("puts the encoded script in the URL fragment of the /share route", () => {
+  it("puts the encoded script in the URL fragment of the /share route, with the trailing slash the static export's trailingSlash config requires", () => {
     expect(buildShareUrl("https://example.com", "", "abc123")).toBe(
-      "https://example.com/share#abc123",
+      "https://example.com/share/#abc123",
     );
   });
 
   it("includes a configured basePath before the route", () => {
     expect(buildShareUrl("https://example.com", "/botc", "abc123")).toBe(
-      "https://example.com/botc/share#abc123",
+      "https://example.com/botc/share/#abc123",
     );
   });
 });
