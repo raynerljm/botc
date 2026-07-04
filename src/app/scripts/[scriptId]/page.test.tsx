@@ -43,6 +43,10 @@ describe("script sheet", () => {
 
     expect(screen.getByText("Washerwoman")).toBeInTheDocument();
     expect(screen.getByText("Imp")).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: /Build the bag/ }),
+    ).toHaveAttribute("href", "/scripts/tb/bag");
   });
 
   it("reveals ability text and the official wiki link when a character is tapped", async () => {
