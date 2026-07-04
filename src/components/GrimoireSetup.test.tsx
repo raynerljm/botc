@@ -172,6 +172,47 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     expect(screen.queryByText(seat1Character.name)).not.toBeInTheDocument();
   });
 
+  it("obscures the whole setup screen — not just the draw region — while a card is hidden mid-pass", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        getCharacter("baron")!,
+        getCharacter("scapegoat")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Keep this token" }));
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    // Mid pass-around: the privacy message is up, and nothing else on the
+    // setup screen — seat names, manual-assign dropdowns (which would list
+    // the remaining bag characters by name), or the traveller control —
+    // should render alongside it.
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/Assign seat \d manually/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add traveller" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Once the next player has confirmed, the setup screen is back.
+    expect(screen.getByLabelText("Seat 1 name")).toBeInTheDocument();
+  });
+
   it("recovers gracefully if the pending token gets manually assigned to another seat first", async () => {
     const user = userEvent.setup();
     // A single official token so seat 2's manual-assign dropdown and seat
@@ -290,6 +331,7 @@ describe("manual assignment mode (mixable with draw)", () => {
     );
     await user.click(screen.getByRole("button", { name: "Keep this token" }));
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     // Seat 3 is the only one left — finish it manually instead of drawing.
     const remainingOption = within(

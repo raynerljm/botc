@@ -207,6 +207,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const setupComplete =
     game.players.length > 0 &&
     game.players.every((p) => p.characterId !== null);
+  // "Screen blurred/obscured until the next player deliberately confirms"
+  // means the *whole* screen, not just the draw card — every other control
+  // (seat names, manual-assign dropdowns listing bag characters, traveller
+  // add) has to disappear too while the device is mid pass-around.
+  const screenObscured = draw?.stage === "hidden";
 
   return (
     <div className={styles.main}>
@@ -280,7 +285,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </div>
       )}
 
-      {game.travellerBag.length > 0 && !travellerFormOpen && (
+      {!screenObscured && game.travellerBag.length > 0 && !travellerFormOpen && (
         <button
           type="button"
           className={styles.addTraveller}
@@ -290,7 +295,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </button>
       )}
 
-      {travellerFormOpen && (
+      {!screenObscured && travellerFormOpen && (
         <form className={styles.travellerForm} onSubmit={addTraveller}>
           <label>
             Traveller character
@@ -342,70 +347,73 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           />
         </div>
       ) : (
-        <ul className={styles.seats}>
-          {game.players.map((player) => {
-            const character = player.characterId
-              ? characterById.get(player.characterId)
-              : undefined;
-            return (
-              <li key={player.id} className={styles.seat}>
-                <label htmlFor={`seat-name-${player.id}`}>
-                  Seat {player.seat} name
-                </label>
-                <input
-                  id={`seat-name-${player.id}`}
-                  type="text"
-                  value={player.name}
-                  onChange={(event) =>
-                    renamePlayer(player.id, event.target.value)
-                  }
-                />
-                {character && draw && (
-                  // A draw session is on-screen for a *different* seat right
-                  // now, which means the device is mid pass-around — every
-                  // other seat's already-revealed identity has to stay
-                  // hidden too, not just the seat currently drawing.
-                  <p className={styles.assignedPlaceholder}>Assigned</p>
-                )}
-                {character && !draw && (
-                  <div className={styles.assignedCharacter}>
-                    <CharacterToken character={character} />
-                    <span>{character.name}</span>
-                    {player.isTraveller && (
-                      <span className={styles.alignment}>
-                        {player.travellerAlignment}
-                      </span>
-                    )}
-                    {player.isDrunk && (
-                      <span className={styles.drunkNote}>
-                        (actually the Drunk)
-                      </span>
-                    )}
-                  </div>
-                )}
-                {!character && (
-                  <label>
-                    Assign seat {player.seat} manually
-                    <select
-                      value=""
-                      onChange={(event) =>
-                        assignManually(player.id, event.target.value)
-                      }
-                    >
-                      <option value="">Choose a character…</option>
-                      {game.bag.map((token) => (
-                        <option key={token.id} value={token.id}>
-                          {characterById.get(token.characterId)?.name ??
-                            token.characterId}
-                        </option>
-                      ))}
-                    </select>
+        !screenObscured && (
+          <ul className={styles.seats}>
+            {game.players.map((player) => {
+              const character = player.characterId
+                ? characterById.get(player.characterId)
+                : undefined;
+              return (
+                <li key={player.id} className={styles.seat}>
+                  <label htmlFor={`seat-name-${player.id}`}>
+                    Seat {player.seat} name
                   </label>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  <input
+                    id={`seat-name-${player.id}`}
+                    type="text"
+                    value={player.name}
+                    onChange={(event) =>
+                      renamePlayer(player.id, event.target.value)
+                    }
+                  />
+                  {character && draw && (
+                    // A draw session is on-screen for a *different* seat
+                    // right now, which means the device is mid pass-around
+                    // — every other seat's already-revealed identity has
+                    // to stay hidden too, not just the seat currently
+                    // drawing.
+                    <p className={styles.assignedPlaceholder}>Assigned</p>
+                  )}
+                  {character && !draw && (
+                    <div className={styles.assignedCharacter}>
+                      <CharacterToken character={character} />
+                      <span>{character.name}</span>
+                      {player.isTraveller && (
+                        <span className={styles.alignment}>
+                          {player.travellerAlignment}
+                        </span>
+                      )}
+                      {player.isDrunk && (
+                        <span className={styles.drunkNote}>
+                          (actually the Drunk)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {!character && (
+                    <label>
+                      Assign seat {player.seat} manually
+                      <select
+                        value=""
+                        onChange={(event) =>
+                          assignManually(player.id, event.target.value)
+                        }
+                      >
+                        <option value="">Choose a character…</option>
+                        {game.bag.map((token) => (
+                          <option key={token.id} value={token.id}>
+                            {characterById.get(token.characterId)?.name ??
+                              token.characterId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )
       )}
     </div>
   );
