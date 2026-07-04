@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { STANDARD_INFO_TOKENS } from "@/lib/infoTokens";
 
+import { PickerCustomTextForm } from "./PickerCustomTextForm";
+import { PickerGroup } from "./PickerGroup";
 import styles from "./InfoTokenLibrary.module.css";
 
 export interface InfoTokenLibraryProps {
@@ -16,32 +18,21 @@ export interface InfoTokenLibraryProps {
   onCancel: () => void;
 }
 
-type Step =
-  | { phase: "browse" }
-  | { phase: "attach"; text: string };
-
 export function InfoTokenLibrary({
   characterById,
   onShow,
   onCancel,
 }: InfoTokenLibraryProps) {
-  const [step, setStep] = useState<Step>({ phase: "browse" });
-  const [customText, setCustomText] = useState("");
+  // Null = browsing the library; a string = that text was chosen and the
+  // storyteller is now on the attach step.
+  const [chosenText, setChosenText] = useState<string | null>(null);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>(
     [],
   );
 
   function chooseText(text: string) {
     setSelectedCharacterIds([]);
-    setStep({ phase: "attach", text });
-  }
-
-  function submitCustomText(event: FormEvent) {
-    event.preventDefault();
-    const text = customText.trim();
-    if (!text) return;
-    chooseText(text);
-    setCustomText("");
+    setChosenText(text);
   }
 
   function toggleCharacter(characterId: string) {
@@ -52,7 +43,7 @@ export function InfoTokenLibrary({
     );
   }
 
-  if (step.phase === "browse") {
+  if (chosenText === null) {
     return (
       <div className={styles.library} role="dialog" aria-label="Info tokens">
         <button type="button" onClick={onCancel}>
@@ -71,17 +62,11 @@ export function InfoTokenLibrary({
           ))}
         </div>
 
-        <form className={styles.customForm} onSubmit={submitCustomText}>
-          <label>
-            Custom info token text
-            <input
-              type="text"
-              value={customText}
-              onChange={(event) => setCustomText(event.target.value)}
-            />
-          </label>
-          <button type="submit">Use this text</button>
-        </form>
+        <PickerCustomTextForm
+          label="Custom info token text"
+          submitLabel="Use this text"
+          onSubmit={chooseText}
+        />
       </div>
     );
   }
@@ -90,28 +75,22 @@ export function InfoTokenLibrary({
 
   return (
     <div className={styles.library} role="dialog" aria-label="Info tokens">
-      <p className={styles.chosenText}>{step.text}</p>
+      <p className={styles.chosenText}>{chosenText}</p>
 
       {groups.map((group) => (
-        <fieldset key={group.team} className={styles.group}>
-          <legend>{teamNames[group.team]}</legend>
-          <div className={styles.characters}>
-            {group.characters.map((character) => (
-              <button
-                key={character.id}
-                type="button"
-                aria-pressed={selectedCharacterIds.includes(character.id)}
-                onClick={() => toggleCharacter(character.id)}
-              >
-                {character.name}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <PickerGroup
+          key={group.team}
+          legend={teamNames[group.team]}
+          items={group.characters.map((character) => ({
+            label: character.name,
+            selected: selectedCharacterIds.includes(character.id),
+            onClick: () => toggleCharacter(character.id),
+          }))}
+        />
       ))}
 
       <div className={styles.attachActions}>
-        <button type="button" onClick={() => setStep({ phase: "browse" })}>
+        <button type="button" onClick={() => setChosenText(null)}>
           Back
         </button>
         <button type="button" onClick={onCancel}>
@@ -120,7 +99,7 @@ export function InfoTokenLibrary({
         <button
           type="button"
           onClick={() =>
-            onShow({ text: step.text, characterIds: selectedCharacterIds })
+            onShow({ text: chosenText, characterIds: selectedCharacterIds })
           }
         >
           Show
