@@ -38,7 +38,11 @@ export default async function BagBuilderPage({ params }: Props) {
         </Link>
         <h1 className={styles.title}>{script.name}</h1>
       </header>
-      <BagBuilder characters={script.characters} />
+      <BagBuilder
+        characters={script.characters}
+        scriptId={scriptId}
+        scriptName={script.name}
+      />
     </main>
   );
 }

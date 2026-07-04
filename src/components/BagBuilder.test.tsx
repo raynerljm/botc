@@ -1,10 +1,16 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
+import { clearGame, loadGame } from "@/lib/gameStorage";
 
 import { BagBuilder } from "./BagBuilder";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+}));
 
 const tb = getEditionCharacters("tb");
 
@@ -262,6 +268,35 @@ describe("special flow: Drunk stand-in (AC4)", () => {
 
     expect(standIn).toHaveDisplayValue("Choose a stand-in…");
   });
+
+  it("warns, but never blocks, when the Drunk has no stand-in picked yet (ADR 0003)", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+
+    expect(
+      screen.getByText(/Drunk needs a stand-in/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    ).not.toBeDisabled();
+
+    await user.selectOptions(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+
+    expect(
+      screen.queryByText(/Drunk needs a stand-in/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
@@ -484,5 +519,54 @@ describe("randomize fills remaining slots to the adjusted targets (AC7)", () => 
     expect(screen.getByText("Outsiders 2/2")).toBeInTheDocument();
     expect(screen.getByText("Minions 1/1")).toBeInTheDocument();
     expect(screen.getByText("Demons 1/1")).toBeInTheDocument();
+  });
+});
+
+describe("continue to seating hands off into a new game (issue #12)", () => {
+  beforeEach(() => {
+    clearGame();
+    push.mockClear();
+  });
+
+  it("has no continue action when the page hasn't identified the script", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(
+      screen.queryByRole("button", { name: /Continue to seating/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("creates and saves a game from the current bag, then navigates to it", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Washerwoman/ }));
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    const game = loadGame();
+    expect(game).not.toBeNull();
+    expect(game!.scriptId).toBe("tb");
+    expect(game!.scriptName).toBe("Trouble Brewing");
+    expect(game!.players).toHaveLength(5);
+    expect(game!.bag.map((t) => t.characterId).sort()).toEqual([
+      "imp",
+      "washerwoman",
+    ]);
+    expect(push).toHaveBeenCalledWith("/game");
+  });
+
+  it("is always available, even far from the target counts (ADR 0003)", () => {
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    ).not.toBeDisabled();
   });
 });
