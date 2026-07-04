@@ -32,15 +32,16 @@ function toSummary(
   script: ScriptDetail,
   source: ScriptSummary["source"],
 ): ScriptSummary {
+  const travellerCount = script.characters.filter(
+    (c) => c.team === "traveller",
+  ).length;
   return {
     id: script.id,
     name: script.name,
     author: script.meta.author,
     source,
-    characterCount: script.characters.filter((c) => c.team !== "traveller")
-      .length,
-    travellerCount: script.characters.filter((c) => c.team === "traveller")
-      .length,
+    characterCount: script.characters.length - travellerCount,
+    travellerCount,
   };
 }
 
@@ -55,16 +56,35 @@ function baseEditionScript(id: BaseEditionId, name: string): ScriptDetail {
   };
 }
 
-// Successfully parsed scripts from the repo's script-library folder;
-// malformed ones are dropped rather than surfaced (they're a repo bug to fix,
-// not something a storyteller can act on).
-export function listValidLibraryScripts(): ScriptDetail[] {
+const baseEditionIds = new Set<string>(baseEditions.map((e) => e.id));
+
+// Computed once: this reads and parses every script-library file, and both
+// listScriptSummaries and getScriptById need the result on every call.
+let libraryScriptsCache: ScriptDetail[] | null = null;
+
+// Successfully parsed scripts from the repo's script-library folder, minus
+// any whose filename collides with a base edition id (that id always
+// resolves to the built-in edition, so a same-named library script would be
+// permanently unreachable); malformed or colliding ones are dropped rather
+// than surfaced — they're a repo bug to fix, not something a storyteller can
+// act on.
+export function listValidLibraryScripts(dir?: string): ScriptDetail[] {
+  if (!dir && libraryScriptsCache) return libraryScriptsCache;
+
   const scripts: ScriptDetail[] = [];
-  for (const entry of listLibraryScripts()) {
+  for (const entry of listLibraryScripts(dir)) {
     if (!entry.result.ok) continue;
+    if (baseEditionIds.has(entry.id)) continue;
     const { meta, characters, jinxes } = entry.result.script;
-    scripts.push({ id: entry.id, name: meta.name ?? entry.id, meta, characters, jinxes });
+    scripts.push({
+      id: entry.id,
+      name: meta.name ?? entry.id,
+      meta,
+      characters,
+      jinxes,
+    });
   }
+  if (!dir) libraryScriptsCache = scripts;
   return scripts;
 }
 

@@ -48,6 +48,18 @@ describe("parseScript: bare ids and id references", () => {
       { type: "unknown-character", raw: "not-a-character" },
     ]);
   });
+
+  it("deduplicates a character named more than once, keeping the first occurrence", () => {
+    const result = parseScript(
+      JSON.stringify(["alchemist", "washerwoman", { id: "Alchemist" }]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.characters.map((c) => c.id)).toEqual([
+      "alchemist",
+      "washerwoman",
+    ]);
+  });
 });
 
 describe("parseScript: invalid input", () => {
@@ -193,6 +205,23 @@ describe("parseScript: _meta", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.script.meta).toEqual({});
+  });
+
+  it("finds _meta regardless of its position in the array", () => {
+    const result = parseScript(
+      JSON.stringify([
+        "washerwoman",
+        "imp",
+        { id: "_meta", name: "Sample Script" },
+      ]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta).toEqual({ name: "Sample Script" });
+    expect(result.script.characters.map((c) => c.id)).toEqual([
+      "washerwoman",
+      "imp",
+    ]);
   });
 });
 

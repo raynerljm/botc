@@ -88,6 +88,21 @@ describe("AddScriptDialog", () => {
     );
   });
 
+  it("renders every error even when two entries produce identical messages", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: { value: '["bogus", "bogus"]' },
+    });
+    await user.click(screen.getByRole("button", { name: "Add script" }));
+
+    expect(
+      screen.getAllByText('Unknown character id: "bogus".'),
+    ).toHaveLength(2);
+  });
+
   it("accepts an uploaded file", async () => {
     render(<AddScriptDialog onAdded={vi.fn()} />);
     const user = userEvent.setup();

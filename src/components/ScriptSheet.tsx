@@ -50,7 +50,10 @@ export function ScriptSheet({ meta, characters, jinxes }: ScriptSheetProps) {
           </h2>
           <ul className={styles.characters}>
             {group.characters.map((character) => {
-              const isOfficial = Boolean(getCharacter(character.id));
+              // A script can reskin an official character (same id, custom
+              // name/ability), so the wiki link — when it exists at all —
+              // must point to the official record, not the local one.
+              const official = getCharacter(character.id);
               return (
                 <li key={character.id}>
                   <details className={styles.character}>
@@ -62,14 +65,14 @@ export function ScriptSheet({ meta, characters, jinxes }: ScriptSheetProps) {
                     </summary>
                     <div className={styles.characterDetail}>
                       <p className={styles.ability}>{character.ability}</p>
-                      {isOfficial && (
+                      {official && (
                         <a
-                          href={wikiUrl(character)}
+                          href={wikiUrl(official)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={styles.wikiLink}
                         >
-                          {character.name} on the wiki ↗
+                          {official.name} on the wiki ↗
                         </a>
                       )}
                     </div>

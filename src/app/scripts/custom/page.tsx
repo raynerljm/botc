@@ -6,22 +6,9 @@ import { Suspense } from "react";
 
 import { ScriptSheet } from "@/components/ScriptSheet";
 import { getCustomScript } from "@/lib/customScripts";
-import { parseScript, type ScriptParseError } from "@/lib/scriptParser";
+import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
 
 import styles from "./page.module.css";
-
-function describeError(error: ScriptParseError): string {
-  switch (error.type) {
-    case "invalid-json":
-      return "That doesn't look like valid JSON.";
-    case "not-array":
-      return "A script must be a JSON array of characters.";
-    case "unknown-character":
-      return `Unknown character id: "${error.raw}".`;
-    case "invalid-homebrew":
-      return `Entry ${error.index + 1} is missing required fields: ${error.missingFields.join(", ")}.`;
-  }
-}
 
 function CustomScriptContent() {
   const searchParams = useSearchParams();
@@ -46,7 +33,7 @@ function CustomScriptContent() {
       {result && !result.ok && (
         <ul className={styles.errors} role="alert">
           {result.errors.map((error, index) => (
-            <li key={index}>{describeError(error)}</li>
+            <li key={index}>{describeScriptParseError(error)}</li>
           ))}
         </ul>
       )}

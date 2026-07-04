@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { getScriptById, listScriptSummaries } from "./scripts";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { getScriptById, listScriptSummaries, listValidLibraryScripts } from "./scripts";
 
 describe("listScriptSummaries", () => {
   it("includes the three base editions and at least one library script", () => {
@@ -49,5 +53,29 @@ describe("getScriptById", () => {
 
   it("returns undefined for an unknown id", () => {
     expect(getScriptById("does-not-exist")).toBeUndefined();
+  });
+});
+
+describe("listValidLibraryScripts: base edition id collision", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "script-library-collision-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("drops a library script whose filename collides with a base edition id", () => {
+    fs.writeFileSync(path.join(dir, "tb.json"), JSON.stringify(["imp"]));
+    fs.writeFileSync(
+      path.join(dir, "my-script.json"),
+      JSON.stringify(["imp"]),
+    );
+
+    const ids = listValidLibraryScripts(dir).map((s) => s.id);
+    expect(ids).not.toContain("tb");
+    expect(ids).toContain("my-script");
   });
 });

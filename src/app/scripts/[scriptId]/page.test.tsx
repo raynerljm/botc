@@ -9,7 +9,7 @@ async function renderSheet(scriptId: string) {
 }
 
 describe("script sheet", () => {
-  it("is pre-rendered for the three base editions and every library script", async () => {
+  it("is pre-rendered for the three base editions and every library script, with no duplicate ids", async () => {
     const params = await generateStaticParams();
     expect(params).toEqual(
       expect.arrayContaining([
@@ -19,6 +19,8 @@ describe("script sheet", () => {
         { scriptId: "sample-homebrew" },
       ]),
     );
+    const ids = params.map((p) => p.scriptId);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("groups the script's characters by team in sheet order", async () => {

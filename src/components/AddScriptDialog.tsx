@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { saveCustomScript } from "@/lib/customScripts";
-import { parseScript, type ScriptParseError } from "@/lib/scriptParser";
+import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
 
 import styles from "./AddScriptDialog.module.css";
 
@@ -15,19 +15,6 @@ function readFileAsText(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsText(file);
   });
-}
-
-function describeError(error: ScriptParseError): string {
-  switch (error.type) {
-    case "invalid-json":
-      return "That doesn't look like valid JSON.";
-    case "not-array":
-      return "A script must be a JSON array of characters.";
-    case "unknown-character":
-      return `Unknown character id: "${error.raw}".`;
-    case "invalid-homebrew":
-      return `Entry ${error.index + 1} is missing required fields: ${error.missingFields.join(", ")}.`;
-  }
 }
 
 export interface AddScriptDialogProps {
@@ -50,7 +37,7 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
     event.preventDefault();
     const result = parseScript(text);
     if (!result.ok) {
-      setErrors(result.errors.map(describeError));
+      setErrors(result.errors.map(describeScriptParseError));
       return;
     }
     setErrors([]);
@@ -90,8 +77,8 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
         </label>
         {errors.length > 0 && (
           <ul className={styles.errors} role="alert">
-            {errors.map((error) => (
-              <li key={error}>{error}</li>
+            {errors.map((error, index) => (
+              <li key={index}>{error}</li>
             ))}
           </ul>
         )}

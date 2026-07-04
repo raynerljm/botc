@@ -1,14 +1,4 @@
-import { allCharacters, type Character, type Team } from "./characters";
-
-const KNOWN_TEAMS: Team[] = [
-  "townsfolk",
-  "outsider",
-  "minion",
-  "demon",
-  "traveller",
-  "fabled",
-  "loric",
-];
+import { allCharacters, teamOrder, type Character, type Team } from "./characters";
 
 export function normalizeCharacterId(id: string): string {
   return id.toLowerCase().replace(/[-_\s]/g, "");
@@ -54,6 +44,19 @@ export type ScriptParseResult =
   | { ok: true; script: ParsedScript }
   | { ok: false; errors: ScriptParseError[] };
 
+export function describeScriptParseError(error: ScriptParseError): string {
+  switch (error.type) {
+    case "invalid-json":
+      return "That doesn't look like valid JSON.";
+    case "not-array":
+      return "A script must be a JSON array of characters.";
+    case "unknown-character":
+      return `Unknown character id: "${error.raw}".`;
+    case "invalid-homebrew":
+      return `Entry ${error.index + 1} is missing required fields: ${error.missingFields.join(", ")}.`;
+  }
+}
+
 export function computeActiveJinxes(characters: Character[]): ActiveJinx[] {
   const idsInScript = new Set(
     characters.map((c) => normalizeCharacterId(c.id)),
@@ -73,6 +76,11 @@ export function computeActiveJinxes(characters: Character[]): ActiveJinx[] {
   return active;
 }
 
+function toStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 function parseMeta(raw: Record<string, unknown>): ScriptMeta {
   const meta: ScriptMeta = {};
   if (typeof raw.name === "string") meta.name = raw.name;
@@ -81,22 +89,14 @@ function parseMeta(raw: Record<string, unknown>): ScriptMeta {
   if (typeof raw.almanac === "string") meta.almanac = raw.almanac;
   if (typeof raw.bootlegger === "string") {
     meta.bootlegger = raw.bootlegger;
-  } else if (Array.isArray(raw.bootlegger)) {
-    const lines = raw.bootlegger.filter(
-      (line): line is string => typeof line === "string",
-    );
-    if (lines.length > 0) meta.bootlegger = lines.join("\n\n");
+  } else {
+    const lines = toStringArray(raw.bootlegger);
+    if (lines && lines.length > 0) meta.bootlegger = lines.join("\n\n");
   }
-  if (Array.isArray(raw.firstNight)) {
-    meta.firstNight = raw.firstNight.filter(
-      (id): id is string => typeof id === "string",
-    );
-  }
-  if (Array.isArray(raw.otherNight)) {
-    meta.otherNight = raw.otherNight.filter(
-      (id): id is string => typeof id === "string",
-    );
-  }
+  const firstNight = toStringArray(raw.firstNight);
+  if (firstNight) meta.firstNight = firstNight;
+  const otherNight = toStringArray(raw.otherNight);
+  if (otherNight) meta.otherNight = otherNight;
   return meta;
 }
 
@@ -113,8 +113,7 @@ function parseHomebrewCharacter(
       ? raw.name.trim()
       : undefined;
   const team =
-    typeof raw.team === "string" &&
-    KNOWN_TEAMS.includes(raw.team as Team)
+    typeof raw.team === "string" && teamOrder.includes(raw.team as Team)
       ? (raw.team as Team)
       : undefined;
   const ability =
@@ -147,12 +146,8 @@ function parseHomebrewCharacter(
     otherNight: typeof raw.otherNight === "number" ? raw.otherNight : 0,
     otherNightReminder:
       typeof raw.otherNightReminder === "string" ? raw.otherNightReminder : "",
-    reminders: Array.isArray(raw.reminders)
-      ? raw.reminders.filter((r): r is string => typeof r === "string")
-      : [],
-    remindersGlobal: Array.isArray(raw.remindersGlobal)
-      ? raw.remindersGlobal.filter((r): r is string => typeof r === "string")
-      : [],
+    reminders: toStringArray(raw.reminders) ?? [],
+    remindersGlobal: toStringArray(raw.remindersGlobal) ?? [],
     setup: raw.setup === true,
     jinxes: Array.isArray(raw.jinxes)
       ? raw.jinxes.filter(
@@ -168,6 +163,22 @@ function parseHomebrewCharacter(
   return { character };
 }
 
+function resolveOrError(
+  id: string,
+  characters: Character[],
+  errors: ScriptParseError[],
+): void {
+  const character = resolveCharacterId(id);
+  if (character) characters.push(character);
+  else errors.push({ type: "unknown-character", raw: id });
+}
+
+function isMetaEntry(entry: unknown): entry is Record<string, unknown> {
+  return (
+    typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).id === "_meta"
+  );
+}
+
 export function parseScript(jsonText: string): ScriptParseResult {
   let data: unknown;
   try {
@@ -180,15 +191,19 @@ export function parseScript(jsonText: string): ScriptParseResult {
     return { ok: false, errors: [{ type: "not-array" }] };
   }
 
-  let meta: ScriptMeta = {};
+  // _meta is recognized as its own preprocessing pass, independent of how the
+  // remaining entries are classified below (reference vs. homebrew) — that
+  // classification order must not affect whether _meta is found.
+  const metaRaw = data.find(isMetaEntry);
+  const meta = metaRaw ? parseMeta(metaRaw) : {};
+  const entries = data.filter((entry) => !isMetaEntry(entry));
+
   const errors: ScriptParseError[] = [];
   const characters: Character[] = [];
 
-  data.forEach((entry, index) => {
+  entries.forEach((entry, index) => {
     if (typeof entry === "string") {
-      const character = resolveCharacterId(entry);
-      if (character) characters.push(character);
-      else errors.push({ type: "unknown-character", raw: entry });
+      resolveOrError(entry, characters, errors);
       return;
     }
 
@@ -203,16 +218,8 @@ export function parseScript(jsonText: string): ScriptParseResult {
 
     const raw = entry as Record<string, unknown>;
 
-    if (raw.id === "_meta") {
-      meta = parseMeta(raw);
-      return;
-    }
-
     if (!("name" in raw) && "id" in raw) {
-      const id = String(raw.id);
-      const character = resolveCharacterId(id);
-      if (character) characters.push(character);
-      else errors.push({ type: "unknown-character", raw: id });
+      resolveOrError(String(raw.id), characters, errors);
       return;
     }
 
@@ -223,5 +230,17 @@ export function parseScript(jsonText: string): ScriptParseResult {
 
   if (errors.length > 0) return { ok: false, errors };
 
-  return { ok: true, script: { meta, characters, jinxes: computeActiveJinxes(characters) } };
+  // A script naming the same character twice (bare id and/or reference) is
+  // deduplicated rather than rendered/keyed twice — keep the first occurrence.
+  const characterIds = new Set<string>();
+  const deduped = characters.filter((character) => {
+    if (characterIds.has(character.id)) return false;
+    characterIds.add(character.id);
+    return true;
+  });
+
+  return {
+    ok: true,
+    script: { meta, characters: deduped, jinxes: computeActiveJinxes(deduped) },
+  };
 }

@@ -18,16 +18,16 @@ export default function Home() {
         <h1 className={styles.title}>BotC Grimoire</h1>
         <p className={styles.subtitle}>Pick a script</p>
       </header>
-      <ul className={styles.editions}>
+      <ul className={styles.scriptList}>
         {baseEditions.map((script) => (
           <li key={script.id}>
             <Link
               href={`/scripts/${script.id}`}
-              className={styles.editionCard}
+              className={styles.scriptCard}
               data-edition={script.id}
             >
-              <span className={styles.editionName}>{script.name}</span>
-              <span className={styles.editionMeta}>
+              <span className={styles.scriptName}>{script.name}</span>
+              <span className={styles.scriptMeta}>
                 {script.characterCount} characters + {script.travellerCount}{" "}
                 travellers
               </span>
@@ -39,15 +39,15 @@ export default function Home() {
       {libraryScripts.length > 0 && (
         <section className={styles.librarySection}>
           <h2 className={styles.sectionHeading}>Script library</h2>
-          <ul className={styles.editions}>
+          <ul className={styles.scriptList}>
             {libraryScripts.map((script) => (
               <li key={script.id}>
                 <Link
                   href={`/scripts/${script.id}`}
-                  className={styles.editionCard}
+                  className={styles.scriptCard}
                 >
-                  <span className={styles.editionName}>{script.name}</span>
-                  <span className={styles.editionMeta}>
+                  <span className={styles.scriptName}>{script.name}</span>
+                  <span className={styles.scriptMeta}>
                     {script.author && `By ${script.author} — `}
                     {script.characterCount} characters +{" "}
                     {script.travellerCount} travellers
