@@ -805,14 +805,80 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const reloaded = loadGame() as GameDocument;
     expect(reloaded.reminders).toHaveLength(2);
     expect(reloaded.reminders).toContainEqual(
-      expect.objectContaining({ characterId: "washerwoman", label: "Townsfolk" }),
+      expect.objectContaining({ characterId: "washerwoman", label: "Townsfolk (Chef)" }),
     );
     expect(reloaded.reminders).toContainEqual(
-      expect.objectContaining({ characterId: "washerwoman", label: "Wrong" }),
+      expect.objectContaining({ characterId: "washerwoman", label: "Wrong (Chef)" }),
     );
     const washerwomanPlayer = reloaded.players.find(
       (p) => p.characterId === "washerwoman",
     )!;
     expect(reloaded.setupWalkthroughSteps[washerwomanPlayer.id]).toBe("answered");
+  });
+
+  it("Redo replaces the previous answer's reminder instead of leaving a stale duplicate (code review finding)", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", { name: /fortune teller/i });
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+    const firstPosition = (loadGame() as GameDocument).reminders.find(
+      (r) => r.label === "Red herring",
+    )!.position;
+
+    await user.click(within(step).getByRole("button", { name: /redo/i }));
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 2");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    const redHerrings = reloaded.reminders.filter((r) => r.label === "Red herring");
+    expect(redHerrings).toHaveLength(1);
+    // Re-answering for a different player actually moved the token, proving
+    // the second Confirm didn't just add another copy at the same spot.
+    expect(redHerrings[0].position).not.toEqual(firstPosition);
+  });
+
+  it("keeps the privacy 'Hide grimoire' toggle across opening and closing the walkthrough (code review finding)", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    await user.click(within(circle).getByRole("button", { name: /hide grimoire/i }));
+    expect(within(circle).getByRole("button", { name: /show grimoire/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    const circleAfter = screen.getByRole("region", { name: "Grimoire circle" });
+    expect(
+      within(circleAfter).getByRole("button", { name: /show grimoire/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps an in-flight 'undo remove reminder' window across opening and closing the walkthrough (code review finding)", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", { name: /fortune teller/i });
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    await user.click(within(circle).getByText("Red herring"));
+    await user.click(within(circle).getByRole("button", { name: "Remove reminder" }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(0);
+
+    await user.click(screen.getByRole("button", { name: /setup walkthrough/i }));
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    const circleAfter = screen.getByRole("region", { name: "Grimoire circle" });
+    await user.click(within(circleAfter).getByRole("button", { name: /undo/i }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(1);
   });
 });

@@ -702,3 +702,65 @@ describe("reminders (issue #14)", () => {
     expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
   });
 });
+
+describe("setup walkthrough reopen button (issue #26)", () => {
+  it("renders the button when a handler is provided", () => {
+    render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={characterById}
+        onOpenSetupWalkthrough={vi.fn()}
+        {...noop}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Setup walkthrough" }),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the button entirely when there's nothing for it to reopen", () => {
+    render(
+      <GrimoireBoard players={[makePlayer()]} characterById={characterById} {...noop} />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls the handler on click", async () => {
+    const user = userEvent.setup();
+    const onOpenSetupWalkthrough = vi.fn();
+    render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={characterById}
+        onOpenSetupWalkthrough={onOpenSetupWalkthrough}
+        {...noop}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Setup walkthrough" }));
+    expect(onOpenSetupWalkthrough).toHaveBeenCalled();
+  });
+
+  it("hides while the reminder picker is open (code review: matches 'Add reminder's own guard)", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={characterById}
+        onOpenSetupWalkthrough={vi.fn()}
+        {...noop}
+      />,
+    );
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
+  });
+});

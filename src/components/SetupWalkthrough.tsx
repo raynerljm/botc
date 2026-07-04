@@ -5,6 +5,7 @@ import { useState } from "react";
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
   circlePosition,
+  parkBeside,
   type Player,
   type PlayerPosition,
   type SetupWalkthroughStepStatus,
@@ -12,6 +13,16 @@ import {
 import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
 import styles from "./SetupWalkthrough.module.css";
+
+// What a resolved step hands back to be persisted as reminder tokens — never
+// a new field on GameDocument, so a step's actual decision (who's the red
+// herring, which character was claimed, ...) always lives only as ordinary
+// reminders (issue #26 AC).
+export interface SetupWalkthroughReminderInput {
+  characterId: string | null;
+  label: string;
+  position: PlayerPosition;
+}
 
 export interface SetupWalkthroughProps {
   steps: SetupWalkthroughStep[];
@@ -21,17 +32,15 @@ export interface SetupWalkthroughProps {
   // character pickers — same script-first precedent as issue #15's swap
   // picker and issue #14's reminder picker.
   characterPool: Character[];
-  onAddReminder: (input: {
-    characterId: string | null;
-    label: string;
-    position: PlayerPosition;
-  }) => void;
-  onResolveStep: (stepId: string, status: SetupWalkthroughStepStatus) => void;
+  // Bundles the reminders a step produces with its resolution into one call
+  // so re-answering a step (Redo) can atomically swap out its previous
+  // reminders for the new ones — see GrimoireSetup.tsx's resolveWalkthroughStep.
+  onResolveStep: (
+    stepId: string,
+    status: SetupWalkthroughStepStatus,
+    reminders: SetupWalkthroughReminderInput[],
+  ) => void;
   onClose: () => void;
-}
-
-function clampPct(value: number): number {
-  return Math.min(96, Math.max(4, value));
 }
 
 // A placed reminder starts a little offset from its anchor player, the same
@@ -46,17 +55,18 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
       sorted.findIndex((p) => p.id === playerId),
       sorted.length,
     );
-  return { x: clampPct(base.x + 5), y: clampPct(base.y) };
+  return parkBeside(base);
 }
 
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
   const [showAll, setShowAll] = useState(false);
   const scripted = characterPool.filter((c) => c.team === team);
-  const everything = allCharacters.filter((c) => c.team === team);
   const list = showAll
     ? [
         ...scripted,
-        ...everything.filter((c) => !scripted.some((s) => s.id === c.id)),
+        ...allCharacters.filter(
+          (c) => c.team === team && !scripted.some((s) => s.id === c.id),
+        ),
       ]
     : scripted;
   return { list, showAll, setShowAll };
@@ -67,7 +77,6 @@ interface StepPanelProps {
   status: SetupWalkthroughStepStatus | undefined;
   players: Player[];
   characterPool: Character[];
-  onAddReminder: SetupWalkthroughProps["onAddReminder"];
   onResolveStep: SetupWalkthroughProps["onResolveStep"];
 }
 
@@ -76,24 +85,23 @@ function StepPanel({
   status,
   players,
   characterPool,
-  onAddReminder,
   onResolveStep,
 }: StepPanelProps) {
   const [forceEditing, setForceEditing] = useState(false);
   const editing = forceEditing || status === undefined;
   const otherPlayers = players.filter((p) => p.id !== step.playerId);
 
-  function resolve(nextStatus: SetupWalkthroughStepStatus) {
-    onResolveStep(step.id, nextStatus);
+  // Bundling every reminder a step produces with its status into one call
+  // (rather than separate add-reminder-then-resolve calls) is what makes
+  // Redo safe: GrimoireSetup's resolveWalkthroughStep replaces this step's
+  // *previous* reminders with this set atomically, so re-answering never
+  // leaves a stale token from the first answer behind.
+  function resolve(
+    nextStatus: SetupWalkthroughStepStatus,
+    reminders: SetupWalkthroughReminderInput[] = [],
+  ) {
+    onResolveStep(step.id, nextStatus, reminders);
     setForceEditing(false);
-  }
-
-  function skipButton() {
-    return (
-      <button type="button" onClick={() => resolve("skipped")}>
-        Skip
-      </button>
-    );
   }
 
   return (
@@ -110,115 +118,142 @@ function StepPanel({
         </p>
       )}
 
-      {editing && step.kind === "playerPick" && (
-        <PlayerPickControls
-          otherPlayers={otherPlayers}
-          onConfirm={(playerId) => {
-            onAddReminder({
-              characterId: step.characterId,
-              label: step.reminderLabel,
-              position: anchorPosition(playerId, players),
-            });
-            resolve("answered");
-          }}
-          skip={skipButton}
-        />
-      )}
+      {editing && (
+        <>
+          {step.kind === "playerPick" && (
+            <PlayerPickControls
+              otherPlayers={otherPlayers}
+              onConfirm={(playerId) =>
+                resolve("answered", [
+                  {
+                    characterId: step.characterId,
+                    label: step.reminderLabel,
+                    position: anchorPosition(playerId, players),
+                  },
+                ])
+              }
+            />
+          )}
 
-      {editing && step.kind === "characterAndTwoPlayers" && (
-        <CharacterAndTwoPlayersControls
-          step={step}
-          otherPlayers={otherPlayers}
-          characterPool={characterPool}
-          onConfirm={(character, truePlayerId, falsePlayerId) => {
-            onAddReminder({
-              characterId: step.characterId,
-              label: step.trueLabel,
-              position: anchorPosition(truePlayerId, players),
-            });
-            onAddReminder({
-              characterId: step.characterId,
-              label: step.falseLabel,
-              position: anchorPosition(falsePlayerId, players),
-            });
-            resolve("answered");
-          }}
-          skip={skipButton}
-        />
-      )}
+          {step.kind === "characterAndTwoPlayers" && (
+            <CharacterAndTwoPlayersControls
+              step={step}
+              otherPlayers={otherPlayers}
+              characterPool={characterPool}
+              onConfirm={(character, truePlayerId, falsePlayerId) =>
+                resolve("answered", [
+                  {
+                    characterId: step.characterId,
+                    // The claimed character's name rides along in the label
+                    // itself — otherwise which specific character (e.g.
+                    // "Chef") was claimed is lost the moment this resolves,
+                    // with nothing recording it (code review finding).
+                    label: `${step.trueLabel} (${character.name})`,
+                    position: anchorPosition(truePlayerId, players),
+                  },
+                  {
+                    characterId: step.characterId,
+                    label: `${step.falseLabel} (${character.name})`,
+                    position: anchorPosition(falsePlayerId, players),
+                  },
+                ])
+              }
+            />
+          )}
 
-      {editing && step.kind === "neighborCheck" && (
-        <NeighborCheckControls
-          step={step}
-          onConfirm={(placeReminder) => {
-            if (placeReminder) {
-              onAddReminder({
-                characterId: step.characterId,
-                label: step.reminderLabel,
-                position: anchorPosition(step.playerId, players),
-              });
-            }
-            resolve("answered");
-          }}
-          skip={skipButton}
-        />
-      )}
+          {step.kind === "neighborCheck" && (
+            <ReminderToggleControls
+              note={
+                step.seatedCorrectly
+                  ? "Correctly seated next to the Demon."
+                  : "Not seated next to the Demon — move a player."
+              }
+              reminderLabel={step.reminderLabel}
+              onConfirm={(placeReminder) =>
+                resolve(
+                  "answered",
+                  placeReminder
+                    ? [
+                        {
+                          characterId: step.characterId,
+                          label: step.reminderLabel,
+                          position: anchorPosition(step.playerId, players),
+                        },
+                      ]
+                    : [],
+                )
+              }
+            />
+          )}
 
-      {editing && step.kind === "believedDemon" && (
-        <BelievedDemonControls
-          characterPool={characterPool}
-          onConfirm={(demon) => {
-            onAddReminder({
-              characterId: null,
-              label: `Thinks: ${demon.name}`,
-              position: anchorPosition(step.playerId, players),
-            });
-            resolve("answered");
-          }}
-          skip={skipButton}
-        />
-      )}
+          {step.kind === "believedDemon" && (
+            <BelievedDemonControls
+              characterPool={characterPool}
+              onConfirm={(demon) =>
+                resolve("answered", [
+                  {
+                    characterId: null,
+                    label: `Thinks: ${demon.name}`,
+                    position: anchorPosition(step.playerId, players),
+                  },
+                ])
+              }
+            />
+          )}
 
-      {editing && step.kind === "acknowledge" && (
-        <div className={styles.controls}>
-          <p>{step.message}</p>
-          <button type="button" onClick={() => resolve("answered")}>
-            Confirm
+          {step.kind === "acknowledge" && (
+            <div className={styles.controls}>
+              <p>{step.message}</p>
+              <button type="button" onClick={() => resolve("answered")}>
+                Confirm
+              </button>
+            </div>
+          )}
+
+          {step.kind === "review" && (
+            <ReminderToggleControls
+              reminderLabel={step.reminderLabel}
+              onConfirm={(placeReminder) =>
+                resolve(
+                  "answered",
+                  placeReminder
+                    ? [
+                        {
+                          // The Drunk's own reminder, not the stand-in
+                          // character's — step.characterId is the stand-in
+                          // (e.g. "washerwoman"), which isn't who this
+                          // reminder is about.
+                          characterId: "drunk",
+                          label: step.reminderLabel,
+                          position: anchorPosition(step.playerId, players),
+                        },
+                      ]
+                    : [],
+                )
+              }
+            />
+          )}
+
+          {step.kind === "generic" && (
+            <GenericControls
+              step={step}
+              onDone={(labels) =>
+                resolve(
+                  "answered",
+                  labels.map((label) => ({
+                    characterId: step.characterId,
+                    label,
+                    position: anchorPosition(step.playerId, players),
+                  })),
+                )
+              }
+            />
+          )}
+
+          <button type="button" onClick={() => resolve("skipped")}>
+            Skip
           </button>
-          {skipButton()}
-        </div>
-      )}
-
-      {editing && step.kind === "review" && (
-        <ReviewControls
-          step={step}
-          onConfirm={(placeReminder) => {
-            if (placeReminder) {
-              onAddReminder({
-                characterId: "drunk",
-                label: step.reminderLabel,
-                position: anchorPosition(step.playerId, players),
-              });
-            }
-            resolve("answered");
-          }}
-          skip={skipButton}
-        />
-      )}
-
-      {editing && step.kind === "generic" && (
-        <GenericControls
-          step={step}
-          onAddReminder={(label) =>
-            onAddReminder({
-              characterId: step.characterId,
-              label,
-              position: anchorPosition(step.playerId, players),
-            })
-          }
-          onDone={() => resolve("answered")}
-          skip={skipButton}
-        />
+        </>
       )}
     </fieldset>
   );
@@ -227,11 +262,9 @@ function StepPanel({
 function PlayerPickControls({
   otherPlayers,
   onConfirm,
-  skip,
 }: {
   otherPlayers: Player[];
   onConfirm: (playerId: string) => void;
-  skip: () => React.ReactNode;
 }) {
   const [playerId, setPlayerId] = useState("");
   return (
@@ -254,8 +287,26 @@ function PlayerPickControls({
       >
         Confirm
       </button>
-      {skip()}
     </div>
+  );
+}
+
+function ShowAllToggle({
+  showAll,
+  onChange,
+}: {
+  showAll: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={showAll}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      Show all characters
+    </label>
   );
 }
 
@@ -264,7 +315,6 @@ function CharacterAndTwoPlayersControls({
   otherPlayers,
   characterPool,
   onConfirm,
-  skip,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "characterAndTwoPlayers" }>;
   otherPlayers: Player[];
@@ -274,7 +324,6 @@ function CharacterAndTwoPlayersControls({
     truePlayerId: string,
     falsePlayerId: string,
   ) => void;
-  skip: () => React.ReactNode;
 }) {
   const { list, showAll, setShowAll } = useCandidateCharacters(
     step.candidateTeam,
@@ -289,6 +338,16 @@ function CharacterAndTwoPlayersControls({
     !!truePlayerId &&
     !!falsePlayerId &&
     truePlayerId !== falsePlayerId;
+
+  // Unchecking "show all" can drop the currently-picked character out of
+  // `list` (if it isn't on the script) — reset the selection instead of
+  // leaving Confirm silently disabled with no visible reason why.
+  function handleShowAllChange(next: boolean) {
+    setShowAll(next);
+    if (!next && characterId && !characterPool.some((c) => c.id === characterId)) {
+      setCharacterId("");
+    }
+  }
 
   return (
     <div className={styles.controls}>
@@ -306,14 +365,7 @@ function CharacterAndTwoPlayersControls({
           ))}
         </select>
       </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={showAll}
-          onChange={(e) => setShowAll(e.target.checked)}
-        />
-        Show all characters
-      </label>
+      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <label>
         {`Shown as ${step.trueLabel}`}
         <select
@@ -349,40 +401,37 @@ function CharacterAndTwoPlayersControls({
       >
         Confirm
       </button>
-      {skip()}
     </div>
   );
 }
 
-function NeighborCheckControls({
-  step,
+// Shared by the neighborCheck (Marionette) and review (Drunk) steps — both
+// are a single reminder-or-not toggle plus an optional note, differing only
+// in whether they show a seating-check message first.
+function ReminderToggleControls({
+  note,
+  reminderLabel,
   onConfirm,
-  skip,
 }: {
-  step: Extract<SetupWalkthroughStep, { kind: "neighborCheck" }>;
+  note?: string;
+  reminderLabel: string;
   onConfirm: (placeReminder: boolean) => void;
-  skip: () => React.ReactNode;
 }) {
   const [placeReminder, setPlaceReminder] = useState(true);
   return (
     <div className={styles.controls}>
-      {step.seatedCorrectly ? (
-        <p>Correctly seated next to the Demon.</p>
-      ) : (
-        <p>Not seated next to the Demon — move a player.</p>
-      )}
+      {note && <p>{note}</p>}
       <label>
         <input
           type="checkbox"
           checked={placeReminder}
           onChange={(e) => setPlaceReminder(e.target.checked)}
         />
-        {`Place "${step.reminderLabel}" reminder`}
+        {`Place "${reminderLabel}" reminder`}
       </label>
       <button type="button" onClick={() => onConfirm(placeReminder)}>
         Confirm
       </button>
-      {skip()}
     </div>
   );
 }
@@ -390,11 +439,9 @@ function NeighborCheckControls({
 function BelievedDemonControls({
   characterPool,
   onConfirm,
-  skip,
 }: {
   characterPool: Character[];
   onConfirm: (demon: Character) => void;
-  skip: () => React.ReactNode;
 }) {
   const { list, showAll, setShowAll } = useCandidateCharacters(
     "demon",
@@ -402,6 +449,13 @@ function BelievedDemonControls({
   );
   const [demonId, setDemonId] = useState("");
   const demon = list.find((c) => c.id === demonId);
+
+  function handleShowAllChange(next: boolean) {
+    setShowAll(next);
+    if (!next && demonId && !characterPool.some((c) => c.id === demonId)) {
+      setDemonId("");
+    }
+  }
 
   return (
     <div className={styles.controls}>
@@ -416,14 +470,7 @@ function BelievedDemonControls({
           ))}
         </select>
       </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={showAll}
-          onChange={(e) => setShowAll(e.target.checked)}
-        />
-        Show all characters
-      </label>
+      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <button
         type="button"
         disabled={!demon}
@@ -431,63 +478,46 @@ function BelievedDemonControls({
       >
         Confirm
       </button>
-      {skip()}
-    </div>
-  );
-}
-
-function ReviewControls({
-  step,
-  onConfirm,
-  skip,
-}: {
-  step: Extract<SetupWalkthroughStep, { kind: "review" }>;
-  onConfirm: (placeReminder: boolean) => void;
-  skip: () => React.ReactNode;
-}) {
-  const [placeReminder, setPlaceReminder] = useState(true);
-  return (
-    <div className={styles.controls}>
-      <label>
-        <input
-          type="checkbox"
-          checked={placeReminder}
-          onChange={(e) => setPlaceReminder(e.target.checked)}
-        />
-        {`Place "${step.reminderLabel}" reminder`}
-      </label>
-      <button type="button" onClick={() => onConfirm(placeReminder)}>
-        Confirm
-      </button>
-      {skip()}
     </div>
   );
 }
 
 function GenericControls({
   step,
-  onAddReminder,
   onDone,
-  skip,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "generic" }>;
-  onAddReminder: (label: string) => void;
-  onDone: () => void;
-  skip: () => React.ReactNode;
+  onDone: (labels: string[]) => void;
 }) {
+  // Staged locally rather than added immediately on each click, so a step
+  // that places several reminders still resolves through one onDone call —
+  // consistent with every other kind, and what makes Redo able to clean up
+  // exactly the set this step last produced.
+  const [staged, setStaged] = useState<string[]>([]);
+
   return (
     <div className={styles.controls}>
       <div className={styles.reminderOptions}>
         {step.reminderOptions.map((label) => (
-          <button key={label} type="button" onClick={() => onAddReminder(label)}>
+          <button
+            key={label}
+            type="button"
+            onClick={() => setStaged((current) => [...current, label])}
+          >
             {label}
           </button>
         ))}
       </div>
-      <button type="button" onClick={onDone}>
+      {staged.length > 0 && (
+        <ul className={styles.stagedList}>
+          {staged.map((label, index) => (
+            <li key={index}>{label}</li>
+          ))}
+        </ul>
+      )}
+      <button type="button" onClick={() => onDone(staged)}>
         Done
       </button>
-      {skip()}
     </div>
   );
 }
@@ -497,7 +527,6 @@ export function SetupWalkthrough({
   stepStatuses,
   players,
   characterPool,
-  onAddReminder,
   onResolveStep,
   onClose,
 }: SetupWalkthroughProps) {
@@ -526,7 +555,6 @@ export function SetupWalkthrough({
               status={stepStatuses[step.id]}
               players={players}
               characterPool={characterPool}
-              onAddReminder={onAddReminder}
               onResolveStep={onResolveStep}
             />
           </li>

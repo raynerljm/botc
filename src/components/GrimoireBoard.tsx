@@ -11,6 +11,8 @@ import {
 import { isOfficialCharacter, wikiUrl, type Character } from "@/lib/characters";
 import {
   circlePosition,
+  clampPct,
+  parkBeside,
   type Player,
   type PlayerPosition,
   type ReminderToken,
@@ -59,11 +61,6 @@ function tokenSizeRem(total: number): number {
   return MAX_TOKEN_REM - t * (MAX_TOKEN_REM - MIN_TOKEN_REM);
 }
 
-// Keeps a dragged token's centre within the pad instead of off the edge.
-function clampPct(value: number): number {
-  return Math.min(96, Math.max(4, value));
-}
-
 // A real finger drag always moves a few pixels before settling — without a
 // threshold, every tap-to-open-the-menu would also fire a (near-zero) move.
 const DRAG_THRESHOLD_PX = 6;
@@ -86,7 +83,7 @@ interface DragState {
 // storyteller parks it next to players" means for a freshly-added token.
 function reminderDropPosition(base: PlayerPosition | null): PlayerPosition {
   if (!base) return { x: 50, y: 50 };
-  return { x: clampPct(base.x + 5), y: clampPct(base.y) };
+  return parkBeside(base);
 }
 
 export function GrimoireBoard({
@@ -293,7 +290,7 @@ export function GrimoireBoard({
             Add reminder
           </button>
         )}
-        {!hidden && onOpenSetupWalkthrough && (
+        {!hidden && !picker && onOpenSetupWalkthrough && (
           <button type="button" onClick={onOpenSetupWalkthrough}>
             Setup walkthrough
           </button>

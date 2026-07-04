@@ -157,7 +157,7 @@ function seatedNextToDemon(
 }
 
 export function buildSetupWalkthroughSteps(
-  game: GameDocument,
+  game: Pick<GameDocument, "players" | "characterPool">,
 ): SetupWalkthroughStep[] {
   const characterById = new Map(
     game.characterPool.map((c) => [c.id, c] as const),

@@ -123,6 +123,22 @@ export function circlePosition(index: number, total: number): PlayerPosition {
   };
 }
 
+// Keeps a token's centre within the pad instead of off the edge. Shared by
+// every place that computes a drop position (GrimoireBoard's drag handling
+// and reminder placement, the setup walkthrough's reminder placement) so the
+// pad's usable bounds are defined once.
+export function clampPct(value: number): number {
+  return Math.min(96, Math.max(4, value));
+}
+
+// A reminder parked beside a player (rather than dragged to an exact spot)
+// lands a little to the right of them — the convention for "the storyteller
+// parks it next to players" (issue #14 AC), reused wherever a reminder is
+// placed programmatically rather than dropped by hand.
+export function parkBeside(position: PlayerPosition): PlayerPosition {
+  return { x: clampPct(position.x + 5), y: clampPct(position.y) };
+}
+
 const DRUNK_ID = "drunk";
 
 // A declared winner is what marks a game ended; `winner` and `endedAt` are

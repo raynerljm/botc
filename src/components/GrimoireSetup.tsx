@@ -21,7 +21,7 @@ import { CharacterToken } from "./CharacterToken";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireSetup.module.css";
-import { SetupWalkthrough } from "./SetupWalkthrough";
+import { SetupWalkthrough, type SetupWalkthroughReminderInput } from "./SetupWalkthrough";
 
 export interface GrimoireSetupProps {
   game: GameDocument;
@@ -55,14 +55,29 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const [travellerAlignment, setTravellerAlignment] =
     useState<Alignment>("good");
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  // Tracks which reminder ids each walkthrough step last placed, so
+  // resolveWalkthroughStep can remove exactly those before adding a fresh
+  // set — otherwise re-answering a step (Redo) would leave the previous
+  // answer's tokens on the board alongside the new ones. Session-local only
+  // (not part of GameDocument): it's bookkeeping for this component, not a
+  // new persisted state kind — the reminders themselves are the only
+  // decision data that survives a reload.
+  const stepReminderIdsRef = useRef<Record<string, string[]>>({});
 
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
     [game.characterPool],
   );
+  // Only players/characterPool feed buildSetupWalkthroughSteps — passing
+  // just those (not the whole `game`) skips a rebuild on every unrelated
+  // autosave (moving a token, editing notes, ...).
   const walkthroughSteps = useMemo(
-    () => buildSetupWalkthroughSteps(game),
-    [game],
+    () =>
+      buildSetupWalkthroughSteps({
+        players: game.players,
+        characterPool: game.characterPool,
+      }),
+    [game.players, game.characterPool],
   );
 
   // Travellers (added later, task #6) don't come from this bag draw.
@@ -191,17 +206,45 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   // The auto-offer is shown once (Start or Skip both count as "handled") —
-  // re-entering the walkthrough afterwards is always available from the
-  // grimoire board's own button regardless of this flag (issue #26 AC).
-  function dismissWalkthroughOffer() {
-    update({ ...game, setupWalkthroughOffered: true });
+  // opening the walkthrough by any path (the offer's own "Start", or the
+  // grimoire board's reopen button) marks it offered, so it can never pop
+  // back up over an already-in-progress or already-finished walkthrough.
+  function openWalkthrough() {
+    if (!gameRef.current.setupWalkthroughOffered) {
+      update({ ...gameRef.current, setupWalkthroughOffered: true });
+    }
+    setShowWalkthrough(true);
   }
 
-  // Builds off gameRef.current for the same reason as addReminder above —
-  // this always follows one or more addReminder calls from the same click.
-  function resolveWalkthroughStep(stepId: string, status: SetupWalkthroughStepStatus) {
+  function dismissWalkthroughOffer() {
+    update({ ...gameRef.current, setupWalkthroughOffered: true });
+  }
+
+  // Atomically swaps out whatever reminders this step last placed for the
+  // ones it just produced, then records its status — one update() call, so
+  // a Redo can never leave a stale token from the previous answer behind,
+  // and a step with two reminders (Washerwoman) never risks a partial write.
+  function resolveWalkthroughStep(
+    stepId: string,
+    status: SetupWalkthroughStepStatus,
+    reminders: SetupWalkthroughReminderInput[],
+  ) {
+    const previousIds = stepReminderIdsRef.current[stepId] ?? [];
+    const newReminders: ReminderToken[] = reminders.map((input) => ({
+      id: crypto.randomUUID(),
+      ...input,
+    }));
+    stepReminderIdsRef.current = {
+      ...stepReminderIdsRef.current,
+      [stepId]: newReminders.map((r) => r.id),
+    };
+
     update({
       ...gameRef.current,
+      reminders: [
+        ...gameRef.current.reminders.filter((r) => !previousIds.includes(r.id)),
+        ...newReminders,
+      ],
       setupWalkthroughSteps: {
         ...gameRef.current.setupWalkthroughSteps,
         [stepId]: status,
@@ -474,19 +517,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {setupComplete ? (
-        showWalkthrough ? (
-          <SetupWalkthrough
-            steps={walkthroughSteps}
-            stepStatuses={game.setupWalkthroughSteps}
-            players={game.players}
-            characterPool={game.characterPool}
-            onAddReminder={addReminder}
-            onResolveStep={resolveWalkthroughStep}
-            onClose={() => setShowWalkthrough(false)}
-          />
-        ) : (
-          <>
-            {walkthroughSteps.length > 0 && !game.setupWalkthroughOffered && (
+        <>
+          {!showWalkthrough &&
+            walkthroughSteps.length > 0 &&
+            !game.setupWalkthroughOffered && (
               <div
                 role="region"
                 aria-label="Setup walkthrough offer"
@@ -497,13 +531,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                   {walkthroughSteps.length === 1 ? "" : "s"} to make before the
                   first night.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    dismissWalkthroughOffer();
-                    setShowWalkthrough(true);
-                  }}
-                >
+                <button type="button" onClick={openWalkthrough}>
                   Start walkthrough
                 </button>
                 <button type="button" onClick={dismissWalkthroughOffer}>
@@ -511,31 +539,49 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 </button>
               </div>
             )}
-            <div role="region" aria-label="Grimoire circle">
-              <GrimoireBoard
-                players={game.players}
-                characterById={characterById}
-                almanacUrl={game.almanacUrl}
-                reminders={game.reminders}
-                onRename={renamePlayer}
-                onMove={movePlayer}
-                onReCircle={reCircle}
-                onReorderSeat={reorderSeat}
-                onToggleDead={toggleDead}
-                onToggleGhostVote={toggleGhostVote}
-                onAddReminder={addReminder}
-                onMoveReminder={moveReminder}
-                onRemoveReminder={removeReminder}
-                onRestoreReminder={restoreReminder}
-                onOpenSetupWalkthrough={
-                  walkthroughSteps.length > 0
-                    ? () => setShowWalkthrough(true)
-                    : undefined
-                }
-              />
-            </div>
-          </>
-        )
+          {/* Stays mounted (just hidden) rather than being swapped out for
+              the walkthrough dialog — GrimoireBoard owns its own session-only
+              state (the privacy "Hide grimoire" toggle, an in-flight "Undo
+              remove reminder" window) that unmounting would silently discard
+              (code review finding). `hidden` also drops it from the
+              accessibility tree, matching the old unmounted behavior for
+              anything that queries by role. */}
+          <div
+            role="region"
+            aria-label="Grimoire circle"
+            hidden={showWalkthrough}
+          >
+            <GrimoireBoard
+              players={game.players}
+              characterById={characterById}
+              almanacUrl={game.almanacUrl}
+              reminders={game.reminders}
+              onRename={renamePlayer}
+              onMove={movePlayer}
+              onReCircle={reCircle}
+              onReorderSeat={reorderSeat}
+              onToggleDead={toggleDead}
+              onToggleGhostVote={toggleGhostVote}
+              onAddReminder={addReminder}
+              onMoveReminder={moveReminder}
+              onRemoveReminder={removeReminder}
+              onRestoreReminder={restoreReminder}
+              onOpenSetupWalkthrough={
+                walkthroughSteps.length > 0 ? openWalkthrough : undefined
+              }
+            />
+          </div>
+          {showWalkthrough && (
+            <SetupWalkthrough
+              steps={walkthroughSteps}
+              stepStatuses={game.setupWalkthroughSteps}
+              players={game.players}
+              characterPool={game.characterPool}
+              onResolveStep={resolveWalkthroughStep}
+              onClose={() => setShowWalkthrough(false)}
+            />
+          )}
+        </>
       ) : (
         !screenObscured && (
           <ul className={styles.seats} aria-label="Seats">

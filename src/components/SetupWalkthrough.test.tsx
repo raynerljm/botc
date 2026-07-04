@@ -45,12 +45,10 @@ function renderWalkthrough(
     steps: SetupWalkthroughStep[];
     players: Player[];
     stepStatuses: Record<string, "answered" | "skipped">;
-    onAddReminder: ReturnType<typeof vi.fn>;
     onResolveStep: ReturnType<typeof vi.fn>;
     onClose: ReturnType<typeof vi.fn>;
   }> = {},
 ) {
-  const onAddReminder = overrides.onAddReminder ?? vi.fn();
   const onResolveStep = overrides.onResolveStep ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
   const players = overrides.players ?? [
@@ -66,12 +64,11 @@ function renderWalkthrough(
       stepStatuses={overrides.stepStatuses ?? {}}
       players={players}
       characterPool={characterPool}
-      onAddReminder={onAddReminder}
       onResolveStep={onResolveStep}
       onClose={onClose}
     />,
   );
-  return { onAddReminder, onResolveStep, onClose, players, ...view };
+  return { onResolveStep, onClose, players, ...view };
 }
 
 const fortuneTellerStep: SetupWalkthroughStep = {
@@ -100,17 +97,16 @@ describe("SetupWalkthrough shell", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("skips a step with one tap, without adding any reminder", async () => {
+  it("skips a step with one tap, without producing any reminder", async () => {
     const user = userEvent.setup();
-    const { onResolveStep, onAddReminder } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [fortuneTellerStep],
     });
 
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
     await user.click(within(step).getByRole("button", { name: /skip/i }));
 
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "skipped");
-    expect(onAddReminder).not.toHaveBeenCalled();
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "skipped", []);
   });
 
   it("keeps a skipped step visible, marked as skipped", () => {
@@ -133,12 +129,37 @@ describe("SetupWalkthrough shell", () => {
     expect(within(step).getByText(/answered/i)).toBeInTheDocument();
     expect(within(step).getByRole("button", { name: /redo/i })).toBeInTheDocument();
   });
+
+  it("re-answering after Redo replaces the previous reminders in one call (no stale duplicate)", async () => {
+    const user = userEvent.setup();
+    const { onResolveStep } = renderWalkthrough({
+      steps: [fortuneTellerStep],
+      stepStatuses: { p1: "answered" },
+    });
+
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    await user.click(within(step).getByRole("button", { name: /redo/i }));
+    await user.selectOptions(within(step).getByLabelText(/player/i), "Cara");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    // The component only ever hands back the *current* set of reminders for
+    // this call — GrimoireSetup's resolveWalkthroughStep is what actually
+    // removes the previous answer's tokens before adding these.
+    expect(onResolveStep).toHaveBeenCalledWith(
+      "p1",
+      "answered",
+      expect.arrayContaining([
+        expect.objectContaining({ characterId: "fortuneteller", label: "Red herring" }),
+      ]),
+    );
+    expect(onResolveStep).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("playerPick step", () => {
   it("places the reminder on the chosen player and marks the step answered", async () => {
     const user = userEvent.setup();
-    const { onAddReminder, onResolveStep } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [fortuneTellerStep],
     });
 
@@ -146,10 +167,9 @@ describe("playerPick step", () => {
     await user.selectOptions(within(step).getByLabelText(/player/i), "Bob");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onAddReminder).toHaveBeenCalledWith(
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: "fortuneteller", label: "Red herring" }),
-    );
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
+    ]);
   });
 
   it("doesn't offer the step's own player as a candidate", () => {
@@ -176,9 +196,9 @@ describe("characterAndTwoPlayers step", () => {
     falseLabel: "Wrong",
   };
 
-  it("places the true and wrong reminders on the two chosen players", async () => {
+  it("places the true and wrong reminders on the two chosen players, naming the claimed character", async () => {
     const user = userEvent.setup();
-    const { onAddReminder, onResolveStep } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [washerwomanStep],
     });
 
@@ -188,13 +208,27 @@ describe("characterAndTwoPlayers step", () => {
     await user.selectOptions(within(step).getByLabelText(/shown as wrong/i), "Cara");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onAddReminder).toHaveBeenCalledWith(
-      expect.objectContaining({ characterId: "washerwoman", label: "Townsfolk" }),
+    expect(onResolveStep).toHaveBeenCalledWith(
+      "p1",
+      "answered",
+      expect.arrayContaining([
+        expect.objectContaining({ characterId: "washerwoman", label: "Townsfolk (Chef)" }),
+        expect.objectContaining({ characterId: "washerwoman", label: "Wrong (Chef)" }),
+      ]),
     );
-    expect(onAddReminder).toHaveBeenCalledWith(
-      expect.objectContaining({ characterId: "washerwoman", label: "Wrong" }),
-    );
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
+  });
+
+  it("resets the selected character if 'show all' is unchecked while an off-script character is chosen", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({ steps: [washerwomanStep] });
+    const step = screen.getByRole("group", { name: washerwomanStep.title });
+
+    await user.click(within(step).getByRole("checkbox", { name: /show all/i }));
+    await user.selectOptions(within(step).getByLabelText("Character"), "Empath");
+    await user.click(within(step).getByRole("checkbox", { name: /show all/i }));
+
+    const select = within(step).getByLabelText("Character") as HTMLSelectElement;
+    expect(select.value).toBe("");
   });
 });
 
@@ -214,7 +248,7 @@ describe("neighborCheck step (Marionette)", () => {
 
   it("shows a correctly-seated confirmation and places the reminder on confirm", async () => {
     const user = userEvent.setup();
-    const { onAddReminder, onResolveStep } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [marionetteStep],
     });
 
@@ -222,19 +256,29 @@ describe("neighborCheck step (Marionette)", () => {
     expect(within(step).getByText(/correctly seated/i)).toBeInTheDocument();
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onAddReminder).toHaveBeenCalledWith(
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({
         characterId: "marionette",
         label: "Is the Marionette",
       }),
-    );
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
+    ]);
   });
 
   it("warns when not seated next to the Demon", () => {
     renderWalkthrough({ steps: [{ ...marionetteStep, seatedCorrectly: false }] });
     const step = screen.getByRole("group", { name: marionetteStep.title });
     expect(within(step).getByText(/not seated next to the demon/i)).toBeInTheDocument();
+  });
+
+  it("produces no reminder when the placement checkbox is unchecked", async () => {
+    const user = userEvent.setup();
+    const { onResolveStep } = renderWalkthrough({ steps: [marionetteStep] });
+
+    const step = screen.getByRole("group", { name: marionetteStep.title });
+    await user.click(within(step).getByRole("checkbox", { name: /place/i }));
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
   });
 });
 
@@ -252,7 +296,7 @@ describe("believedDemon step (Lunatic)", () => {
 
   it("places a custom reminder naming the believed demon", async () => {
     const user = userEvent.setup();
-    const { onAddReminder, onResolveStep } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [lunaticStep],
     });
 
@@ -260,10 +304,9 @@ describe("believedDemon step (Lunatic)", () => {
     await user.selectOptions(within(step).getByLabelText(/demon/i), "Imp");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onAddReminder).toHaveBeenCalledWith(
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: null, label: expect.stringContaining("Imp") }),
-    );
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
+    ]);
   });
 });
 
@@ -280,9 +323,9 @@ describe("acknowledge step (Damsel)", () => {
     message: "Tell all Minions that the Damsel is in play.",
   };
 
-  it("marks the step answered on confirm, without adding a reminder", async () => {
+  it("marks the step answered on confirm, without producing a reminder", async () => {
     const user = userEvent.setup();
-    const { onAddReminder, onResolveStep } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [damselStep],
     });
 
@@ -290,8 +333,7 @@ describe("acknowledge step (Damsel)", () => {
     expect(within(step).getByText(damselStep.message)).toBeInTheDocument();
     await user.click(within(step).getByRole("button", { name: /confirm|done/i }));
 
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
-    expect(onAddReminder).not.toHaveBeenCalled();
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
   });
 });
 
@@ -308,19 +350,18 @@ describe("review step (Drunk)", () => {
     reminderLabel: "Drunk",
   };
 
-  it("places the Drunk reminder on confirm", async () => {
+  it("places the Drunk reminder (not the stand-in character's) on confirm", async () => {
     const user = userEvent.setup();
-    const { onAddReminder, onResolveStep } = renderWalkthrough({
+    const { onResolveStep } = renderWalkthrough({
       steps: [drunkStep],
     });
 
     const step = screen.getByRole("group", { name: drunkStep.title });
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onAddReminder).toHaveBeenCalledWith(
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: "drunk", label: "Drunk" }),
-    );
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
+    ]);
   });
 });
 
@@ -337,16 +378,18 @@ describe("generic step (homebrew fallback)", () => {
     reminderOptions: ["Marked", "Foretold"],
   };
 
-  it("places a chosen reminder token on the character's own player", async () => {
+  it("stages a chosen reminder and only resolves once, on Done", async () => {
     const user = userEvent.setup();
-    const { onAddReminder } = renderWalkthrough({ steps: [genericStep] });
+    const { onResolveStep } = renderWalkthrough({ steps: [genericStep] });
 
     const step = screen.getByRole("group", { name: genericStep.title });
     await user.click(within(step).getByRole("button", { name: "Marked" }));
+    expect(onResolveStep).not.toHaveBeenCalled();
 
-    expect(onAddReminder).toHaveBeenCalledWith(
+    await user.click(within(step).getByRole("button", { name: /^done$/i }));
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: "custom-oracle", label: "Marked" }),
-    );
+    ]);
   });
 
   it("marks the step answered via Done, without requiring every reminder placed", async () => {
@@ -356,6 +399,6 @@ describe("generic step (homebrew fallback)", () => {
     const step = screen.getByRole("group", { name: genericStep.title });
     await user.click(within(step).getByRole("button", { name: /^done$/i }));
 
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered");
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
   });
 });
