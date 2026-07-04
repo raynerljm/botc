@@ -1,9 +1,11 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-// Bumped for issue #14: GameDocument gained the required `reminders` field
-// — a document saved under the old shape must be rejected by gameStorage's
-// version check rather than loaded with it silently undefined.
+// Bumped for issue #14 (GameDocument gained the required `reminders` field)
+// and issue #15 (Player gained startingCharacterId, GameDocument gained
+// activeFabled) — a document saved under the old shape must be rejected by
+// gameStorage's version check rather than loaded with those fields silently
+// undefined.
 export const GAME_SCHEMA_VERSION = 3;
 
 export type Alignment = "good" | "evil";
@@ -49,6 +51,12 @@ export interface Player {
   seat: number;
   name: string;
   characterId: string | null;
+  // Set once, the first time a character reaches this seat (draw, manual
+  // assignment, or a mid-game add), and never touched again — swaps only
+  // ever change characterId. Lets the export tell a starting character from
+  // a final one that diverged (CONTEXT.md: Starting character/Final
+  // character, issue #15).
+  startingCharacterId: string | null;
   isDrunk: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
@@ -87,6 +95,9 @@ export interface GameDocument {
   // character-detail popover on homebrew characters, which have no page on
   // the official wiki.
   almanacUrl: string | null;
+  // Fabled currently in play (character ids), shown outside the circle —
+  // they're storyteller aids, not held by any player (issue #15).
+  activeFabled: string[];
   createdAt: string;
   // End-game state (issue #21). Null winner / null endedAt means the game is
   // still in progress; both are set together when the storyteller declares a
@@ -107,7 +118,10 @@ export function circlePosition(index: number, total: number): PlayerPosition {
   };
 }
 
-const DRUNK_ID = "drunk";
+// The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so
+// every place that special-cases the Drunk (bag building here, the reveal
+// action and display in the grimoire components) shares one source of truth.
+export const DRUNK_ID = "drunk";
 
 // A declared winner is what marks a game ended; `winner` and `endedAt` are
 // always set (and cleared) together, so either can stand for "ended" — this
@@ -250,6 +264,7 @@ export function createGame({
     seat: i + 1,
     name: `Player ${i + 1}`,
     characterId: null,
+    startingCharacterId: null,
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
@@ -278,9 +293,20 @@ export function createGame({
     travellerBag: travellerTokens,
     characterPool,
     almanacUrl,
+    activeFabled: [],
     createdAt,
     winner: null,
     endedAt: null,
     notes: "",
   };
+}
+
+// Makes room at `seat` by bumping every seat at or past it up by one, so a
+// newly created player can take that seat number without colliding — seat
+// order matters mechanically (CONTEXT.md: Seat), so a mid-game addition has
+// to land at a chosen position rather than always the end (issue #15).
+export function insertAtSeat(players: Player[], seat: number): Player[] {
+  return players.map((player) =>
+    player.seat >= seat ? { ...player, seat: player.seat + 1 } : player,
+  );
 }

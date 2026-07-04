@@ -34,6 +34,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       seat: 1,
       name: "Rayner",
       characterId: "imp",
+      startingCharacterId: "imp",
       isDrunk: false,
       isTraveller: false,
       travellerAlignment: null,
@@ -43,6 +44,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       seat: 2,
       name: "Sarah",
       characterId: "washerwoman",
+      startingCharacterId: "washerwoman",
       isDrunk: false,
       isTraveller: false,
       travellerAlignment: null,
@@ -52,6 +54,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       seat: 3,
       name: "Alex",
       characterId: "librarian",
+      startingCharacterId: "librarian",
       isDrunk: true,
       isTraveller: false,
       travellerAlignment: null,
@@ -87,6 +90,26 @@ describe("buildGameSnapshot", () => {
     expect(rayner.finalCharacter).toBe("imp");
   });
 
+  it("keeps a swapped player's starting character/alignment distinct from their final one", () => {
+    const game = makeGame();
+    const swapped: Player = {
+      ...game.players[1],
+      characterId: "imp",
+    };
+    const withSwap = {
+      ...game,
+      players: game.players.map((p, i) => (i === 1 ? swapped : p)),
+    };
+
+    const snapshot = buildGameSnapshot(withSwap);
+    const sarah = snapshot.players.find((p) => p.name === "Sarah")!;
+
+    expect(sarah.startingCharacter).toBe("washerwoman");
+    expect(sarah.finalCharacter).toBe("imp");
+    expect(sarah.startingAlignment).toBe("good");
+    expect(sarah.finalAlignment).toBe("evil");
+  });
+
   it("derives good/evil alignment from the character's team", () => {
     const snapshot = buildGameSnapshot(makeGame());
 
@@ -104,6 +127,7 @@ describe("buildGameSnapshot", () => {
       seat: 4,
       name: "Nomad",
       characterId: "scapegoat",
+      startingCharacterId: "scapegoat",
       isDrunk: false,
       isTraveller: true,
       travellerAlignment: "evil",
@@ -147,12 +171,32 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.endedAt).toBeNull();
   });
 
-  it("defaults forward-looking fields not yet tracked (dead, claim, demonBluffs)", () => {
+  it("defaults forward-looking fields not yet tracked (claim, demonBluffs)", () => {
     const snapshot = buildGameSnapshot(makeGame());
 
-    expect(snapshot.players.every((p) => p.dead === false)).toBe(true);
     expect(snapshot.players.every((p) => p.claim === null)).toBe(true);
     expect(snapshot.demonBluffs).toEqual([]);
+  });
+
+  it("records a player's dead state", () => {
+    const game = makeGame();
+    const withDeath = {
+      ...game,
+      players: game.players.map((p, i) => (i === 0 ? { ...p, dead: true } : p)),
+    };
+
+    const snapshot = buildGameSnapshot(withDeath);
+
+    expect(snapshot.players.find((p) => p.name === "Rayner")!.dead).toBe(true);
+    expect(snapshot.players.find((p) => p.name === "Sarah")!.dead).toBe(false);
+  });
+
+  it("carries the game's active Fabled", () => {
+    const snapshot = buildGameSnapshot(
+      makeGame({ activeFabled: ["angel", "buddhist"] }),
+    );
+
+    expect(snapshot.activeFabled).toEqual(["angel", "buddhist"]);
   });
 });
 

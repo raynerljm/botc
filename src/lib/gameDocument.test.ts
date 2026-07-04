@@ -6,13 +6,32 @@ import {
   circlePosition,
   createGame,
   GAME_SCHEMA_VERSION,
+  insertAtSeat,
   shuffleTokens,
   withRestoredReminder,
+  type Player,
   type ReminderToken,
 } from "./gameDocument";
 
 function characters(...ids: string[]) {
   return ids.map((id) => getCharacter(id)!);
+}
+
+function makePlayer(overrides: Partial<Player> = {}): Player {
+  return {
+    id: "p1",
+    seat: 1,
+    name: "Alice",
+    characterId: "washerwoman",
+    startingCharacterId: "washerwoman",
+    isDrunk: false,
+    isTraveller: false,
+    travellerAlignment: null,
+    dead: false,
+    ghostVoteSpent: false,
+    position: null,
+    ...overrides,
+  };
 }
 
 describe("shuffleTokens", () => {
@@ -49,6 +68,30 @@ describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => 
 
   it("doesn't duplicate a reminder whose id is already present", () => {
     expect(withRestoredReminder([reminder], reminder)).toEqual([reminder]);
+  });
+});
+
+describe("insertAtSeat", () => {
+  it("makes room for a new seat by bumping every later seat by one", () => {
+    const players = [
+      makePlayer({ id: "p1", seat: 1 }),
+      makePlayer({ id: "p2", seat: 2 }),
+      makePlayer({ id: "p3", seat: 3 }),
+    ];
+
+    const result = insertAtSeat(players, 2);
+
+    expect(result.find((p) => p.id === "p1")!.seat).toBe(1);
+    expect(result.find((p) => p.id === "p2")!.seat).toBe(3);
+    expect(result.find((p) => p.id === "p3")!.seat).toBe(4);
+  });
+
+  it("leaves every seat untouched when inserting past the last seat", () => {
+    const players = [makePlayer({ id: "p1", seat: 1 })];
+
+    const result = insertAtSeat(players, 2);
+
+    expect(result.find((p) => p.id === "p1")!.seat).toBe(1);
   });
 });
 
@@ -248,6 +291,34 @@ describe("createGame", () => {
 
     expect(a.id).toBeTruthy();
     expect(a.id).not.toBe(b.id);
+  });
+
+  it("starts with no active Fabled", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.activeFabled).toEqual([]);
+  });
+
+  it("gives every player a null starting character until one is assigned", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.players.every((p) => p.startingCharacterId === null)).toBe(
+      true,
+    );
   });
 
   it("starts unfinished: no winner, no end time, empty notes", () => {

@@ -8,9 +8,18 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { isOfficialCharacter, wikiUrl, type Character } from "@/lib/characters";
+import {
+  characterPickerPool,
+  getCharacter,
+  groupByTeam,
+  isOfficialCharacter,
+  teamNames,
+  wikiUrl,
+  type Character,
+} from "@/lib/characters";
 import {
   circlePosition,
+  DRUNK_ID,
   type Player,
   type PlayerPosition,
   type ReminderToken,
@@ -27,6 +36,7 @@ export interface GrimoireBoardProps {
   characterById: Map<string, Character>;
   almanacUrl?: string | null;
   reminders?: ReminderToken[];
+  activeFabled: string[];
   onRename: (playerId: string, name: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
@@ -41,6 +51,11 @@ export interface GrimoireBoardProps {
   onMoveReminder: (reminderId: string, position: PlayerPosition) => void;
   onRemoveReminder: (reminderId: string) => void;
   onRestoreReminder: (reminder: ReminderToken) => void;
+  onSwapCharacter: (playerId: string, characterId: string) => void;
+  onRemovePlayer: (playerId: string) => void;
+  onRevealDrunk: (playerId: string) => void;
+  onAddFabled: (characterId: string) => void;
+  onRemoveFabled: (characterId: string) => void;
 }
 
 const MIN_TOKEN_REM = 1.9;
@@ -91,6 +106,7 @@ export function GrimoireBoard({
   characterById,
   almanacUrl,
   reminders = [],
+  activeFabled,
   onRename,
   onMove,
   onReCircle,
@@ -101,11 +117,38 @@ export function GrimoireBoard({
   onMoveReminder,
   onRemoveReminder,
   onRestoreReminder,
+  onSwapCharacter,
+  onRemovePlayer,
+  onRevealDrunk,
+  onAddFabled,
+  onRemoveFabled,
 }: GrimoireBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
+
+  // "Script's characters first, then everything in the dataset" (issue #15
+  // AC) — the script pool is whatever's already resolvable on this board.
+  const scriptPool = useMemo(
+    () => [...characterById.values()],
+    [characterById],
+  );
+  // Fabled/Loric are storyteller aids never held by a player (they get their
+  // own Fabled slot below) — a swap must not be able to hand one to a seat.
+  const swapOptions = useMemo(
+    () =>
+      groupByTeam(
+        characterPickerPool(scriptPool).filter(
+          (c) => c.team !== "fabled" && c.team !== "loric",
+        ),
+      ),
+    [scriptPool],
+  );
+  const fabledOptions = useMemo(
+    () => characterPickerPool(scriptPool, "fabled"),
+    [scriptPool],
+  );
   // The dragged token's position while a gesture is in progress — updated
   // every pointermove for smooth visual feedback, but never persisted until
   // the drag ends (see handlePointerUp). Persisting per pointermove would
@@ -326,6 +369,10 @@ export function GrimoireBoard({
                 ? liveDrag.position
                 : (player.position ?? circlePosition(index, total));
             const official = character ? isOfficialCharacter(character) : false;
+            // True only while the player is still wearing the stand-in's
+            // identity — once swapped to any other character (including a
+            // reveal to "drunk" itself), there's nothing left to disguise.
+            const isHiddenDrunk = player.isDrunk && character?.id !== DRUNK_ID;
 
             return (
               <div
@@ -366,7 +413,7 @@ export function GrimoireBoard({
                         <span className={styles.srOnly}> (dead)</span>
                       )}
                     </span>
-                    {player.isDrunk && (
+                    {isHiddenDrunk && (
                       <span className={styles.note}>(actually the Drunk)</span>
                     )}
                     {player.isTraveller && (
@@ -388,6 +435,43 @@ export function GrimoireBoard({
 
                     <button type="button" onClick={() => onToggleDead(player.id)}>
                       {player.dead ? "Mark alive" : "Mark dead"}
+                    </button>
+
+                    <label
+                      className={styles.field}
+                      htmlFor={`swap-character-${player.id}`}
+                    >
+                      Swap character
+                      <select
+                        id={`swap-character-${player.id}`}
+                        value={player.characterId ?? ""}
+                        onChange={(event) =>
+                          onSwapCharacter(player.id, event.target.value)
+                        }
+                      >
+                        {swapOptions.map((group) => (
+                          <optgroup key={group.team} label={teamNames[group.team]}>
+                            {group.characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+
+                    {isHiddenDrunk && (
+                      <button
+                        type="button"
+                        onClick={() => onRevealDrunk(player.id)}
+                      >
+                        Reveal Drunk
+                      </button>
+                    )}
+
+                    <button type="button" onClick={() => onRemovePlayer(player.id)}>
+                      Remove player
                     </button>
 
                     {!picker && (
@@ -509,6 +593,48 @@ export function GrimoireBoard({
           </div>
         )}
       </div>
+
+      {/* Fabled are storyteller aids, not held by any player, so they render
+          outside the circle rather than as a token on it (issue #15). */}
+      {!hidden && (
+        <div className={styles.fabledRow} role="region" aria-label="Fabled">
+          {activeFabled.map((id) => {
+            // A script rarely lists its own Fabled, so fall back to the
+            // vendored dataset when the id isn't already in characterById.
+            const character = characterById.get(id) ?? getCharacter(id);
+            if (!character) return null;
+            return (
+              <div key={id} className={styles.fabledToken}>
+                <CharacterToken character={character} />
+                <span>{character.name}</span>
+                <button type="button" onClick={() => onRemoveFabled(id)}>
+                  Remove {character.name}
+                </button>
+              </div>
+            );
+          })}
+
+          <label className={styles.field} htmlFor="add-fabled">
+            Add Fabled
+            <select
+              id="add-fabled"
+              value=""
+              onChange={(event) => {
+                if (event.target.value) onAddFabled(event.target.value);
+              }}
+            >
+              <option value="">Choose a Fabled…</option>
+              {fabledOptions
+                .filter((c) => !activeFabled.includes(c.id))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 }
