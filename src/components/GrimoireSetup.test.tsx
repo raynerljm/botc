@@ -580,3 +580,54 @@ describe("end game and export (issue #21)", () => {
     expect(reloaded.endedAt).toBeTruthy();
   });
 });
+
+describe("reminder tokens (issue #14)", () => {
+  async function completedBoard(user: ReturnType<typeof userEvent.setup>) {
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+    return screen.getByRole("region", { name: "Grimoire circle" });
+  }
+
+  it("adds a reminder from the pad and persists it to the game document", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const padControls = circle.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0]).toMatchObject({
+      characterId: "washerwoman",
+      label: "Townsfolk",
+    });
+  });
+
+  it("removes a reminder and persists the removal; undo restores it", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const padControls = circle.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    await user.click(within(circle).getByText("Townsfolk"));
+    await user.click(within(circle).getByRole("button", { name: "Remove reminder" }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(0);
+
+    await user.click(within(circle).getByRole("button", { name: /undo/i }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(1);
+  });
+});

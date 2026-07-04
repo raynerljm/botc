@@ -3,9 +3,19 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
-import type { Player } from "@/lib/gameDocument";
+import type { Player, ReminderToken } from "@/lib/gameDocument";
 
 import { GrimoireBoard } from "./GrimoireBoard";
+
+function makeReminder(overrides: Partial<ReminderToken> = {}): ReminderToken {
+  return {
+    id: "r1",
+    characterId: "washerwoman",
+    label: "Townsfolk",
+    position: { x: 60, y: 40 },
+    ...overrides,
+  };
+}
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
   return {
@@ -52,6 +62,10 @@ function makeHandlers() {
     onReorderSeat: vi.fn(),
     onToggleDead: vi.fn(),
     onToggleGhostVote: vi.fn(),
+    onAddReminder: vi.fn(),
+    onMoveReminder: vi.fn(),
+    onRemoveReminder: vi.fn(),
+    onRestoreReminder: vi.fn(),
   };
 }
 
@@ -61,16 +75,38 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+function mockBoardRect(container: HTMLElement) {
+  const board = container.querySelector("[data-board]") as HTMLElement;
+  vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+    left: 0,
+    top: 0,
+    width: 400,
+    height: 400,
+    right: 400,
+    bottom: 400,
+    x: 0,
+    y: 0,
+    toJSON() {},
+  });
+}
+
 function renderBoard(
   players: Player[],
-  overrides: Partial<ReturnType<typeof makeHandlers> & { almanacUrl?: string | null }> = {},
+  overrides: Partial<
+    ReturnType<typeof makeHandlers> & {
+      almanacUrl?: string | null;
+      reminders?: ReminderToken[];
+    }
+  > = {},
 ) {
-  const handlers = { ...makeHandlers(), ...overrides };
+  const { reminders = [], almanacUrl, ...handlerOverrides } = overrides;
+  const handlers = { ...makeHandlers(), ...handlerOverrides };
   const view = render(
     <GrimoireBoard
       players={players}
       characterById={characterById}
-      almanacUrl={overrides.almanacUrl}
+      almanacUrl={almanacUrl}
+      reminders={reminders}
       {...handlers}
     />,
   );
@@ -365,21 +401,6 @@ describe("re-circle", () => {
 });
 
 describe("drag", () => {
-  function mockBoardRect(container: HTMLElement) {
-    const board = container.querySelector("[data-board]") as HTMLElement;
-    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
-      left: 0,
-      top: 0,
-      width: 400,
-      height: 400,
-      right: 400,
-      bottom: 400,
-      x: 0,
-      y: 0,
-      toJSON() {},
-    });
-  }
-
   it("moves the token visually once the pointer moves past the drag threshold, without saving yet", () => {
     const { container, onMove } = renderBoard([makePlayer()]);
     mockBoardRect(container);
@@ -525,5 +546,159 @@ describe("hide grimoire", () => {
     expect(onMove).not.toHaveBeenCalled();
     const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
     expect(wrap.style.left).not.toBe("35%");
+  });
+});
+
+describe("reminders (issue #14)", () => {
+  it("renders every reminder on the pad at its stored position, with the source character's art", () => {
+    const { container } = renderBoard([makePlayer()], {
+      reminders: [makeReminder({ id: "r1", characterId: "washerwoman", label: "Townsfolk", position: { x: 60, y: 40 } })],
+    });
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    expect(wrap).toBeInTheDocument();
+    expect(wrap.style.left).toBe("60%");
+    expect(wrap.style.top).toBe("40%");
+    expect(within(wrap).getByText("Townsfolk")).toBeInTheDocument();
+  });
+
+  it("renders a reminder with no source character (custom text) without character art", () => {
+    const { container } = renderBoard([makePlayer()], {
+      reminders: [makeReminder({ id: "r1", characterId: null, label: "Custom note" })],
+    });
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    expect(within(wrap).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(wrap).getByText("Custom note")).toBeInTheDocument();
+  });
+
+  it("opens the reminder picker from the pad, and adds the chosen reminder at a default position", async () => {
+    const user = userEvent.setup();
+    const { container, onAddReminder } = renderBoard([makePlayer()]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    const dialog = screen.getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    expect(onAddReminder).toHaveBeenCalledWith({
+      characterId: "washerwoman",
+      label: "Townsfolk",
+      position: { x: 50, y: 50 },
+    });
+  });
+
+  it("opens the reminder picker from a player's token menu, and parks the new reminder next to them", async () => {
+    const user = userEvent.setup();
+    const { onAddReminder } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 30, y: 40 } }),
+    ]);
+
+    await user.click(screen.getByText("Alice"));
+    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    expect(onAddReminder).toHaveBeenCalledWith({
+      characterId: "washerwoman",
+      label: "Townsfolk",
+      position: { x: 35, y: 40 },
+    });
+  });
+
+  it("drags a reminder the same way a player token drags, saving only on pointerup", () => {
+    const { container, onMoveReminder, onMove } = renderBoard([makePlayer()], {
+      reminders: [makeReminder({ id: "r1", position: { x: 60, y: 40 } })],
+    });
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-reminder-id='r1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    expect(wrap.style.left).toBe("35%");
+    expect(onMoveReminder).not.toHaveBeenCalled();
+
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 35, y: 45 });
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("removes a reminder in one tap, offering an undo that restores it", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1" });
+    const { container, onRemoveReminder, onRestoreReminder } = renderBoard([makePlayer()], {
+      reminders: [reminder],
+    });
+
+    await user.click(within(container.querySelector("[data-reminder-id='r1']") as HTMLElement).getByText("Townsfolk"));
+    await user.click(screen.getByRole("button", { name: "Remove reminder" }));
+
+    expect(onRemoveReminder).toHaveBeenCalledWith("r1");
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    expect(onRestoreReminder).toHaveBeenCalledWith(reminder);
+  });
+
+  it("hides the undo banner along with the rest of the board when the grimoire is hidden", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1" });
+    const { container } = renderBoard([makePlayer()], { reminders: [reminder] });
+
+    await user.click(within(container.querySelector("[data-reminder-id='r1']") as HTMLElement).getByText("Townsfolk"));
+    await user.click(screen.getByRole("button", { name: "Remove reminder" }));
+    expect(screen.getByRole("button", { name: /undo/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
+    expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
+  });
+
+  it("doesn't let a second 'Add reminder' tap silently discard an already-open picker's context", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 30, y: 40 } }),
+    ]);
+
+    await user.click(screen.getByText("Alice"));
+    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+
+    const padControls = container.querySelector("[data-controls]") as HTMLElement;
+    expect(
+      within(padControls).queryByRole("button", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes the reminder picker and hides its pad trigger when the grimoire is hidden (code review: PR #37)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    const padControls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    expect(screen.getByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
+    expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+    expect(
+      within(padControls).queryByRole("button", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes an open reminder picker on re-circle, so a stale parked position can't be used (code review: PR #37)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ id: "p1", position: { x: 30, y: 40 } })]);
+
+    await user.click(screen.getByText("Alice"));
+    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    expect(screen.getByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /re-circle/i }));
+    expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
   });
 });

@@ -1,11 +1,10 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-// Bumped for issue #13: Player/GameDocument gained new required fields
-// (dead, ghostVoteSpent, position, almanacUrl) — a document saved under the
-// old shape must be rejected by gameStorage's version check rather than
-// loaded with those fields silently undefined.
-export const GAME_SCHEMA_VERSION = 2;
+// Bumped for issue #14: GameDocument gained the required `reminders` field
+// — a document saved under the old shape must be rejected by gameStorage's
+// version check rather than loaded with it silently undefined.
+export const GAME_SCHEMA_VERSION = 3;
 
 export type Alignment = "good" | "evil";
 
@@ -28,6 +27,21 @@ export interface BagToken {
 export interface PlayerPosition {
   x: number;
   y: number;
+}
+
+// A reminder token parked on the pad to track ability state (CONTEXT.md
+// doesn't define this term separately from the token itself, but see issue
+// #14: "the small tokens the storyteller parks next to players"). Unlike a
+// Player, a reminder has no inherent default layout — position is always a
+// concrete point, set once when the token is added.
+export interface ReminderToken {
+  id: string;
+  // The character this reminder's text comes from, for grouping in the
+  // picker and for wiki/almanac-style provenance. Null for a free-text
+  // reminder that isn't tied to any character.
+  characterId: string | null;
+  label: string;
+  position: PlayerPosition;
 }
 
 export interface Player {
@@ -55,6 +69,11 @@ export interface GameDocument {
   scriptId: string;
   scriptName: string;
   players: Player[];
+  // Tokens tracking ability state, dragged freely around the pad rather than
+  // owned by any one player (CONTEXT.md: Bag draw is the physical ritual
+  // this app digitizes; reminder tokens are the physical ones storytellers
+  // park next to players, but nothing here ties a reminder to a player id).
+  reminders: ReminderToken[];
   // Undrawn/unassigned tokens, kept separate so a Traveller added later
   // never competes with the official-team draw pool (CONTEXT.md: Bag).
   bag: BagToken[];
@@ -101,6 +120,17 @@ export function isGameEnded(game: GameDocument): boolean {
 // (CONTEXT.md: Target counts).
 export function seatedPlayerCount(game: GameDocument): number {
   return game.players.filter((player) => !player.isTraveller).length;
+}
+
+// Undo must be idempotent: two Undo taps fired before the banner's state
+// update has rendered would otherwise both append the same removed token,
+// leaving two reminders sharing one id.
+export function withRestoredReminder(
+  reminders: ReminderToken[],
+  reminder: ReminderToken,
+): ReminderToken[] {
+  if (reminders.some((r) => r.id === reminder.id)) return reminders;
+  return [...reminders, reminder];
 }
 
 function defaultNewId(): string {
@@ -243,6 +273,7 @@ export function createGame({
     scriptId,
     scriptName,
     players,
+    reminders: [],
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,

@@ -7,6 +7,8 @@ import {
   createGame,
   GAME_SCHEMA_VERSION,
   shuffleTokens,
+  withRestoredReminder,
+  type ReminderToken,
 } from "./gameDocument";
 
 function characters(...ids: string[]) {
@@ -30,6 +32,23 @@ describe("shuffleTokens", () => {
     expect(shuffleTokens([1, 2, 3, 4], random)).toEqual(
       shuffleTokens([1, 2, 3, 4], random),
     );
+  });
+});
+
+describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => {
+  const reminder: ReminderToken = {
+    id: "r1",
+    characterId: null,
+    label: "Poisoned",
+    position: { x: 10, y: 20 },
+  };
+
+  it("appends a restored reminder that isn't already present", () => {
+    expect(withRestoredReminder([], reminder)).toEqual([reminder]);
+  });
+
+  it("doesn't duplicate a reminder whose id is already present", () => {
+    expect(withRestoredReminder([reminder], reminder)).toEqual([reminder]);
   });
 });
 
@@ -245,6 +264,19 @@ describe("createGame", () => {
     expect(game.winner).toBeNull();
     expect(game.endedAt).toBeNull();
     expect(game.notes).toBe("");
+  });
+
+  it("starts with no reminder tokens on the pad", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.reminders).toEqual([]);
   });
 
   it("puts the built bag tokens on the game document", () => {
