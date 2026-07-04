@@ -214,6 +214,39 @@ describe("createGame", () => {
     expect(game.createdAt).toBe("2026-07-04T00:00:00.000Z");
   });
 
+  it("gives every game a unique id so many games can coexist", () => {
+    const input = {
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    } as const;
+
+    const a = createGame(input);
+    const b = createGame(input);
+
+    expect(a.id).toBeTruthy();
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("starts unfinished: no winner, no end time, empty notes", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+      createdAt: "2026-07-04T00:00:00.000Z",
+    });
+
+    expect(game.winner).toBeNull();
+    expect(game.endedAt).toBeNull();
+    expect(game.notes).toBe("");
+  });
+
   it("puts the built bag tokens on the game document", () => {
     const game = createGame({
       scriptId: "tb",

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
-import { clearGame, loadGame } from "@/lib/gameStorage";
+import { clearGames, loadGame } from "@/lib/gameStorage";
 
 import { GrimoireSetup } from "./GrimoireSetup";
 
@@ -24,7 +24,7 @@ function makeGame(overrides: Partial<Parameters<typeof createGame>[0]> = {}) {
 }
 
 afterEach(() => {
-  clearGame();
+  clearGames();
 });
 
 describe("seat list generated from player count", () => {
@@ -557,5 +557,26 @@ describe("autosave (issue #12)", () => {
       "Bob",
       "Player 3",
     ]);
+  });
+});
+
+describe("end game and export (issue #21)", () => {
+  it("keeps export reachable while a game is still in progress", () => {
+    render(<GrimoireSetup game={makeGame({ playerCount: 5 })} />);
+
+    expect(
+      screen.getByRole("button", { name: /export game/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("persists a declared winner to the game document", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={makeGame({ playerCount: 5 })} />);
+
+    await user.click(screen.getByRole("button", { name: /evil wins/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.winner).toBe("evil");
+    expect(reloaded.endedAt).toBeTruthy();
   });
 });

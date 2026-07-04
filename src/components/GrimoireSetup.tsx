@@ -14,6 +14,7 @@ import {
 import { saveGame } from "@/lib/gameStorage";
 
 import { CharacterToken } from "./CharacterToken";
+import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireSetup.module.css";
 
@@ -407,7 +408,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </div>
       ) : (
         !screenObscured && (
-          <ul className={styles.seats}>
+          <ul className={styles.seats} aria-label="Seats">
             {game.players.map((player) => {
               const character = player.characterId
                 ? characterById.get(player.characterId)
@@ -474,6 +475,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           </ul>
         )
       )}
+
+      {/* End-game and export are always reachable (export works mid-game too,
+          issue #21 AC), but hidden while the device is mid pass-around so a
+          drawing player can't see it. */}
+      {!screenObscured && <EndGamePanel game={game} onChange={update} />}
     </div>
   );
 }

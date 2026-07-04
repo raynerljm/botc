@@ -1,6 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getCharacter } from "@/lib/characters";
+import { createGame } from "@/lib/gameDocument";
+import { saveGame } from "@/lib/gameStorage";
+
 import Home from "./page";
 
 vi.mock("next/navigation", () => ({
@@ -41,5 +45,27 @@ describe("script picker", () => {
 
     expect(screen.getByText("Your scripts")).toBeInTheDocument();
     expect(screen.getByText("Add a script")).toBeInTheDocument();
+  });
+
+  it("shows saved games above the picker, with a way to resume them", () => {
+    saveGame(
+      createGame({
+        scriptId: "tb",
+        scriptName: "Trouble Brewing",
+        playerCount: 5,
+        selectedCharacters: [getCharacter("washerwoman")!],
+        standIn: null,
+        extraCopies: {},
+      }),
+    );
+
+    render(<Home />);
+
+    expect(
+      screen.getByRole("region", { name: /your games/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /resume/i }),
+    ).toBeInTheDocument();
   });
 });

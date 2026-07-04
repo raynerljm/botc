@@ -10,8 +10,8 @@ import {
   type Character,
   type Team,
 } from "@/lib/characters";
-import { createGame } from "@/lib/gameDocument";
-import { saveGame } from "@/lib/gameStorage";
+import { createGame, isGameEnded } from "@/lib/gameDocument";
+import { listGames, saveGame } from "@/lib/gameStorage";
 import { computeActiveJinxes, normalizeCharacterId } from "@/lib/scriptParser";
 import {
   MAX_PLAYERS,
@@ -293,6 +293,18 @@ export function BagBuilder({
 
   function handleContinue() {
     if (!scriptId || !scriptName) return;
+    // Starting a new game is non-destructive now that many games coexist, but
+    // an in-progress game is easy to lose track of — confirm before adding
+    // another (advisory, ADR 0003: the storyteller can always proceed).
+    const inProgress = listGames().some((g) => !isGameEnded(g));
+    if (
+      inProgress &&
+      !window.confirm(
+        "You already have a game in progress. Start a new game as well? Your existing game stays saved.",
+      )
+    ) {
+      return;
+    }
     const game = createGame({
       scriptId,
       scriptName,

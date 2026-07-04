@@ -9,6 +9,11 @@ export const GAME_SCHEMA_VERSION = 2;
 
 export type Alignment = "good" | "evil";
 
+// Display text for an alignment (CONTEXT.md: Alignment is good or evil).
+export function alignmentLabel(alignment: Alignment): string {
+  return alignment === "good" ? "Good" : "Evil";
+}
+
 export interface BagToken {
   id: string;
   characterId: string;
@@ -43,6 +48,10 @@ export interface Player {
 
 export interface GameDocument {
   schemaVersion: typeof GAME_SCHEMA_VERSION;
+  // Stable per-game identity so several saved games can coexist on one device
+  // (CONTEXT.md: Game document is the unit of persistence; a games list lets
+  // more than one live at once).
+  id: string;
   scriptId: string;
   scriptName: string;
   players: Player[];
@@ -60,6 +69,12 @@ export interface GameDocument {
   // the official wiki.
   almanacUrl: string | null;
   createdAt: string;
+  // End-game state (issue #21). Null winner / null endedAt means the game is
+  // still in progress; both are set together when the storyteller declares a
+  // result. Notes is free text the storyteller can add at any time.
+  winner: Alignment | null;
+  endedAt: string | null;
+  notes: string;
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -74,6 +89,19 @@ export function circlePosition(index: number, total: number): PlayerPosition {
 }
 
 const DRUNK_ID = "drunk";
+
+// A declared winner is what marks a game ended; `winner` and `endedAt` are
+// always set (and cleared) together, so either can stand for "ended" — this
+// helper keeps every call site reading the same one.
+export function isGameEnded(game: GameDocument): boolean {
+  return game.winner !== null;
+}
+
+// The distribution-table player count — travellers are extra and never counted
+// (CONTEXT.md: Target counts).
+export function seatedPlayerCount(game: GameDocument): number {
+  return game.players.filter((player) => !player.isTraveller).length;
+}
 
 function defaultNewId(): string {
   return crypto.randomUUID();
@@ -211,6 +239,7 @@ export function createGame({
 
   return {
     schemaVersion: GAME_SCHEMA_VERSION,
+    id: newId(),
     scriptId,
     scriptName,
     players,
@@ -219,5 +248,8 @@ export function createGame({
     characterPool,
     almanacUrl,
     createdAt,
+    winner: null,
+    endedAt: null,
+    notes: "",
   };
 }
