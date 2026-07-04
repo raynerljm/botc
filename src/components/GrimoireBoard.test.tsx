@@ -673,4 +673,32 @@ describe("reminders (issue #14)", () => {
       within(padControls).queryByRole("button", { name: "Add reminder" }),
     ).not.toBeInTheDocument();
   });
+
+  it("closes the reminder picker and hides its pad trigger when the grimoire is hidden (code review: PR #37)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    const padControls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    expect(screen.getByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
+    expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+    expect(
+      within(padControls).queryByRole("button", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes an open reminder picker on re-circle, so a stale parked position can't be used (code review: PR #37)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ id: "p1", position: { x: 30, y: 40 } })]);
+
+    await user.click(screen.getByText("Alice"));
+    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    expect(screen.getByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /re-circle/i }));
+    expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+  });
 });

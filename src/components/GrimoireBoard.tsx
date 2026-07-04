@@ -263,6 +263,10 @@ export function GrimoireBoard({
           type="button"
           onClick={() => {
             cancelActiveDrag();
+            // A picker already open holds a player's position captured at
+            // open time — re-circling can move that player, so the stale
+            // parked position has to be discarded along with the drag.
+            setPicker(null);
             onReCircle();
           }}
         >
@@ -273,20 +277,21 @@ export function GrimoireBoard({
             type="button"
             onClick={() => {
               cancelActiveDrag();
+              setPicker(null);
               setHidden(true);
             }}
           >
             Hide grimoire
           </button>
         )}
-        {!picker && (
+        {!hidden && !picker && (
           <button type="button" onClick={() => setPicker({ base: null })}>
             Add reminder
           </button>
         )}
       </div>
 
-      {picker && (
+      {!hidden && picker && (
         <ReminderPicker
           characterById={characterById}
           inPlayCharacterIds={inPlayCharacterIds}

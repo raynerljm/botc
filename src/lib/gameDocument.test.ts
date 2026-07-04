@@ -7,6 +7,8 @@ import {
   createGame,
   GAME_SCHEMA_VERSION,
   shuffleTokens,
+  withRestoredReminder,
+  type ReminderToken,
 } from "./gameDocument";
 
 function characters(...ids: string[]) {
@@ -30,6 +32,23 @@ describe("shuffleTokens", () => {
     expect(shuffleTokens([1, 2, 3, 4], random)).toEqual(
       shuffleTokens([1, 2, 3, 4], random),
     );
+  });
+});
+
+describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => {
+  const reminder: ReminderToken = {
+    id: "r1",
+    characterId: null,
+    label: "Poisoned",
+    position: { x: 10, y: 20 },
+  };
+
+  it("appends a restored reminder that isn't already present", () => {
+    expect(withRestoredReminder([], reminder)).toEqual([reminder]);
+  });
+
+  it("doesn't duplicate a reminder whose id is already present", () => {
+    expect(withRestoredReminder([reminder], reminder)).toEqual([reminder]);
   });
 });
 

@@ -5,6 +5,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Character } from "@/lib/characters";
 import {
   shuffleTokens,
+  withRestoredReminder,
   type Alignment,
   type BagToken,
   type GameDocument,
@@ -157,9 +158,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // Restores the exact removed token (same id, label, and position) rather
   // than building a fresh one — every field the storyteller sees is back to
   // how it was, even though the token lands at the end of the array if other
-  // reminders were added or removed in the meantime.
+  // reminders were added or removed in the meantime. withRestoredReminder is
+  // idempotent by id, so a rapid double-tap on Undo can't duplicate it.
   function restoreReminder(reminder: ReminderToken) {
-    update({ ...game, reminders: [...game.reminders, reminder] });
+    update({ ...game, reminders: withRestoredReminder(game.reminders, reminder) });
   }
 
   function startDraw() {
