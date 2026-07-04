@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 
 import { CharacterToken } from "@/components/CharacterToken";
 import {
-  type BaseEditionId,
   baseEditions,
   getEditionCharacters,
   groupByTeam,
@@ -35,7 +34,7 @@ export default async function CharacterSheetPage({ params }: Props) {
   const edition = baseEditions.find((e) => e.id === editionId);
   if (!edition) notFound();
 
-  const groups = groupByTeam(getEditionCharacters(edition.id as BaseEditionId));
+  const groups = groupByTeam(getEditionCharacters(edition.id));
 
   return (
     <main className={styles.main}>

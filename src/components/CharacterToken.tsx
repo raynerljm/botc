@@ -22,7 +22,9 @@ export function CharacterToken({ character }: { character: Character }) {
   }
   return (
     <Image
-      src={character.image}
+      // next/image does not prepend basePath to unoptimized images, so a
+      // subpath deploy (GitHub Pages) needs it added here.
+      src={(process.env.NEXT_PUBLIC_BASE_PATH ?? "") + character.image}
       alt=""
       width={48}
       height={48}

@@ -47,8 +47,14 @@ async function main() {
     (c) => !HOMEBREW_EDITIONS.has(c.edition),
   );
 
+  const officialIds = new Set(official.map((c) => c.id));
+  // The jinx table also covers unofficial characters; keep only jinxes whose
+  // target exists in the vendored dataset so no reference dangles.
   const jinxesByCharacter = new Map(
-    rawJinxes.map((entry) => [entry.id, entry.jinx]),
+    rawJinxes.map((entry) => [
+      entry.id,
+      entry.jinx.filter((j) => officialIds.has(j.id)),
+    ]),
   );
 
   const iconsDir = path.join(ROOT, "public", "icons");
