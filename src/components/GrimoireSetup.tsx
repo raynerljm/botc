@@ -10,6 +10,7 @@ import {
   type GameDocument,
   type Player,
   type PlayerPosition,
+  type ReminderToken,
 } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
 
@@ -126,6 +127,39 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ...game,
       players: updatePlayer(playerId, { ghostVoteSpent: !player.ghostVoteSpent }),
     });
+  }
+
+  function addReminder(input: {
+    characterId: string | null;
+    label: string;
+    position: PlayerPosition;
+  }) {
+    const reminder: ReminderToken = { id: crypto.randomUUID(), ...input };
+    update({ ...game, reminders: [...game.reminders, reminder] });
+  }
+
+  function moveReminder(reminderId: string, position: PlayerPosition) {
+    update({
+      ...game,
+      reminders: game.reminders.map((r) =>
+        r.id === reminderId ? { ...r, position } : r,
+      ),
+    });
+  }
+
+  function removeReminder(reminderId: string) {
+    update({
+      ...game,
+      reminders: game.reminders.filter((r) => r.id !== reminderId),
+    });
+  }
+
+  // Restores the exact removed token (same id, label, and position) rather
+  // than building a fresh one — every field the storyteller sees is back to
+  // how it was, even though the token lands at the end of the array if other
+  // reminders were added or removed in the meantime.
+  function restoreReminder(reminder: ReminderToken) {
+    update({ ...game, reminders: [...game.reminders, reminder] });
   }
 
   function startDraw() {
@@ -398,12 +432,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             players={game.players}
             characterById={characterById}
             almanacUrl={game.almanacUrl}
+            reminders={game.reminders}
             onRename={renamePlayer}
             onMove={movePlayer}
             onReCircle={reCircle}
             onReorderSeat={reorderSeat}
             onToggleDead={toggleDead}
             onToggleGhostVote={toggleGhostVote}
+            onAddReminder={addReminder}
+            onMoveReminder={moveReminder}
+            onRemoveReminder={removeReminder}
+            onRestoreReminder={restoreReminder}
           />
         </div>
       ) : (

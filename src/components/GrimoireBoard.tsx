@@ -1,28 +1,46 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import { isOfficialCharacter, wikiUrl, type Character } from "@/lib/characters";
 import {
   circlePosition,
   type Player,
   type PlayerPosition,
+  type ReminderToken,
 } from "@/lib/gameDocument";
 import { isHttpUrl } from "@/lib/scriptParser";
 
 import { CharacterToken } from "./CharacterToken";
+import { ReminderChip } from "./ReminderChip";
+import { ReminderPicker } from "./ReminderPicker";
 import styles from "./GrimoireBoard.module.css";
 
 export interface GrimoireBoardProps {
   players: Player[];
   characterById: Map<string, Character>;
   almanacUrl?: string | null;
+  reminders?: ReminderToken[];
   onRename: (playerId: string, name: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
   onReorderSeat: (playerId: string, direction: "earlier" | "later") => void;
   onToggleDead: (playerId: string) => void;
   onToggleGhostVote: (playerId: string) => void;
+  onAddReminder: (input: {
+    characterId: string | null;
+    label: string;
+    position: PlayerPosition;
+  }) => void;
+  onMoveReminder: (reminderId: string, position: PlayerPosition) => void;
+  onRemoveReminder: (reminderId: string) => void;
+  onRestoreReminder: (reminder: ReminderToken) => void;
 }
 
 const MIN_TOKEN_REM = 1.9;
@@ -47,8 +65,11 @@ function clampPct(value: number): number {
 // threshold, every tap-to-open-the-menu would also fire a (near-zero) move.
 const DRAG_THRESHOLD_PX = 6;
 
+type TokenKind = "player" | "reminder";
+
 interface DragState {
-  playerId: string;
+  kind: TokenKind;
+  id: string;
   pointerId: number;
   startX: number;
   startY: number;
@@ -57,16 +78,29 @@ interface DragState {
   lastPosition: PlayerPosition;
 }
 
+// A reminder dropped from a player's token menu starts parked just beside
+// them rather than at the pad's generic default — this is what "the
+// storyteller parks it next to players" means for a freshly-added token.
+function reminderDropPosition(base: PlayerPosition | null): PlayerPosition {
+  if (!base) return { x: 50, y: 50 };
+  return { x: clampPct(base.x + 5), y: clampPct(base.y) };
+}
+
 export function GrimoireBoard({
   players,
   characterById,
   almanacUrl,
+  reminders = [],
   onRename,
   onMove,
   onReCircle,
   onReorderSeat,
   onToggleDead,
   onToggleGhostVote,
+  onAddReminder,
+  onMoveReminder,
+  onRemoveReminder,
+  onRestoreReminder,
 }: GrimoireBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -78,9 +112,25 @@ export function GrimoireBoard({
   // mean dozens of full-document localStorage writes a second on a real
   // touch drag, which is the opposite of "must feel good on an iPad."
   const [liveDrag, setLiveDrag] = useState<{
-    playerId: string;
+    kind: TokenKind;
+    id: string;
     position: PlayerPosition;
   } | null>(null);
+  // null = closed; { base: null } = opened from the pad (generic default
+  // position); { base: <player position> } = opened from a token's menu.
+  const [picker, setPicker] = useState<{ base: PlayerPosition | null } | null>(
+    null,
+  );
+  const [removedReminder, setRemovedReminder] = useState<ReminderToken | null>(
+    null,
+  );
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    };
+  }, []);
 
   const sorted = useMemo(
     () => [...players].sort((a, b) => a.seat - b.seat),
@@ -88,10 +138,20 @@ export function GrimoireBoard({
   );
   const total = sorted.length;
   const tokenSize = tokenSizeRem(total);
+  const inPlayCharacterIds = useMemo(
+    () =>
+      new Set(
+        players
+          .map((p) => p.characterId)
+          .filter((id): id is string => id !== null),
+      ),
+    [players],
+  );
 
   function handlePointerDown(
     event: ReactPointerEvent<HTMLElement>,
-    playerId: string,
+    kind: TokenKind,
+    id: string,
   ) {
     const board = boardRef.current;
     if (!board) return;
@@ -101,7 +161,8 @@ export function GrimoireBoard({
     // the first drag would never resolve.
     if (dragRef.current) return;
     dragRef.current = {
-      playerId,
+      kind,
+      id,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -131,15 +192,16 @@ export function GrimoireBoard({
     drag.lastPosition = position;
     // Local state only, for smooth visual feedback — the game document is
     // written once, in handlePointerUp, not on every frame of the drag.
-    setLiveDrag({ playerId: drag.playerId, position });
+    setLiveDrag({ kind: drag.kind, id: drag.id, position });
   }
 
   function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.dragged) {
-      justDraggedRef.current = drag.playerId;
-      onMove(drag.playerId, drag.lastPosition);
+      justDraggedRef.current = `${drag.kind}:${drag.id}`;
+      if (drag.kind === "player") onMove(drag.id, drag.lastPosition);
+      else onMoveReminder(drag.id, drag.lastPosition);
     }
     dragRef.current = null;
     setLiveDrag(null);
@@ -157,12 +219,32 @@ export function GrimoireBoard({
   // also pop the menu open.
   function handleSummaryClick(
     event: React.MouseEvent<HTMLElement>,
-    playerId: string,
+    kind: TokenKind,
+    id: string,
   ) {
-    if (justDraggedRef.current === playerId) {
+    if (justDraggedRef.current === `${kind}:${id}`) {
       event.preventDefault();
       justDraggedRef.current = null;
     }
+  }
+
+  function handleAddReminder(input: { characterId: string | null; label: string }) {
+    onAddReminder({ ...input, position: reminderDropPosition(picker?.base ?? null) });
+    setPicker(null);
+  }
+
+  function handleRemoveReminder(reminder: ReminderToken) {
+    onRemoveReminder(reminder.id);
+    setRemovedReminder(reminder);
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    undoTimeoutRef.current = setTimeout(() => setRemovedReminder(null), 6000);
+  }
+
+  function handleUndoRemove() {
+    if (!removedReminder) return;
+    onRestoreReminder(removedReminder);
+    setRemovedReminder(null);
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
   }
 
   // Re-circling or hiding the board while a drag is still in progress must
@@ -176,7 +258,7 @@ export function GrimoireBoard({
 
   return (
     <div className={styles.wrapper}>
-      <div className={styles.controls}>
+      <div className={styles.controls} data-controls>
         <button
           type="button"
           onClick={() => {
@@ -197,7 +279,30 @@ export function GrimoireBoard({
             Hide grimoire
           </button>
         )}
+        {!picker && (
+          <button type="button" onClick={() => setPicker({ base: null })}>
+            Add reminder
+          </button>
+        )}
       </div>
+
+      {picker && (
+        <ReminderPicker
+          characterById={characterById}
+          inPlayCharacterIds={inPlayCharacterIds}
+          onAdd={handleAddReminder}
+          onCancel={() => setPicker(null)}
+        />
+      )}
+
+      {!hidden && removedReminder && (
+        <div className={styles.undoBanner}>
+          <span>Removed &ldquo;{removedReminder.label}&rdquo;</span>
+          <button type="button" onClick={handleUndoRemove}>
+            Undo
+          </button>
+        </div>
+      )}
 
       <div
         ref={boardRef}
@@ -212,7 +317,7 @@ export function GrimoireBoard({
               ? characterById.get(player.characterId)
               : undefined;
             const position =
-              liveDrag?.playerId === player.id
+              liveDrag?.kind === "player" && liveDrag.id === player.id
                 ? liveDrag.position
                 : (player.position ?? circlePosition(index, total));
             const official = character ? isOfficialCharacter(character) : false;
@@ -228,11 +333,13 @@ export function GrimoireBoard({
                   <summary
                     className={styles.tokenSummary}
                     data-dead={player.dead || undefined}
-                    onPointerDown={(event) => handlePointerDown(event, player.id)}
+                    onPointerDown={(event) =>
+                      handlePointerDown(event, "player", player.id)
+                    }
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                     onPointerCancel={handlePointerCancel}
-                    onClick={(event) => handleSummaryClick(event, player.id)}
+                    onClick={(event) => handleSummaryClick(event, "player", player.id)}
                     // The character art is an <img>, which browsers make
                     // natively draggable — without this, the OS's own
                     // drag-and-drop takes over after the first pointermove
@@ -277,6 +384,15 @@ export function GrimoireBoard({
                     <button type="button" onClick={() => onToggleDead(player.id)}>
                       {player.dead ? "Mark alive" : "Mark dead"}
                     </button>
+
+                    {!picker && (
+                      <button
+                        type="button"
+                        onClick={() => setPicker({ base: position })}
+                      >
+                        Add reminder
+                      </button>
+                    )}
 
                     <div className={styles.seatControls}>
                       <button
@@ -329,6 +445,53 @@ export function GrimoireBoard({
                     Ghost vote: {player.ghostVoteSpent ? "spent" : "available"}
                   </button>
                 )}
+              </div>
+            );
+          })}
+
+        {!hidden &&
+          reminders.map((reminder) => {
+            const character = reminder.characterId
+              ? characterById.get(reminder.characterId)
+              : undefined;
+            const position =
+              liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
+                ? liveDrag.position
+                : reminder.position;
+
+            return (
+              <div
+                key={reminder.id}
+                className={styles.reminderWrap}
+                data-reminder-id={reminder.id}
+                style={{ left: `${position.x}%`, top: `${position.y}%` }}
+              >
+                <details className={styles.menu}>
+                  <summary
+                    className={styles.tokenSummary}
+                    onPointerDown={(event) =>
+                      handlePointerDown(event, "reminder", reminder.id)
+                    }
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerCancel}
+                    onClick={(event) =>
+                      handleSummaryClick(event, "reminder", reminder.id)
+                    }
+                    onDragStart={(event) => event.preventDefault()}
+                  >
+                    <ReminderChip character={character} label={reminder.label} />
+                  </summary>
+
+                  <div className={styles.menuBody}>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveReminder(reminder)}
+                    >
+                      Remove reminder
+                    </button>
+                  </div>
+                </details>
               </div>
             );
           })}

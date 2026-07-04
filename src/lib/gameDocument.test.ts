@@ -247,6 +247,19 @@ describe("createGame", () => {
     expect(game.notes).toBe("");
   });
 
+  it("starts with no reminder tokens on the pad", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.reminders).toEqual([]);
+  });
+
   it("puts the built bag tokens on the game document", () => {
     const game = createGame({
       scriptId: "tb",
