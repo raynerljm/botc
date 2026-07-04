@@ -2,13 +2,19 @@ import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
 // Bumped for issue #14 (GameDocument gained the required `reminders` field),
-// issue #15 (Player gained startingCharacterId, GameDocument gained
-// activeFabled), and issue #16 (GameDocument gained the night-list fields:
-// night, nightOpen, nightChecked, nightUnskipped, firstNightOrder,
-// otherNightOrder) — a document saved under an older shape must be rejected
-// by gameStorage's version check rather than loaded with any of those
-// fields silently undefined.
-export const GAME_SCHEMA_VERSION = 3;
+// again for issue #15 (Player gained startingCharacterId, GameDocument
+// gained activeFabled), again for issue #16 (GameDocument gained the
+// night-list fields: night, nightOpen, nightChecked, nightUnskipped,
+// firstNightOrder, otherNightOrder), and again for issue #18 (Player gained
+// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`) — a
+// document saved under an older shape must be rejected by gameStorage's
+// version check rather than loaded with any of these fields silently
+// undefined.
+export const GAME_SCHEMA_VERSION = 6;
+
+// Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
+// script-wide, not per-player"), not an open-ended list.
+export const DEMON_BLUFF_SLOTS = 3;
 
 export type Alignment = "good" | "evil";
 
@@ -68,6 +74,10 @@ export interface Player {
   // one ghost vote was already spent.
   ghostVoteSpent: boolean;
   position: PlayerPosition | null;
+  // The character this player is currently presenting as, good or evil
+  // alike (CONTEXT.md: Claim). Current claim only — no history, matching a
+  // finished game's export (ADR 0002 spirit).
+  claim: string | null;
 }
 
 export interface GameDocument {
@@ -93,6 +103,16 @@ export interface GameDocument {
   // the vendored dataset, so tokens/players resolve display info from here
   // instead of a global lookup.
   characterPool: Character[];
+  // Every character the script offered at bag-build time, whether or not it
+  // made the bag — unlike characterPool, this is the universe a "not in
+  // play" distinction needs (e.g. Demon bluffs). Captured once here because
+  // resolving a script by id needs filesystem access the client-only /game
+  // route doesn't have (ADR 0001).
+  scriptCharacters: Character[];
+  // The three not-in-play good characters shown to the Demon on the first
+  // night (CONTEXT.md: Demon bluffs) — a fixed DEMON_BLUFF_SLOTS-length
+  // array of character ids, null where a slot hasn't been filled yet.
+  demonBluffs: (string | null)[];
   // The script's own almanac link (script-tool _meta.almanac), used for the
   // character-detail popover on homebrew characters, which have no page on
   // the official wiki.
@@ -261,6 +281,11 @@ export interface CreateGameInput {
   otherNightOrder?: string[] | null;
   createdAt?: string;
   newId?: () => string;
+  // The script's full character list, selected or not (BagBuilder already
+  // has this from its own `characters` prop). Defaults to just the selected
+  // characters, so a caller that doesn't have the full script on hand still
+  // gets a valid document — it just can't offer any "not in play" options.
+  scriptCharacters?: Character[];
 }
 
 export function createGame({
@@ -275,6 +300,7 @@ export function createGame({
   otherNightOrder = null,
   createdAt = new Date().toISOString(),
   newId = defaultNewId,
+  scriptCharacters = selectedCharacters,
 }: CreateGameInput): GameDocument {
   const { officialTokens, travellerTokens } = buildBagTokens({
     selectedCharacters,
@@ -295,6 +321,7 @@ export function createGame({
     dead: false,
     ghostVoteSpent: false,
     position: null,
+    claim: null,
   }));
 
   const characterPool = Array.from(
@@ -316,6 +343,8 @@ export function createGame({
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,
+    scriptCharacters,
+    demonBluffs: Array.from({ length: DEMON_BLUFF_SLOTS }, () => null),
     almanacUrl,
     activeFabled: [],
     firstNightOrder,

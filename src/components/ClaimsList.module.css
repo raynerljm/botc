@@ -1,0 +1,39 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.heading {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.claim {
+  color: var(--muted);
+}

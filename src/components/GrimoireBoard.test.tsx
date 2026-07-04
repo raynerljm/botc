@@ -30,6 +30,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     dead: false,
     ghostVoteSpent: false,
     position: null,
+    claim: null,
     ...overrides,
   };
 }
@@ -38,6 +39,16 @@ const characterById = new Map([
   ["washerwoman", getCharacter("washerwoman")!],
   ["imp", getCharacter("imp")!],
 ]);
+
+// Deliberately distinct from the "washerwoman"/"imp" characters used as
+// player tokens elsewhere in this file, so a claim <option>'s text (present
+// in the DOM even inside a closed token menu) never collides with a token's
+// own rendered name.
+const claimOptions = [
+  getCharacter("librarian")!,
+  getCharacter("monk")!,
+  getCharacter("recluse")!,
+];
 
 // jsdom has no real PointerEvent constructor, so a plain MouseEvent stands in
 // with pointerId grafted on — React's synthetic event reads whatever
@@ -72,6 +83,7 @@ function makeHandlers() {
     onRevealDrunk: vi.fn(),
     onAddFabled: vi.fn(),
     onRemoveFabled: vi.fn(),
+    onSetClaim: vi.fn(),
   };
 }
 
@@ -103,16 +115,23 @@ function renderBoard(
       almanacUrl?: string | null;
       reminders?: ReminderToken[];
       activeFabled?: string[];
+      claimOptions?: typeof claimOptions;
     }
   > = {},
 ) {
-  const { reminders = [], almanacUrl, activeFabled, ...handlerOverrides } =
-    overrides;
+  const {
+    reminders = [],
+    activeFabled,
+    claimOptions: claimOptionsOverride,
+    almanacUrl,
+    ...handlerOverrides
+  } = overrides;
   const handlers = { ...makeHandlers(), ...handlerOverrides };
   const view = render(
     <GrimoireBoard
       players={players}
       characterById={characterById}
+      claimOptions={claimOptionsOverride ?? claimOptions}
       almanacUrl={almanacUrl}
       reminders={reminders}
       activeFabled={activeFabled ?? []}
@@ -132,6 +151,7 @@ describe("GrimoireBoard rendering", () => {
         ]}
         characterById={characterById}
         activeFabled={[]}
+        claimOptions={claimOptions}
         {...noop}
       />,
     );
@@ -254,6 +274,7 @@ describe("token menu", () => {
       <GrimoireBoard
         players={[makePlayer({ characterId: "custom-oracle" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         almanacUrl="https://example.com/almanac"
         activeFabled={[]}
         {...noop}
@@ -279,6 +300,7 @@ describe("token menu", () => {
       <GrimoireBoard
         players={[makePlayer({ characterId: "custom-oracle" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         almanacUrl="javascript:alert(1)"
         activeFabled={[]}
         {...noop}
@@ -306,6 +328,7 @@ describe("token menu", () => {
       <GrimoireBoard
         players={[makePlayer({ characterId: "imp" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         almanacUrl="https://example.com/almanac"
         activeFabled={[]}
         {...noop}
@@ -318,6 +341,40 @@ describe("token menu", () => {
     expect(screen.getByText(reskinned.ability)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
+  });
+});
+
+describe("claims", () => {
+  it("sets a player's claim from their token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/claim/i), "librarian");
+
+    expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", "librarian");
+  });
+
+  it("clears a claim back to none", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer({ claim: "librarian" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/claim/i), "");
+
+    expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", null);
+  });
+
+  it("renders a small claim badge by the token", () => {
+    renderBoard([makePlayer({ claim: "librarian" })]);
+
+    expect(screen.getByText(/claims librarian/i)).toBeInTheDocument();
+  });
+
+  it("shows no claim badge when the player hasn't claimed anything", () => {
+    renderBoard([makePlayer({ claim: null })]);
+
+    expect(screen.queryByText(/claims/i)).not.toBeInTheDocument();
   });
 });
 
@@ -746,6 +803,7 @@ describe("swap character", () => {
       <GrimoireBoard
         players={[makePlayer()]}
         characterById={byId}
+        claimOptions={claimOptions}
         activeFabled={["angel"]}
         {...noop}
       />,
@@ -838,6 +896,7 @@ describe("Drunk reveal", () => {
       <GrimoireBoard
         players={[makePlayer({ isDrunk: true, characterId: "drunk" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         activeFabled={[]}
         {...noop}
       />,
@@ -865,6 +924,7 @@ describe("Fabled", () => {
       <GrimoireBoard
         players={[makePlayer()]}
         characterById={byId}
+        claimOptions={claimOptions}
         activeFabled={["angel"]}
         {...noop}
       />,
@@ -888,6 +948,7 @@ describe("Fabled", () => {
       <GrimoireBoard
         players={[makePlayer()]}
         characterById={byId}
+        claimOptions={claimOptions}
         activeFabled={[]}
         {...handlers}
       />,
@@ -909,6 +970,7 @@ describe("Fabled", () => {
       <GrimoireBoard
         players={[makePlayer()]}
         characterById={byId}
+        claimOptions={claimOptions}
         activeFabled={["angel"]}
         {...handlers}
       />,

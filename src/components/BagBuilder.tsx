@@ -319,6 +319,10 @@ export function BagBuilder({
       almanacUrl,
       firstNightOrder,
       otherNightOrder,
+      // `pool`, not the raw `characters` prop — a character pulled in by
+      // auto-add (e.g. Huntsman's Damsel) is genuinely in play and must be
+      // offerable as a claim/bluff option too.
+      scriptCharacters: pool,
     });
     saveGame(game);
     router.push("/game");

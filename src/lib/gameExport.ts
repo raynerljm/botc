@@ -13,10 +13,7 @@ import {
 // claim/demonBluffs, which were already part of v1's shape as placeholders).
 export const EXPORT_SCHEMA_VERSION = 2;
 
-// The exported snapshot shape (ADR 0002: a snapshot, not an event log). Fields
-// that later slices fill in — claim and demonBluffs (#18) — are present now
-// with safe defaults so the file format is stable from this slice on and
-// that slice only has to populate them.
+// The exported snapshot shape (ADR 0002: a snapshot, not an event log).
 export interface SnapshotPlayer {
   name: string;
   seat: number;
@@ -79,7 +76,7 @@ export function buildGameSnapshot(game: GameDocument): GameSnapshot {
       startingAlignment: alignmentOf(player, startingCharacter),
       finalAlignment: alignmentOf(player, finalCharacter),
       dead: player.dead,
-      claim: null,
+      claim: player.claim,
     };
   });
 
@@ -87,11 +84,16 @@ export function buildGameSnapshot(game: GameDocument): GameSnapshot {
     schemaVersion: EXPORT_SCHEMA_VERSION,
     script: {
       name: game.scriptName,
-      characters: game.characterPool.map((c) => c.id),
+      // The full script pool, not just characterPool (in-play) — a claim or
+      // Demon bluff can reference a not-in-play character (CONTEXT.md:
+      // Script is "the list of characters available", not "in play"), and
+      // the snapshot would otherwise reference ids missing from its own
+      // script.characters list.
+      characters: game.scriptCharacters.map((c) => c.id),
     },
     playerCount: seatedPlayerCount(game),
     players,
-    demonBluffs: [],
+    demonBluffs: game.demonBluffs.filter((id): id is string => id !== null),
     activeFabled: game.activeFabled,
     winner: game.winner,
     startedAt: game.createdAt,

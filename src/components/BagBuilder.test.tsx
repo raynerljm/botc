@@ -315,6 +315,27 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
     expect(damsel).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("captures the auto-added Damsel in the game's script pool, not just the bag", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("huntsman")}
+        scriptId="custom"
+        scriptName="Custom"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    // Damsel never appeared in the script's own `characters` prop — she only
+    // entered play via auto-add — but a real player can still draw her, so
+    // she must be a valid claim/bluff option too.
+    expect(loadGame()!.scriptCharacters.map((c) => c.id)).toContain("damsel");
+  });
+
   it("removes the auto-added Damsel when the Huntsman is deselected", async () => {
     const user = userEvent.setup();
     render(<BagBuilder characters={characters("huntsman")} />);
@@ -559,6 +580,10 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
       "washerwoman",
     ]);
     expect(push).toHaveBeenCalledWith("/game");
+    // The full script pool is captured too, not just what made the bag — a
+    // Townsfolk left unselected (e.g. the Chef) still needs to be offerable
+    // as a not-in-play Demon bluff later.
+    expect(game!.scriptCharacters.map((c) => c.id)).toContain("chef");
   });
 
   it("is always available, even far from the target counts (ADR 0003)", () => {

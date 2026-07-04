@@ -82,6 +82,25 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.script.characters).toContain("baron");
   });
 
+  it("lists the full script pool, not just in-play characters, so a not-in-play claim or bluff always resolves against it", () => {
+    const game = makeGame({
+      scriptCharacters: [
+        getCharacter("imp")!,
+        getCharacter("washerwoman")!,
+        getCharacter("librarian")!,
+        getCharacter("baron")!,
+        // Not selected into this game's bag/characterPool.
+        getCharacter("chef")!,
+      ],
+      demonBluffs: ["chef", null, null],
+    });
+
+    const snapshot = buildGameSnapshot(game);
+
+    expect(snapshot.script.characters).toContain("chef");
+    expect(snapshot.demonBluffs).toContain("chef");
+  });
+
   it("records each player's starting and final character (equal until a swap slice lands)", () => {
     const snapshot = buildGameSnapshot(makeGame());
     const rayner = snapshot.players.find((p) => p.name === "Rayner")!;
@@ -135,6 +154,7 @@ describe("buildGameSnapshot", () => {
       dead: false,
       ghostVoteSpent: false,
       position: null,
+      claim: null,
     };
     const withTraveller = {
       ...game,
@@ -172,7 +192,7 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.endedAt).toBeNull();
   });
 
-  it("defaults forward-looking fields not yet tracked (claim, demonBluffs)", () => {
+  it("defaults dead, claim, and demonBluffs when none are set", () => {
     const snapshot = buildGameSnapshot(makeGame());
 
     expect(snapshot.players.every((p) => p.claim === null)).toBe(true);
@@ -198,6 +218,40 @@ describe("buildGameSnapshot", () => {
     );
 
     expect(snapshot.activeFabled).toEqual(["angel", "buddhist"]);
+  });
+
+  it("carries each player's dead state and claim into the snapshot", () => {
+    const game = makeGame();
+    const [rayner, sarah] = game.players;
+    const withState = {
+      ...game,
+      players: [
+        { ...rayner, dead: true, claim: "washerwoman" },
+        { ...sarah, claim: "librarian" },
+        ...game.players.slice(2),
+      ],
+    };
+
+    const snapshot = buildGameSnapshot(withState);
+
+    expect(snapshot.players.find((p) => p.name === "Rayner")).toMatchObject({
+      dead: true,
+      claim: "washerwoman",
+    });
+    expect(snapshot.players.find((p) => p.name === "Sarah")).toMatchObject({
+      dead: false,
+      claim: "librarian",
+    });
+  });
+
+  it("carries only the filled Demon bluff slots into the snapshot", () => {
+    const game = makeGame({
+      demonBluffs: ["fortuneteller", null, "slayer"],
+    });
+
+    const snapshot = buildGameSnapshot(game);
+
+    expect(snapshot.demonBluffs).toEqual(["fortuneteller", "slayer"]);
   });
 });
 

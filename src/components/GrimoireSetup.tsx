@@ -23,6 +23,8 @@ import {
 import { saveGame } from "@/lib/gameStorage";
 
 import { CharacterToken } from "./CharacterToken";
+import { ClaimsList } from "./ClaimsList";
+import { DemonBluffsPanel } from "./DemonBluffsPanel";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import { NightList } from "./NightList";
@@ -85,6 +87,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
     [game.characterPool],
+  );
+  // Claims (and Demon bluffs) aren't limited to in-play characters, so they
+  // resolve names from the script's full pool rather than characterById.
+  const scriptCharacterById = useMemo(
+    () => new Map(game.scriptCharacters.map((c) => [c.id, c] as const)),
+    [game.scriptCharacters],
   );
 
   // Sharing from the grimoire shares what's actually in this game — the
@@ -289,6 +297,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  function setClaim(playerId: string, characterId: string | null) {
+    update({ ...game, players: updatePlayer(playerId, { claim: characterId }) });
+  }
+
   function startDraw() {
     if (!nextUnassignedSeat) return;
     setDraw({
@@ -405,6 +417,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       dead: false,
       ghostVoteSpent: false,
       position: null,
+      claim: null,
     };
 
     update({
@@ -442,6 +455,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       dead: false,
       ghostVoteSpent: false,
       position: null,
+      claim: null,
     };
 
     update({
@@ -649,33 +663,39 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {setupComplete ? (
-        <div className={styles.circleLayout}>
-          <div role="region" aria-label="Grimoire circle">
-            <GrimoireBoard
-              players={game.players}
-              characterById={characterById}
-              almanacUrl={game.almanacUrl}
-              reminders={game.reminders}
-              activeFabled={game.activeFabled}
-              onRename={renamePlayer}
-              onMove={movePlayer}
-              onReCircle={reCircle}
-              onReorderSeat={reorderSeat}
-              onToggleDead={toggleDead}
-              onToggleGhostVote={toggleGhostVote}
-              onAddReminder={addReminder}
-              onMoveReminder={moveReminder}
-              onRemoveReminder={removeReminder}
-              onRestoreReminder={restoreReminder}
-              onSwapCharacter={swapCharacter}
-              onRemovePlayer={removePlayer}
-              onRevealDrunk={revealDrunk}
-              onAddFabled={addFabled}
-              onRemoveFabled={removeFabled}
-            />
+        <>
+          <div className={styles.circleLayout}>
+            <div role="region" aria-label="Grimoire circle">
+              <GrimoireBoard
+                players={game.players}
+                characterById={characterById}
+                claimOptions={game.scriptCharacters}
+                almanacUrl={game.almanacUrl}
+                reminders={game.reminders}
+                activeFabled={game.activeFabled}
+                onRename={renamePlayer}
+                onMove={movePlayer}
+                onReCircle={reCircle}
+                onReorderSeat={reorderSeat}
+                onToggleDead={toggleDead}
+                onToggleGhostVote={toggleGhostVote}
+                onAddReminder={addReminder}
+                onMoveReminder={moveReminder}
+                onRemoveReminder={removeReminder}
+                onRestoreReminder={restoreReminder}
+                onSwapCharacter={swapCharacter}
+                onRemovePlayer={removePlayer}
+                onRevealDrunk={revealDrunk}
+                onAddFabled={addFabled}
+                onRemoveFabled={removeFabled}
+                onSetClaim={setClaim}
+              />
+            </div>
+            <NightList game={game} characterById={characterById} onChange={update} />
           </div>
-          <NightList game={game} characterById={characterById} onChange={update} />
-        </div>
+          <DemonBluffsPanel game={game} onChange={update} />
+          <ClaimsList players={game.players} characterById={scriptCharacterById} />
+        </>
       ) : (
         !screenObscured && (
           <ul className={styles.seats} aria-label="Seats">
