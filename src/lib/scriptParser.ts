@@ -173,9 +173,13 @@ function resolveOrError(
   else errors.push({ type: "unknown-character", raw: id });
 }
 
+export const META_ENTRY_ID = "_meta";
+
 function isMetaEntry(entry: unknown): entry is Record<string, unknown> {
   return (
-    typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).id === "_meta"
+    typeof entry === "object" &&
+    entry !== null &&
+    (entry as Record<string, unknown>).id === META_ENTRY_ID
   );
 }
 

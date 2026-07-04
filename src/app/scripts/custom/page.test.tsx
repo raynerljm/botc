@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveCustomScript } from "@/lib/customScripts";
+import { decodeScriptForShare } from "@/lib/scriptShare";
 
 let searchParams = new URLSearchParams();
 vi.mock("next/navigation", () => ({
@@ -38,6 +40,28 @@ describe("custom script page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Washerwoman")).toBeInTheDocument();
     expect(screen.getByText("Imp")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /share via qr/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shares the storyteller's locally-assigned name when the script's own JSON has no _meta.name", async () => {
+    const saved = saveCustomScript({
+      rawText: JSON.stringify(["washerwoman", "imp"]),
+      name: "My Locally Named Script",
+    });
+
+    await renderCustomScriptPage(saved.id);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    const shareUrl = screen.getByText(/\/share#/).textContent!;
+    const encoded = shareUrl.split("#")[1];
+
+    const result = decodeScriptForShare(encoded);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta.name).toBe("My Locally Named Script");
   });
 
   it("shows a friendly message when the script isn't on this device", async () => {

@@ -37,6 +37,10 @@ describe("getScriptById", () => {
     expect(script?.characters.map((c) => c.id)).toContain("imp");
   });
 
+  it("carries its display name in meta.name too, for consumers that only read meta (e.g. sharing)", () => {
+    expect(getScriptById("tb")?.meta.name).toBe("Trouble Brewing");
+  });
+
   it("resolves a library script by its filename-derived id, meta and jinxes included", () => {
     const script = getScriptById("sample-homebrew");
     expect(script?.name).toBe("Sample Homebrew Script");

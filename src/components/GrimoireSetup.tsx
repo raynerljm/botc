@@ -16,6 +16,7 @@ import { CharacterToken } from "./CharacterToken";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireCircle } from "./GrimoireCircle";
 import styles from "./GrimoireSetup.module.css";
+import { ShareScriptButton } from "./ShareScriptButton";
 
 export interface GrimoireSetupProps {
   game: GameDocument;
@@ -44,6 +45,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
     [game.characterPool],
+  );
+
+  // Sharing from the grimoire shares what's actually in this game — the
+  // characterPool (CONTEXT.md: Script) — rather than re-resolving the
+  // original script file, which for a library script would require
+  // filesystem access this client component doesn't have.
+  const shareableScriptMeta = useMemo(
+    () => ({ name: game.scriptName }),
+    [game.scriptName],
   );
 
   // Travellers (added later, task #6) don't come from this bag draw.
@@ -417,10 +427,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         )
       )}
 
-      {/* End-game and export are always reachable (export works mid-game too,
-          issue #21 AC), but hidden while the device is mid pass-around so a
-          drawing player can't see it. */}
-      {!screenObscured && <EndGamePanel game={game} onChange={update} />}
+      {/* End-game, export, and script sharing are always reachable (export
+          works mid-game too, issue #21 AC), but hidden while the device is
+          mid pass-around so a drawing player can't see it. */}
+      {!screenObscured && (
+        <>
+          <ShareScriptButton
+            meta={shareableScriptMeta}
+            characters={game.characterPool}
+          />
+          <EndGamePanel game={game} onChange={update} />
+        </>
+      )}
     </div>
   );
 }

@@ -50,7 +50,10 @@ function baseEditionScript(id: BaseEditionId, name: string): ScriptDetail {
   return {
     id,
     name,
-    meta: {},
+    // meta.name mirrors the top-level name so consumers that only see the
+    // meta (e.g. sharing a script) don't lose the display name for base
+    // editions, which have no script-tool _meta entry of their own.
+    meta: { name },
     characters,
     jinxes: computeActiveJinxes(characters),
   };

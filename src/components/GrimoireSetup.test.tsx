@@ -576,3 +576,13 @@ describe("end game and export (issue #21)", () => {
     expect(reloaded.endedAt).toBeTruthy();
   });
 });
+
+describe("share the script via QR from the grimoire (issue #22)", () => {
+  it("offers to share the game's script", () => {
+    render(<GrimoireSetup game={makeGame({ playerCount: 5 })} />);
+
+    expect(
+      screen.getByRole("button", { name: /share via qr/i }),
+    ).toBeInTheDocument();
+  });
+});
