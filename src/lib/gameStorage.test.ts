@@ -126,9 +126,8 @@ describe("legacy migration (pre-#21 single-game key)", () => {
   // Pre-#21 shape: no `id`/`winner`/`endedAt`/`notes` — those were added by
   // this slice, so a genuinely old save has none of them.
   function legacyDocument(overrides: Record<string, unknown> = {}) {
-    const full = makeGame("Legacy Game") as Record<string, unknown>;
     const legacy = Object.fromEntries(
-      Object.entries(full).filter(
+      Object.entries(makeGame("Legacy Game")).filter(
         ([key]) => !["id", "winner", "endedAt", "notes"].includes(key),
       ),
     );
