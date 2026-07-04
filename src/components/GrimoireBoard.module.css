@@ -193,6 +193,28 @@
   cursor: pointer;
 }
 
+.fabledRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+}
+
+.fabledToken {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.fabledToken :global(img) {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
 .srOnly {
   position: absolute;
   width: 1px;

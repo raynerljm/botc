@@ -8,14 +8,15 @@ import {
 
 // The export is its own versioned format (ADR 0002), independent of the game
 // document's schema version (ADR 0001) — a document-schema bump must not
-// silently restamp exports whose shape hasn't changed.
-export const EXPORT_SCHEMA_VERSION = 1;
+// silently restamp exports whose shape hasn't changed. Bumped to 2 for issue
+// #15's activeFabled field, an addition to the snapshot shape itself (unlike
+// claim/demonBluffs, which were already part of v1's shape as placeholders).
+export const EXPORT_SCHEMA_VERSION = 2;
 
 // The exported snapshot shape (ADR 0002: a snapshot, not an event log). Fields
-// that later slices fill in — final character (swaps, #15), dead (#13), claim
-// and demonBluffs (#18) — are present now with safe defaults so the file
-// format is stable from this slice on and those slices only have to populate
-// them.
+// that later slices fill in — claim and demonBluffs (#18) — are present now
+// with safe defaults so the file format is stable from this slice on and
+// that slice only has to populate them.
 export interface SnapshotPlayer {
   name: string;
   seat: number;
@@ -33,6 +34,7 @@ export interface GameSnapshot {
   playerCount: number;
   players: SnapshotPlayer[];
   demonBluffs: string[];
+  activeFabled: string[];
   winner: Alignment | null;
   startedAt: string;
   endedAt: string | null;
@@ -63,22 +65,20 @@ export function buildGameSnapshot(game: GameDocument): GameSnapshot {
   const characterById = new Map(game.characterPool.map((c) => [c.id, c]));
 
   const players: SnapshotPlayer[] = game.players.map((player) => {
-    const character = player.characterId
+    const startingCharacter = player.startingCharacterId
+      ? characterById.get(player.startingCharacterId)
+      : undefined;
+    const finalCharacter = player.characterId
       ? characterById.get(player.characterId)
       : undefined;
-    const alignment = alignmentOf(player, character);
-    // No character-swap tracking yet (#15), so a player's starting and final
-    // character/alignment are the same. The two fields still export
-    // separately so a game with no swaps reads correctly and later slices
-    // only need to diverge them.
     return {
       name: player.name,
       seat: player.seat,
-      startingCharacter: player.characterId,
+      startingCharacter: player.startingCharacterId,
       finalCharacter: player.characterId,
-      startingAlignment: alignment,
-      finalAlignment: alignment,
-      dead: false,
+      startingAlignment: alignmentOf(player, startingCharacter),
+      finalAlignment: alignmentOf(player, finalCharacter),
+      dead: player.dead,
       claim: null,
     };
   });
@@ -92,6 +92,7 @@ export function buildGameSnapshot(game: GameDocument): GameSnapshot {
     playerCount: seatedPlayerCount(game),
     players,
     demonBluffs: [],
+    activeFabled: game.activeFabled,
     winner: game.winner,
     startedAt: game.createdAt,
     endedAt: game.endedAt,

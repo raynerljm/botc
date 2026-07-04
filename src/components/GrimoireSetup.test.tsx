@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
@@ -388,6 +388,28 @@ describe("travellers addable at setup with alignment", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("joins the circle at a chosen seat position rather than always the end", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await user.selectOptions(
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Seat position"),
+      "Before Player 1",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to the circle" }));
+
+    const reloaded = loadGame()!;
+    const traveller = reloaded.players.find((p) => p.isTraveller)!;
+    expect(traveller.seat).toBe(1);
+    // Both official seats shifted later to make room.
+    expect(reloaded.players.filter((p) => !p.isTraveller).map((p) => p.seat).sort()).toEqual([2, 3]);
+  });
+
   it("appends a new seat with the chosen character and alignment, without touching the official target counts", async () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={gameWithTraveller()} />);
@@ -444,8 +466,9 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
 
     // A single seat, now fully assigned, renders as the completed circle.
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    expect(within(circle).getByText("Washerwoman")).toBeInTheDocument();
-    expect(within(circle).getByText(/actually the Drunk/i)).toBeInTheDocument();
+    const summary = circle.querySelector("details > summary") as HTMLElement;
+    expect(within(summary).getByText("Washerwoman")).toBeInTheDocument();
+    expect(within(summary).getByText(/actually the Drunk/i)).toBeInTheDocument();
 
     expect(loadGame()!.players[0].isDrunk).toBe(true);
   });
@@ -463,6 +486,268 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     expect(
       within(seat1).queryByText(/actually the Drunk/i),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("mid-game token management (issue #15)", () => {
+  async function completeSetup(
+    playerCount = 2,
+    selectedCharacters = [getCharacter("washerwoman")!, getCharacter("imp")!],
+  ) {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount, selectedCharacters });
+    render(<GrimoireSetup game={game} />);
+
+    for (let seat = 1; seat <= playerCount; seat++) {
+      const remainingOption = within(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+      )
+        .getAllByRole("option")
+        .find((option) => option.textContent !== "Choose a character…")!;
+      await user.selectOptions(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+        remainingOption.textContent!,
+      );
+    }
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    return { user, circle };
+  }
+
+  it("swapping a player's character preserves their starting character for export", async () => {
+    const { user, circle } = await completeSetup();
+
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "imp",
+    );
+
+    const reloaded = loadGame()!;
+    expect(reloaded.players[0].characterId).toBe("imp");
+    expect(reloaded.players[0].startingCharacterId).toBe("washerwoman");
+  });
+
+  it("adds a swapped-in off-script character to the character pool so it stays resolvable", async () => {
+    const { user, circle } = await completeSetup();
+
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "baron",
+    );
+
+    const reloaded = loadGame()!;
+    expect(reloaded.characterPool.map((c) => c.id)).toContain("baron");
+  });
+
+  it("removes a player after confirmation", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { user, circle } = await completeSetup();
+
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.click(
+      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
+    );
+
+    expect(confirmSpy).toHaveBeenCalled();
+    const reloaded = loadGame()!;
+    expect(reloaded.players).toHaveLength(1);
+    expect(reloaded.players.map((p) => p.name)).toEqual(["Player 2"]);
+    confirmSpy.mockRestore();
+  });
+
+  it("keeps every player when the storyteller declines the removal confirmation", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { user, circle } = await completeSetup();
+
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.click(
+      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
+    );
+
+    expect(loadGame()!.players).toHaveLength(2);
+    confirmSpy.mockRestore();
+  });
+
+  it("reveals the Drunk, showing the real character openly from then on", async () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: washerwoman,
+      extraCopies: {},
+    });
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={game} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelector("[data-player-id]") as HTMLElement;
+    await user.click(within(wrap).getByText("Player 1"));
+    await user.click(
+      within(wrap).getByRole("button", { name: /reveal drunk/i }),
+    );
+
+    expect(loadGame()!.players[0].characterId).toBe("drunk");
+    expect(
+      within(wrap).queryByRole("button", { name: /reveal drunk/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clears the Drunk stand-in note once a generic swap moves the seat to a different character", async () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!, getCharacter("imp")!],
+      standIn: washerwoman,
+      extraCopies: {},
+    });
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={game} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelector("[data-player-id]") as HTMLElement;
+    await user.click(within(wrap).getByText("Player 1"));
+    await user.selectOptions(within(wrap).getByLabelText(/swap character/i), "imp");
+
+    expect(loadGame()!.players[0].isDrunk).toBe(false);
+    expect(within(wrap).queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
+    expect(
+      within(wrap).queryByRole("button", { name: /reveal drunk/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adds and removes an active Fabled, displayed outside the circle", async () => {
+    const { user, circle } = await completeSetup();
+
+    const fabledRow = within(circle).getByRole("region", { name: "Fabled" });
+    await user.selectOptions(
+      within(fabledRow).getByLabelText(/add fabled/i),
+      "angel",
+    );
+
+    expect(loadGame()!.activeFabled).toEqual(["angel"]);
+    expect(loadGame()!.characterPool.map((c) => c.id)).toContain("angel");
+    expect(within(fabledRow).getByText("Angel")).toBeInTheDocument();
+
+    await user.click(
+      within(fabledRow).getByRole("button", { name: /remove angel/i }),
+    );
+
+    expect(loadGame()!.activeFabled).toEqual([]);
+  });
+
+  it("adds a non-traveller character token mid-game at a chosen seat position", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+    await user.selectOptions(screen.getByLabelText("Character"), "baron");
+    await user.selectOptions(
+      screen.getByLabelText("Seat position"),
+      "Before Player 1",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Add to the grimoire" }),
+    );
+
+    const reloaded = loadGame()!;
+    expect(reloaded.players).toHaveLength(3);
+    const added = reloaded.players.find((p) => p.characterId === "baron")!;
+    expect(added.seat).toBe(1);
+    expect(added.startingCharacterId).toBe("baron");
+    expect(
+      reloaded.players.filter((p) => p.characterId !== "baron").map((p) => p.seat).sort(),
+    ).toEqual([2, 3]);
+    expect(reloaded.characterPool.map((c) => c.id)).toContain("baron");
+  });
+
+  it("computes 'At the end' from the highest seat number, not the player count, once a removal has left a gap", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+    ]);
+
+    // Remove the middle seat, leaving seats {1, 3} — only 2 players, but the
+    // highest seat number in play is still 3.
+    const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
+    await user.click(within(seat2Wrap).getByText("Player 2"));
+    await user.click(
+      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
+    );
+    confirmSpy.mockRestore();
+
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+    await user.selectOptions(screen.getByLabelText("Character"), "baron");
+    await user.selectOptions(
+      screen.getByLabelText("Seat position"),
+      "At the end",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Add to the grimoire" }),
+    );
+
+    const reloaded = loadGame()!;
+    const added = reloaded.players.find((p) => p.characterId === "baron")!;
+    // The true end is seat 4 (after the existing seat-3 player), not seat 3
+    // (which would collide with — and displace — the existing seat-3 player).
+    expect(added.seat).toBe(4);
+    expect(reloaded.players.find((p) => p.name === "Player 1")!.seat).toBe(1);
+    expect(reloaded.players.find((p) => p.name === "Player 3")!.seat).toBe(3);
+  });
+
+  async function removeMiddleSeat(extraCharacters: NonNullable<ReturnType<typeof getCharacter>>[] = []) {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+      ...extraCharacters,
+    ]);
+
+    const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
+    await user.click(within(seat2Wrap).getByText("Player 2"));
+    await user.click(
+      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
+    );
+    confirmSpy.mockRestore();
+    return user;
+  }
+
+  it("defaults the 'Add character' seat position to the true end, not the player count, after a removal left a gap", async () => {
+    const user = await removeMiddleSeat();
+
+    // The select is never touched — its default value on open must already
+    // be the true end (seat 4), not players.length + 1 (seat 3, which would
+    // collide with the existing seat-3 player).
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+
+    expect(screen.getByLabelText("Seat position")).toHaveValue("4");
+  });
+
+  it("defaults the 'Add traveller' seat position to the true end, not the player count, after a removal left a gap", async () => {
+    const user = await removeMiddleSeat([getCharacter("scapegoat")!]);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+
+    expect(screen.getByLabelText("Seat position")).toHaveValue("4");
   });
 });
 
@@ -489,10 +774,17 @@ describe("the first visible grimoire (issue #12)", () => {
     );
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    expect(within(circle).getByText("Player 1")).toBeInTheDocument();
-    expect(within(circle).getByText("Player 2")).toBeInTheDocument();
-    expect(within(circle).getByText("Washerwoman")).toBeInTheDocument();
-    expect(within(circle).getByText("Imp")).toBeInTheDocument();
+    const wraps = circle.querySelectorAll("[data-player-id]");
+    const seat1 = (wraps[0] as HTMLElement).querySelector(
+      "details > summary",
+    ) as HTMLElement;
+    const seat2 = (wraps[1] as HTMLElement).querySelector(
+      "details > summary",
+    ) as HTMLElement;
+    expect(within(seat1).getByText("Player 1")).toBeInTheDocument();
+    expect(within(seat2).getByText("Player 2")).toBeInTheDocument();
+    expect(within(seat1).getByText("Washerwoman")).toBeInTheDocument();
+    expect(within(seat2).getByText("Imp")).toBeInTheDocument();
     // The setup controls (draw/manual-assign) are gone — there's nothing
     // left to assign.
     expect(
