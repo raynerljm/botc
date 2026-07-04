@@ -1,0 +1,79 @@
+.main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 1rem;
+  min-height: calc(100vh - 6rem);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.title {
+  font-size: 2.25rem;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.subtitle {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.editions {
+  list-style: none;
+  display: grid;
+  gap: 1rem;
+}
+
+.editionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.5rem 1.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.75rem;
+  transition: background 0.15s ease;
+}
+
+.editionCard:hover,
+.editionCard:focus-visible {
+  background: var(--surface-raised);
+}
+
+.editionCard[data-edition="tb"] {
+  border-left-color: var(--team-demon);
+}
+
+.editionCard[data-edition="bmr"] {
+  border-left-color: var(--team-minion);
+}
+
+.editionCard[data-edition="snv"] {
+  border-left-color: var(--team-traveller);
+}
+
+.editionName {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.editionMeta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (min-width: 640px) {
+  .editions {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .editionCard {
+    min-height: 9rem;
+    justify-content: center;
+  }
+}
