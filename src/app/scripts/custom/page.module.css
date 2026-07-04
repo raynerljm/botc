@@ -1,0 +1,39 @@
+.main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 1rem;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.5rem 0 1.5rem;
+}
+
+.back {
+  color: var(--muted);
+  font-size: 0.95rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+}
+
+.back:hover {
+  color: var(--foreground);
+}
+
+.title {
+  font-size: 1.75rem;
+  color: var(--accent);
+}
+
+.message {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.errors {
+  color: var(--team-demon);
+  line-height: 1.5;
+  display: grid;
+  gap: 0.35rem;
+}

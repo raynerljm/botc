@@ -24,6 +24,13 @@ Actions" in repo settings).
 The official character dataset and token art are vendored; see
 `docs/dataset.md` for sources and `npm run refresh-dataset` to update.
 
+## Scripts
+
+Beyond the three base editions, scripts can come from the repo's
+`script-library/` folder (auto-discovered at build time) or from a runtime
+upload/paste, remembered on-device. See `docs/scripts.md` for the script-tool
+format and how each source works.
+
 ## Vocabulary and decisions
 
 Domain vocabulary lives in `CONTEXT.md`; binding architecture decisions in

@@ -22,13 +22,13 @@
   font-size: 1.1rem;
 }
 
-.editions {
+.scriptList {
   list-style: none;
   display: grid;
   gap: 1rem;
 }
 
-.editionCard {
+.scriptCard {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -40,40 +40,52 @@
   transition: background 0.15s ease;
 }
 
-.editionCard:hover,
-.editionCard:focus-visible {
+.scriptCard:hover,
+.scriptCard:focus-visible {
   background: var(--surface-raised);
 }
 
-.editionCard[data-edition="tb"] {
+.scriptCard[data-edition="tb"] {
   border-left-color: var(--team-demon);
 }
 
-.editionCard[data-edition="bmr"] {
+.scriptCard[data-edition="bmr"] {
   border-left-color: var(--team-minion);
 }
 
-.editionCard[data-edition="snv"] {
+.scriptCard[data-edition="snv"] {
   border-left-color: var(--team-traveller);
 }
 
-.editionName {
+.scriptName {
   font-size: 1.35rem;
   font-weight: 600;
 }
 
-.editionMeta {
+.scriptMeta {
   color: var(--muted);
   font-size: 0.9rem;
 }
 
 @media (min-width: 640px) {
-  .editions {
+  .scriptList {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .editionCard {
+  .scriptCard {
     min-height: 9rem;
     justify-content: center;
   }
+}
+
+.librarySection {
+  margin-top: 2.5rem;
+}
+
+.sectionHeading {
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 1rem;
 }
