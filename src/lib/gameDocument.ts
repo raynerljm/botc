@@ -1,7 +1,11 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-export const GAME_SCHEMA_VERSION = 1;
+// Bumped for issue #13: Player/GameDocument gained new required fields
+// (dead, ghostVoteSpent, position, almanacUrl) — a document saved under the
+// old shape must be rejected by gameStorage's version check rather than
+// loaded with those fields silently undefined.
+export const GAME_SCHEMA_VERSION = 2;
 
 export type Alignment = "good" | "evil";
 
@@ -18,6 +22,14 @@ export interface BagToken {
   isDrunkStandIn: boolean;
 }
 
+// Free-drag position as a percentage of the board's width/height. Null means
+// "not dragged" — the token renders at its computed circlePosition instead,
+// so a re-circle is just clearing this back to null for everyone.
+export interface PlayerPosition {
+  x: number;
+  y: number;
+}
+
 export interface Player {
   id: string;
   seat: number;
@@ -26,6 +38,12 @@ export interface Player {
   isDrunk: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
+  dead: boolean;
+  // Only meaningful once dead, but kept on every player rather than added on
+  // death so a player who dies twice in one game doesn't lose whether their
+  // one ghost vote was already spent.
+  ghostVoteSpent: boolean;
+  position: PlayerPosition | null;
 }
 
 export interface GameDocument {
@@ -46,6 +64,10 @@ export interface GameDocument {
   // the vendored dataset, so tokens/players resolve display info from here
   // instead of a global lookup.
   characterPool: Character[];
+  // The script's own almanac link (script-tool _meta.almanac), used for the
+  // character-detail popover on homebrew characters, which have no page on
+  // the official wiki.
+  almanacUrl: string | null;
   createdAt: string;
   // End-game state (issue #21). Null winner / null endedAt means the game is
   // still in progress; both are set together when the storyteller declares a
@@ -53,6 +75,17 @@ export interface GameDocument {
   winner: Alignment | null;
   endedAt: string | null;
   notes: string;
+}
+
+// The circle layout every seat without a dragged position renders at —
+// evenly spaced starting from the top, matching a physical cloth circle.
+export function circlePosition(index: number, total: number): PlayerPosition {
+  const angle = (2 * Math.PI * index) / total - Math.PI / 2;
+  const radius = 45;
+  return {
+    x: 50 + radius * Math.cos(angle),
+    y: 50 + radius * Math.sin(angle),
+  };
 }
 
 const DRUNK_ID = "drunk";
@@ -159,6 +192,7 @@ export interface CreateGameInput {
   selectedCharacters: Character[];
   standIn: Character | null;
   extraCopies: Record<string, number>;
+  almanacUrl?: string | null;
   createdAt?: string;
   newId?: () => string;
 }
@@ -170,6 +204,7 @@ export function createGame({
   selectedCharacters,
   standIn,
   extraCopies,
+  almanacUrl = null,
   createdAt = new Date().toISOString(),
   newId = defaultNewId,
 }: CreateGameInput): GameDocument {
@@ -188,6 +223,9 @@ export function createGame({
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
+    dead: false,
+    ghostVoteSpent: false,
+    position: null,
   }));
 
   const characterPool = Array.from(
@@ -208,6 +246,7 @@ export function createGame({
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,
+    almanacUrl,
     createdAt,
     winner: null,
     endedAt: null,

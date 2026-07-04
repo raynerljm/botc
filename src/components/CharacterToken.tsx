@@ -32,6 +32,10 @@ export function CharacterToken({ character }: { character: Character }) {
       // Static export has no optimization server (also applied globally in
       // next.config.ts, which tests don't load).
       unoptimized
+      // Browsers make <img> natively draggable, which steals the gesture
+      // from any consumer implementing its own drag-and-drop (e.g. the
+      // grimoire board's token dragging).
+      draggable={false}
     />
   );
 }

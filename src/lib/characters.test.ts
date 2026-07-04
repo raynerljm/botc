@@ -6,7 +6,9 @@ import {
   getCharacter,
   getEditionCharacters,
   groupByTeam,
+  isOfficialCharacter,
   wikiUrl,
+  type Character,
 } from "./characters";
 
 describe("vendored character dataset", () => {
@@ -96,5 +98,44 @@ describe("official wiki links", () => {
     expect(wikiUrl(getCharacter("devilsadvocate")!)).toBe(
       "https://wiki.bloodontheclocktower.com/Devil%27s_Advocate",
     );
+  });
+});
+
+describe("isOfficialCharacter", () => {
+  it("recognizes an official character even after a JSON round-trip (no shared object reference)", () => {
+    // A game document loaded back from localStorage never has the same
+    // object references as the imported dataset, even for genuinely
+    // official characters — value equality has to survive that.
+    const reloaded: Character = JSON.parse(JSON.stringify(getCharacter("imp")!));
+    expect(isOfficialCharacter(reloaded)).toBe(true);
+  });
+
+  it("rejects a homebrew character that reuses an official id with different content", () => {
+    const reskinned: Character = {
+      ...getCharacter("imp")!,
+      name: "Totally Different Demon",
+      ability: "A homebrew ability, not the real Imp's.",
+    };
+    expect(isOfficialCharacter(reskinned)).toBe(false);
+  });
+
+  it("rejects a character whose id isn't in the vendored dataset at all", () => {
+    const homebrew: Character = {
+      id: "custom-oracle",
+      name: "Custom Oracle",
+      edition: null,
+      team: "townsfolk",
+      ability: "A homebrew ability.",
+      firstNight: 0,
+      firstNightReminder: "",
+      otherNight: 0,
+      otherNightReminder: "",
+      reminders: [],
+      remindersGlobal: [],
+      setup: false,
+      jinxes: [],
+      image: null,
+    };
+    expect(isOfficialCharacter(homebrew)).toBe(false);
   });
 });

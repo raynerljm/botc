@@ -112,6 +112,7 @@ export interface BagBuilderProps {
   characters: Character[];
   scriptId?: string;
   scriptName?: string;
+  almanacUrl?: string;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -128,7 +129,12 @@ function omitKey(
   return next;
 }
 
-export function BagBuilder({ characters, scriptId, scriptName }: BagBuilderProps) {
+export function BagBuilder({
+  characters,
+  scriptId,
+  scriptName,
+  almanacUrl,
+}: BagBuilderProps) {
   const router = useRouter();
   const [playerCount, setPlayerCount] = useState<number | "">(MIN_PLAYERS);
   const [travellerCount, setTravellerCount] = useState<number | "">(0);
@@ -306,6 +312,7 @@ export function BagBuilder({ characters, scriptId, scriptName }: BagBuilderProps
       selectedCharacters,
       standIn: standInId ? (poolById.get(standInId) ?? null) : null,
       extraCopies,
+      almanacUrl,
     });
     saveGame(game);
     router.push("/game");

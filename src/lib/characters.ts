@@ -56,6 +56,17 @@ export function getCharacter(id: string): Character | undefined {
   return charactersById.get(id);
 }
 
+// Value equality against the vendored dataset, not object identity — a game
+// document round-tripped through localStorage (JSON.parse) never has the
+// same object references as the imported dataset, even for a genuinely
+// official character. A homebrew character reusing an official id but with
+// its own name/ability differs in value, so it correctly reads as not
+// official.
+export function isOfficialCharacter(character: Character): boolean {
+  const official = getCharacter(character.id);
+  return official !== undefined && JSON.stringify(official) === JSON.stringify(character);
+}
+
 export const teamOrder: Team[] = [
   "townsfolk",
   "outsider",
