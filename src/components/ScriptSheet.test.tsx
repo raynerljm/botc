@@ -74,4 +74,50 @@ describe("ScriptSheet", () => {
       screen.queryByRole("link", { name: /on the wiki/i }),
     ).not.toBeInTheDocument();
   });
+
+  it("resolves a jinx name even when the target id's case/hyphenation differs from the character's own id", () => {
+    const alchemist = getCharacter("alchemist")!;
+    const wraith = getCharacter("wraith")!;
+
+    render(
+      <ScriptSheet
+        meta={{}}
+        characters={[alchemist, wraith]}
+        jinxes={[
+          {
+            characterId: "Alchemist",
+            targetId: "Wraith",
+            reason: "test reason",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Alchemist & Wraith")).toBeInTheDocument();
+  });
+
+  it("does not render a javascript: almanac link, but renders a real http(s) one", () => {
+    const { rerender } = render(
+      <ScriptSheet
+        meta={{ author: "Someone", almanac: "javascript:alert(1)" }}
+        characters={[]}
+        jinxes={[]}
+      />,
+    );
+    expect(
+      screen.queryByRole("link", { name: /almanac/i }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <ScriptSheet
+        meta={{ author: "Someone", almanac: "https://example.com/almanac" }}
+        characters={[]}
+        jinxes={[]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: /almanac/i })).toHaveAttribute(
+      "href",
+      "https://example.com/almanac",
+    );
+  });
 });

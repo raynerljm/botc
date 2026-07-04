@@ -5,7 +5,11 @@ import {
   wikiUrl,
   type Character,
 } from "@/lib/characters";
-import type { ActiveJinx, ScriptMeta } from "@/lib/scriptParser";
+import {
+  normalizeCharacterId,
+  type ActiveJinx,
+  type ScriptMeta,
+} from "@/lib/scriptParser";
 
 import { CharacterToken } from "./CharacterToken";
 import styles from "./ScriptSheet.module.css";
@@ -17,7 +21,23 @@ export interface ScriptSheetProps {
 }
 
 function characterName(characters: Character[], id: string): string {
-  return characters.find((c) => c.id === id)?.name ?? id;
+  const normalized = normalizeCharacterId(id);
+  return (
+    characters.find((c) => normalizeCharacterId(c.id) === normalized)?.name ??
+    id
+  );
+}
+
+// meta.almanac comes from user-provided script JSON (upload/paste), so it
+// must be checked before use as a link href — otherwise a javascript: URL
+// could be persisted and executed on click.
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function ScriptSheet({ meta, characters, jinxes }: ScriptSheetProps) {
@@ -28,7 +48,7 @@ export function ScriptSheet({ meta, characters, jinxes }: ScriptSheetProps) {
       {meta.author && (
         <p className={styles.meta}>
           <span>By {meta.author}</span>
-          {meta.almanac && (
+          {meta.almanac && isHttpUrl(meta.almanac) && (
             <a
               href={meta.almanac}
               target="_blank"

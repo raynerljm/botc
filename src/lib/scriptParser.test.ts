@@ -223,6 +223,23 @@ describe("parseScript: _meta", () => {
       "imp",
     ]);
   });
+
+  it("keeps homebrew error indices pointing at the original array position when _meta precedes them", () => {
+    const result = parseScript(
+      JSON.stringify([
+        { id: "_meta", name: "Sample Script" },
+        "washerwoman",
+        { name: "Missing bits", team: "townsfolk" },
+      ]),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // The bad entry is at index 2 in the original array (after _meta and
+    // washerwoman), not index 1 in the meta-filtered list.
+    expect(result.errors).toEqual([
+      { type: "invalid-homebrew", index: 2, missingFields: ["id", "ability"] },
+    ]);
+  });
 });
 
 describe("parseScript: active jinxes", () => {

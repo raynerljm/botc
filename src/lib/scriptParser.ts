@@ -193,15 +193,19 @@ export function parseScript(jsonText: string): ScriptParseResult {
 
   // _meta is recognized as its own preprocessing pass, independent of how the
   // remaining entries are classified below (reference vs. homebrew) — that
-  // classification order must not affect whether _meta is found.
+  // classification order must not affect whether _meta is found. Each
+  // entry keeps its original array position so homebrew error messages
+  // ("Entry N") point at the same position the user sees in their JSON.
   const metaRaw = data.find(isMetaEntry);
   const meta = metaRaw ? parseMeta(metaRaw) : {};
-  const entries = data.filter((entry) => !isMetaEntry(entry));
+  const entries = data
+    .map((entry, originalIndex) => ({ entry, originalIndex }))
+    .filter(({ entry }) => !isMetaEntry(entry));
 
   const errors: ScriptParseError[] = [];
   const characters: Character[] = [];
 
-  entries.forEach((entry, index) => {
+  entries.forEach(({ entry, originalIndex }) => {
     if (typeof entry === "string") {
       resolveOrError(entry, characters, errors);
       return;
@@ -210,7 +214,7 @@ export function parseScript(jsonText: string): ScriptParseResult {
     if (typeof entry !== "object" || entry === null) {
       errors.push({
         type: "invalid-homebrew",
-        index,
+        index: originalIndex,
         missingFields: [...HOMEBREW_REQUIRED_FIELDS],
       });
       return;
@@ -223,7 +227,7 @@ export function parseScript(jsonText: string): ScriptParseResult {
       return;
     }
 
-    const result = parseHomebrewCharacter(raw, index);
+    const result = parseHomebrewCharacter(raw, originalIndex);
     if ("error" in result) errors.push(result.error);
     else characters.push(result.character);
   });

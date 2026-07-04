@@ -76,10 +76,16 @@ export function getCustomScriptsSnapshot(): StoredCustomScript[] {
 
 export function subscribeCustomScripts(onChange: () => void): () => void {
   if (!hasStorage()) return () => {};
+  // event.key is null for localStorage.clear(); otherwise only react to our
+  // own key so unrelated localStorage writes elsewhere on the origin don't
+  // trigger a re-render.
+  function handleStorage(event: StorageEvent): void {
+    if (event.key === null || event.key === STORAGE_KEY) onChange();
+  }
   window.addEventListener(CHANGE_EVENT, onChange);
-  window.addEventListener("storage", onChange);
+  window.addEventListener("storage", handleStorage);
   return () => {
     window.removeEventListener(CHANGE_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
+    window.removeEventListener("storage", handleStorage);
   };
 }

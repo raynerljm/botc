@@ -103,6 +103,36 @@ describe("AddScriptDialog", () => {
     ).toHaveLength(2);
   });
 
+  it("shows a friendly error when the file can't be read", async () => {
+    const OriginalFileReader = globalThis.FileReader;
+    class FailingFileReader extends OriginalFileReader {
+      readAsText() {
+        queueMicrotask(() =>
+          this.onerror?.(new ProgressEvent("error") as ProgressEvent<FileReader>),
+        );
+      }
+    }
+    vi.stubGlobal("FileReader", FailingFileReader);
+
+    try {
+      render(<AddScriptDialog onAdded={vi.fn()} />);
+      const user = userEvent.setup();
+
+      await user.click(screen.getByText("Add a script"));
+      const file = new File(['["washerwoman"]'], "script.json", {
+        type: "application/json",
+      });
+      await user.upload(screen.getByLabelText(/upload a script-tool/i), file);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        /couldn't read that file/i,
+      );
+      expect(listCustomScripts()).toEqual([]);
+    } finally {
+      vi.stubGlobal("FileReader", OriginalFileReader);
+    }
+  });
+
   it("accepts an uploaded file", async () => {
     render(<AddScriptDialog onAdded={vi.fn()} />);
     const user = userEvent.setup();

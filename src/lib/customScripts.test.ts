@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   deleteCustomScript,
   getCustomScript,
   listCustomScripts,
   saveCustomScript,
+  subscribeCustomScripts,
 } from "./customScripts";
 
 describe("custom scripts (localStorage)", () => {
@@ -56,5 +57,32 @@ describe("custom scripts (localStorage)", () => {
     saveCustomScript({ rawText: "[]", name: "B" });
     expect(listCustomScripts()).toHaveLength(2);
     expect(new Set(listCustomScripts().map((s) => s.id)).size).toBe(2);
+  });
+
+  describe("subscribeCustomScripts", () => {
+    it("ignores storage events for unrelated keys", () => {
+      const onChange = vi.fn();
+      const unsubscribe = subscribeCustomScripts(onChange);
+
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "some-other-key" }),
+      );
+      expect(onChange).not.toHaveBeenCalled();
+
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "botc:custom-scripts" }),
+      );
+      expect(onChange).toHaveBeenCalledTimes(1);
+
+      // key: null means localStorage.clear() — should still notify.
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+      expect(onChange).toHaveBeenCalledTimes(2);
+
+      unsubscribe();
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "botc:custom-scripts" }),
+      );
+      expect(onChange).toHaveBeenCalledTimes(2);
+    });
   });
 });

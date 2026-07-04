@@ -30,7 +30,13 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setText(await readFileAsText(file));
+    try {
+      setText(await readFileAsText(file));
+    } catch {
+      setErrors([
+        "Couldn't read that file. Try a different file or paste the JSON instead.",
+      ]);
+    }
   }
 
   function handleSubmit(event: FormEvent) {
