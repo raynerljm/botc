@@ -331,6 +331,26 @@ describe("computeNightList: script _meta night-order overrides", () => {
     expect(ids.indexOf("imp")).toBeLessThan(ids.indexOf("fixed:dawn"));
     expect(ids).toContain("washerwoman");
     expect(ids).toContain("poisoner");
+    // A partial override must not let Dawn leapfrog real, unlisted actors —
+    // washerwoman/poisoner still act *during* the night, not after it ends.
+    expect(ids.indexOf("washerwoman")).toBeLessThan(ids.indexOf("fixed:dawn"));
+    expect(ids.indexOf("poisoner")).toBeLessThan(ids.indexOf("fixed:dawn"));
+  });
+
+  it("keeps Dusk first and Dawn last even when the override omits fixed-step tokens entirely", () => {
+    const game = gameWith(["empath", "imp"], {
+      firstNightOrder: ["empath"],
+    });
+    const entries = computeNightList({
+      game,
+      characterById: characterById(game),
+      phase: "first",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    expect(entries[0].id).toBe("fixed:dusk");
+    expect(entries[entries.length - 1].id).toBe("fixed:dawn");
   });
 
   it("only applies the matching phase's override", () => {

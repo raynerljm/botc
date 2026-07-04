@@ -69,6 +69,11 @@ interface RawEntry extends NightListEntry {
   // 4 non-acting characters (show-all only), 5 dawn.
   defaultBucket: number;
   nightValue: number;
+  // A character entry's _meta override rank, computed once where it's also
+  // needed to decide whether the character acts tonight, and reused for
+  // sorting so the two can't drift apart. Undefined for fixed entries (their
+  // rank is looked up separately, keyed by their fixed token).
+  overrideRank?: number;
 }
 
 function fixedEntry(id: string, bucket: number): RawEntry {
@@ -146,9 +151,10 @@ export function computeNightList({
     // the storyteller's evidence it belongs (e.g. a Demon like the Imp, whose
     // own firstNight is 0 because "Demon info" is the fixed step that
     // actually covers first night, still needs to appear when the script
-    // places it explicitly).
-    const overridden = metaRank(order, character.id, true) !== undefined;
-    const acts = nightValue > 0 || overridden;
+    // places it explicitly). Computed once and reused for sorting below, so
+    // "does it act" and "where does it sort" can never drift apart.
+    const overrideRank = metaRank(order, character.id, true);
+    const acts = nightValue > 0 || overrideRank !== undefined;
     if (!acts && !showAll) continue;
 
     raw.push({
@@ -165,6 +171,7 @@ export function computeNightList({
       skipped: player.dead && !unskippedIds.has(`char:${player.id}`),
       defaultBucket: acts ? 3 : 4,
       nightValue: acts ? nightValue : Number.MAX_SAFE_INTEGER,
+      overrideRank,
     });
   }
 
@@ -175,10 +182,21 @@ export function computeNightList({
     rank:
       entry.kind === "fixed"
         ? metaRank(order, FIXED_TOKEN_BY_ID[entry.id], false)
-        : metaRank(order, entry.characterId!, true),
+        : entry.overrideRank,
   }));
 
   ranked.sort((a, b) => {
+    // Dusk and Dawn are physical bookends of the night — nothing happens
+    // before eyes close or after the sun rises — so they stay pinned first
+    // and last regardless of any override rank. Without this, a partial
+    // _meta night order (naming Dawn but omitting real acting characters,
+    // or naming one character without any fixed-step tokens at all) could
+    // sort Dawn before those characters' actions, or a lone ranked
+    // character ahead of Dusk.
+    if (a.entry.id !== FIXED_DUSK && b.entry.id === FIXED_DUSK) return 1;
+    if (a.entry.id === FIXED_DUSK && b.entry.id !== FIXED_DUSK) return -1;
+    if (a.entry.id !== FIXED_DAWN && b.entry.id === FIXED_DAWN) return -1;
+    if (a.entry.id === FIXED_DAWN && b.entry.id !== FIXED_DAWN) return 1;
     if (a.rank !== undefined && b.rank !== undefined) return a.rank - b.rank;
     if (a.rank !== undefined) return -1;
     if (b.rank !== undefined) return 1;

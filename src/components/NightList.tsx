@@ -63,6 +63,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
     );
   }
 
+  const checkedIds = new Set(game.nightChecked);
   const entries = computeNightList({
     game,
     characterById,
@@ -71,9 +72,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
     unskippedIds: new Set(game.nightUnskipped),
   });
   const countable = entries.filter((entry) => !entry.skipped);
-  const checkedCount = countable.filter((entry) =>
-    game.nightChecked.includes(entry.id),
-  ).length;
+  const checkedCount = countable.filter((entry) => checkedIds.has(entry.id)).length;
 
   return (
     <section className={styles.panel} aria-label="Night list">
@@ -113,7 +112,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
                 <input
                   type="checkbox"
                   aria-label={accessibleName}
-                  checked={game.nightChecked.includes(entry.id)}
+                  checked={checkedIds.has(entry.id)}
                   onChange={() => toggleChecked(entry.id)}
                 />
                 <span className={styles.entryToken}>
