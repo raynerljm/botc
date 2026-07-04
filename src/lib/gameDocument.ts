@@ -13,6 +13,14 @@ export interface BagToken {
   isDrunkStandIn: boolean;
 }
 
+// Free-drag position as a percentage of the board's width/height. Null means
+// "not dragged" — the token renders at its computed circlePosition instead,
+// so a re-circle is just clearing this back to null for everyone.
+export interface PlayerPosition {
+  x: number;
+  y: number;
+}
+
 export interface Player {
   id: string;
   seat: number;
@@ -21,6 +29,12 @@ export interface Player {
   isDrunk: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
+  dead: boolean;
+  // Only meaningful once dead, but kept on every player rather than added on
+  // death so a player who dies twice in one game doesn't lose whether their
+  // one ghost vote was already spent.
+  ghostVoteSpent: boolean;
+  position: PlayerPosition | null;
 }
 
 export interface GameDocument {
@@ -37,7 +51,22 @@ export interface GameDocument {
   // the vendored dataset, so tokens/players resolve display info from here
   // instead of a global lookup.
   characterPool: Character[];
+  // The script's own almanac link (script-tool _meta.almanac), used for the
+  // character-detail popover on homebrew characters, which have no page on
+  // the official wiki.
+  almanacUrl: string | null;
   createdAt: string;
+}
+
+// The circle layout every seat without a dragged position renders at —
+// evenly spaced starting from the top, matching a physical cloth circle.
+export function circlePosition(index: number, total: number): PlayerPosition {
+  const angle = (2 * Math.PI * index) / total - Math.PI / 2;
+  const radius = 45;
+  return {
+    x: 50 + radius * Math.cos(angle),
+    y: 50 + radius * Math.sin(angle),
+  };
 }
 
 const DRUNK_ID = "drunk";
@@ -131,6 +160,7 @@ export interface CreateGameInput {
   selectedCharacters: Character[];
   standIn: Character | null;
   extraCopies: Record<string, number>;
+  almanacUrl?: string | null;
   createdAt?: string;
   newId?: () => string;
 }
@@ -142,6 +172,7 @@ export function createGame({
   selectedCharacters,
   standIn,
   extraCopies,
+  almanacUrl = null,
   createdAt = new Date().toISOString(),
   newId = defaultNewId,
 }: CreateGameInput): GameDocument {
@@ -160,6 +191,9 @@ export function createGame({
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
+    dead: false,
+    ghostVoteSpent: false,
+    position: null,
   }));
 
   const characterPool = Array.from(
@@ -179,6 +213,7 @@ export function createGame({
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,
+    almanacUrl,
     createdAt,
   };
 }

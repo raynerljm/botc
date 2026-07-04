@@ -489,8 +489,8 @@ describe("the first visible grimoire (issue #12)", () => {
     );
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    expect(within(circle).getByDisplayValue("Player 1")).toBeInTheDocument();
-    expect(within(circle).getByDisplayValue("Player 2")).toBeInTheDocument();
+    expect(within(circle).getByText("Player 1")).toBeInTheDocument();
+    expect(within(circle).getByText("Player 2")).toBeInTheDocument();
     expect(within(circle).getByText("Washerwoman")).toBeInTheDocument();
     expect(within(circle).getByText("Imp")).toBeInTheDocument();
     // The setup controls (draw/manual-assign) are gone — there's nothing
@@ -517,7 +517,11 @@ describe("the first visible grimoire (issue #12)", () => {
     );
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    const seat1Name = within(circle).getByDisplayValue("Player 1");
+    // Renaming from the completed grimoire now happens from the token's
+    // menu (issue #13's living board), not an always-visible input.
+    const seat1Token = within(circle).getByText("Player 1").closest("div")!;
+    await user.click(within(circle).getByText("Player 1"));
+    const seat1Name = within(seat1Token).getByLabelText(/player name/i);
     await user.clear(seat1Name);
     await user.type(seat1Name, "Alice");
 

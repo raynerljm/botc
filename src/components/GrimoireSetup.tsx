@@ -9,11 +9,12 @@ import {
   type BagToken,
   type GameDocument,
   type Player,
+  type PlayerPosition,
 } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
 
 import { CharacterToken } from "./CharacterToken";
-import { GrimoireCircle } from "./GrimoireCircle";
+import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireSetup.module.css";
 
 export interface GrimoireSetupProps {
@@ -75,6 +76,55 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   function renamePlayer(playerId: string, name: string) {
     update({ ...game, players: updatePlayer(playerId, { name }) });
+  }
+
+  function movePlayer(playerId: string, position: PlayerPosition) {
+    update({ ...game, players: updatePlayer(playerId, { position }) });
+  }
+
+  // Every seat's dragged position is cleared, so the next render falls back
+  // to the computed circle for all of them at once.
+  function reCircle() {
+    update({
+      ...game,
+      players: game.players.map((player) => ({ ...player, position: null })),
+    });
+  }
+
+  // Reordering only swaps the two seats' numbers — the players array itself
+  // stays in whatever order it was already in, since GrimoireBoard sorts by
+  // seat before rendering.
+  function reorderSeat(playerId: string, direction: "earlier" | "later") {
+    const bySeat = [...game.players].sort((a, b) => a.seat - b.seat);
+    const index = bySeat.findIndex((p) => p.id === playerId);
+    const swapIndex = direction === "earlier" ? index - 1 : index + 1;
+    if (index === -1 || swapIndex < 0 || swapIndex >= bySeat.length) return;
+
+    const current = bySeat[index];
+    const swapWith = bySeat[swapIndex];
+    update({
+      ...game,
+      players: game.players.map((player) => {
+        if (player.id === current.id) return { ...player, seat: swapWith.seat };
+        if (player.id === swapWith.id) return { ...player, seat: current.seat };
+        return player;
+      }),
+    });
+  }
+
+  function toggleDead(playerId: string) {
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return;
+    update({ ...game, players: updatePlayer(playerId, { dead: !player.dead }) });
+  }
+
+  function toggleGhostVote(playerId: string) {
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return;
+    update({
+      ...game,
+      players: updatePlayer(playerId, { ghostVoteSpent: !player.ghostVoteSpent }),
+    });
   }
 
   function startDraw() {
@@ -187,6 +237,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       isDrunk: false,
       isTraveller: true,
       travellerAlignment,
+      dead: false,
+      ghostVoteSpent: false,
+      position: null,
     };
 
     update({
@@ -340,10 +393,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
       {setupComplete ? (
         <div role="region" aria-label="Grimoire circle">
-          <GrimoireCircle
+          <GrimoireBoard
             players={game.players}
             characterById={characterById}
+            almanacUrl={game.almanacUrl}
             onRename={renamePlayer}
+            onMove={movePlayer}
+            onReCircle={reCircle}
+            onReorderSeat={reorderSeat}
+            onToggleDead={toggleDead}
+            onToggleGhostVote={toggleGhostVote}
           />
         </div>
       ) : (
