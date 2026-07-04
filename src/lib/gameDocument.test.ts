@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import { getCharacter, type Character } from "./characters";
 import {
   buildBagTokens,
+  circlePosition,
   createGame,
   GAME_SCHEMA_VERSION,
   shuffleTokens,
+  withRestoredReminder,
+  type ReminderToken,
 } from "./gameDocument";
 
 function characters(...ids: string[]) {
@@ -29,6 +32,45 @@ describe("shuffleTokens", () => {
     expect(shuffleTokens([1, 2, 3, 4], random)).toEqual(
       shuffleTokens([1, 2, 3, 4], random),
     );
+  });
+});
+
+describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => {
+  const reminder: ReminderToken = {
+    id: "r1",
+    characterId: null,
+    label: "Poisoned",
+    position: { x: 10, y: 20 },
+  };
+
+  it("appends a restored reminder that isn't already present", () => {
+    expect(withRestoredReminder([], reminder)).toEqual([reminder]);
+  });
+
+  it("doesn't duplicate a reminder whose id is already present", () => {
+    expect(withRestoredReminder([reminder], reminder)).toEqual([reminder]);
+  });
+});
+
+describe("circlePosition", () => {
+  it("places the first seat of a 4-seat circle at the top centre", () => {
+    const { x, y } = circlePosition(0, 4);
+    expect(x).toBeCloseTo(50);
+    expect(y).toBeCloseTo(5);
+  });
+
+  it("spaces seats evenly all the way around", () => {
+    const top = circlePosition(0, 4);
+    const right = circlePosition(1, 4);
+    const bottom = circlePosition(2, 4);
+    const left = circlePosition(3, 4);
+
+    expect(right.x).toBeGreaterThan(top.x);
+    expect(bottom.y).toBeGreaterThan(top.y);
+    expect(left.x).toBeLessThan(top.x);
+    // Symmetric around the centre (50, 50).
+    expect(right.x - 50).toBeCloseTo(50 - left.x);
+    expect(bottom.y - 50).toBeCloseTo(50 - top.y);
   });
 });
 
@@ -132,6 +174,48 @@ describe("createGame", () => {
     expect(game.players.every((p) => p.characterId === null)).toBe(true);
   });
 
+  it("starts every player alive, on the computed circle, with an unspent ghost vote", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 3,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.players.every((p) => p.dead === false)).toBe(true);
+    expect(game.players.every((p) => p.ghostVoteSpent === false)).toBe(true);
+    expect(game.players.every((p) => p.position === null)).toBe(true);
+  });
+
+  it("carries the script's almanac link onto the game document when provided", () => {
+    const game = createGame({
+      scriptId: "custom-script",
+      scriptName: "Custom Script",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+      almanacUrl: "https://example.com/almanac",
+    });
+
+    expect(game.almanacUrl).toBe("https://example.com/almanac");
+  });
+
+  it("defaults the almanac link to null when the script doesn't provide one", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.almanacUrl).toBeNull();
+  });
+
   it("stamps the schema version, script, and creation time", () => {
     const game = createGame({
       scriptId: "tb",
@@ -180,6 +264,19 @@ describe("createGame", () => {
     expect(game.winner).toBeNull();
     expect(game.endedAt).toBeNull();
     expect(game.notes).toBe("");
+  });
+
+  it("starts with no reminder tokens on the pad", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.reminders).toEqual([]);
   });
 
   it("puts the built bag tokens on the game document", () => {

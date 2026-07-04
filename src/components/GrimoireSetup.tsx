@@ -5,16 +5,19 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { Character } from "@/lib/characters";
 import {
   shuffleTokens,
+  withRestoredReminder,
   type Alignment,
   type BagToken,
   type GameDocument,
   type Player,
+  type PlayerPosition,
+  type ReminderToken,
 } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
 
 import { CharacterToken } from "./CharacterToken";
 import { EndGamePanel } from "./EndGamePanel";
-import { GrimoireCircle } from "./GrimoireCircle";
+import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireSetup.module.css";
 import { ShareScriptButton } from "./ShareScriptButton";
 
@@ -86,6 +89,89 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   function renamePlayer(playerId: string, name: string) {
     update({ ...game, players: updatePlayer(playerId, { name }) });
+  }
+
+  function movePlayer(playerId: string, position: PlayerPosition) {
+    update({ ...game, players: updatePlayer(playerId, { position }) });
+  }
+
+  // Every seat's dragged position is cleared, so the next render falls back
+  // to the computed circle for all of them at once.
+  function reCircle() {
+    update({
+      ...game,
+      players: game.players.map((player) => ({ ...player, position: null })),
+    });
+  }
+
+  // Reordering only swaps the two seats' numbers — the players array itself
+  // stays in whatever order it was already in, since GrimoireBoard sorts by
+  // seat before rendering.
+  function reorderSeat(playerId: string, direction: "earlier" | "later") {
+    const bySeat = [...game.players].sort((a, b) => a.seat - b.seat);
+    const index = bySeat.findIndex((p) => p.id === playerId);
+    const swapIndex = direction === "earlier" ? index - 1 : index + 1;
+    if (index === -1 || swapIndex < 0 || swapIndex >= bySeat.length) return;
+
+    const current = bySeat[index];
+    const swapWith = bySeat[swapIndex];
+    update({
+      ...game,
+      players: game.players.map((player) => {
+        if (player.id === current.id) return { ...player, seat: swapWith.seat };
+        if (player.id === swapWith.id) return { ...player, seat: current.seat };
+        return player;
+      }),
+    });
+  }
+
+  function toggleDead(playerId: string) {
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return;
+    update({ ...game, players: updatePlayer(playerId, { dead: !player.dead }) });
+  }
+
+  function toggleGhostVote(playerId: string) {
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return;
+    update({
+      ...game,
+      players: updatePlayer(playerId, { ghostVoteSpent: !player.ghostVoteSpent }),
+    });
+  }
+
+  function addReminder(input: {
+    characterId: string | null;
+    label: string;
+    position: PlayerPosition;
+  }) {
+    const reminder: ReminderToken = { id: crypto.randomUUID(), ...input };
+    update({ ...game, reminders: [...game.reminders, reminder] });
+  }
+
+  function moveReminder(reminderId: string, position: PlayerPosition) {
+    update({
+      ...game,
+      reminders: game.reminders.map((r) =>
+        r.id === reminderId ? { ...r, position } : r,
+      ),
+    });
+  }
+
+  function removeReminder(reminderId: string) {
+    update({
+      ...game,
+      reminders: game.reminders.filter((r) => r.id !== reminderId),
+    });
+  }
+
+  // Restores the exact removed token (same id, label, and position) rather
+  // than building a fresh one — every field the storyteller sees is back to
+  // how it was, even though the token lands at the end of the array if other
+  // reminders were added or removed in the meantime. withRestoredReminder is
+  // idempotent by id, so a rapid double-tap on Undo can't duplicate it.
+  function restoreReminder(reminder: ReminderToken) {
+    update({ ...game, reminders: withRestoredReminder(game.reminders, reminder) });
   }
 
   function startDraw() {
@@ -198,6 +284,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       isDrunk: false,
       isTraveller: true,
       travellerAlignment,
+      dead: false,
+      ghostVoteSpent: false,
+      position: null,
     };
 
     update({
@@ -351,10 +440,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
       {setupComplete ? (
         <div role="region" aria-label="Grimoire circle">
-          <GrimoireCircle
+          <GrimoireBoard
             players={game.players}
             characterById={characterById}
+            almanacUrl={game.almanacUrl}
+            reminders={game.reminders}
             onRename={renamePlayer}
+            onMove={movePlayer}
+            onReCircle={reCircle}
+            onReorderSeat={reorderSeat}
+            onToggleDead={toggleDead}
+            onToggleGhostVote={toggleGhostVote}
+            onAddReminder={addReminder}
+            onMoveReminder={moveReminder}
+            onRemoveReminder={removeReminder}
+            onRestoreReminder={restoreReminder}
           />
         </div>
       ) : (

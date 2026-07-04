@@ -6,6 +6,7 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
+  isHttpUrl,
   normalizeCharacterId,
   type ActiveJinx,
   type ScriptMeta,
@@ -26,18 +27,6 @@ function characterName(characters: Character[], id: string): string {
     characters.find((c) => normalizeCharacterId(c.id) === normalized)?.name ??
     id
   );
-}
-
-// meta.almanac comes from user-provided script JSON (upload/paste), so it
-// must be checked before use as a link href — otherwise a javascript: URL
-// could be persisted and executed on click.
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 export function ScriptSheet({ meta, characters, jinxes }: ScriptSheetProps) {

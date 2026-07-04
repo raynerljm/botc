@@ -1,7 +1,10 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-export const GAME_SCHEMA_VERSION = 1;
+// Bumped for issue #14: GameDocument gained the required `reminders` field
+// — a document saved under the old shape must be rejected by gameStorage's
+// version check rather than loaded with it silently undefined.
+export const GAME_SCHEMA_VERSION = 3;
 
 export type Alignment = "good" | "evil";
 
@@ -18,6 +21,29 @@ export interface BagToken {
   isDrunkStandIn: boolean;
 }
 
+// Free-drag position as a percentage of the board's width/height. Null means
+// "not dragged" — the token renders at its computed circlePosition instead,
+// so a re-circle is just clearing this back to null for everyone.
+export interface PlayerPosition {
+  x: number;
+  y: number;
+}
+
+// A reminder token parked on the pad to track ability state (CONTEXT.md
+// doesn't define this term separately from the token itself, but see issue
+// #14: "the small tokens the storyteller parks next to players"). Unlike a
+// Player, a reminder has no inherent default layout — position is always a
+// concrete point, set once when the token is added.
+export interface ReminderToken {
+  id: string;
+  // The character this reminder's text comes from, for grouping in the
+  // picker and for wiki/almanac-style provenance. Null for a free-text
+  // reminder that isn't tied to any character.
+  characterId: string | null;
+  label: string;
+  position: PlayerPosition;
+}
+
 export interface Player {
   id: string;
   seat: number;
@@ -26,6 +52,12 @@ export interface Player {
   isDrunk: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
+  dead: boolean;
+  // Only meaningful once dead, but kept on every player rather than added on
+  // death so a player who dies twice in one game doesn't lose whether their
+  // one ghost vote was already spent.
+  ghostVoteSpent: boolean;
+  position: PlayerPosition | null;
 }
 
 export interface GameDocument {
@@ -37,6 +69,11 @@ export interface GameDocument {
   scriptId: string;
   scriptName: string;
   players: Player[];
+  // Tokens tracking ability state, dragged freely around the pad rather than
+  // owned by any one player (CONTEXT.md: Bag draw is the physical ritual
+  // this app digitizes; reminder tokens are the physical ones storytellers
+  // park next to players, but nothing here ties a reminder to a player id).
+  reminders: ReminderToken[];
   // Undrawn/unassigned tokens, kept separate so a Traveller added later
   // never competes with the official-team draw pool (CONTEXT.md: Bag).
   bag: BagToken[];
@@ -46,6 +83,10 @@ export interface GameDocument {
   // the vendored dataset, so tokens/players resolve display info from here
   // instead of a global lookup.
   characterPool: Character[];
+  // The script's own almanac link (script-tool _meta.almanac), used for the
+  // character-detail popover on homebrew characters, which have no page on
+  // the official wiki.
+  almanacUrl: string | null;
   createdAt: string;
   // End-game state (issue #21). Null winner / null endedAt means the game is
   // still in progress; both are set together when the storyteller declares a
@@ -53,6 +94,17 @@ export interface GameDocument {
   winner: Alignment | null;
   endedAt: string | null;
   notes: string;
+}
+
+// The circle layout every seat without a dragged position renders at —
+// evenly spaced starting from the top, matching a physical cloth circle.
+export function circlePosition(index: number, total: number): PlayerPosition {
+  const angle = (2 * Math.PI * index) / total - Math.PI / 2;
+  const radius = 45;
+  return {
+    x: 50 + radius * Math.cos(angle),
+    y: 50 + radius * Math.sin(angle),
+  };
 }
 
 const DRUNK_ID = "drunk";
@@ -68,6 +120,17 @@ export function isGameEnded(game: GameDocument): boolean {
 // (CONTEXT.md: Target counts).
 export function seatedPlayerCount(game: GameDocument): number {
   return game.players.filter((player) => !player.isTraveller).length;
+}
+
+// Undo must be idempotent: two Undo taps fired before the banner's state
+// update has rendered would otherwise both append the same removed token,
+// leaving two reminders sharing one id.
+export function withRestoredReminder(
+  reminders: ReminderToken[],
+  reminder: ReminderToken,
+): ReminderToken[] {
+  if (reminders.some((r) => r.id === reminder.id)) return reminders;
+  return [...reminders, reminder];
 }
 
 function defaultNewId(): string {
@@ -159,6 +222,7 @@ export interface CreateGameInput {
   selectedCharacters: Character[];
   standIn: Character | null;
   extraCopies: Record<string, number>;
+  almanacUrl?: string | null;
   createdAt?: string;
   newId?: () => string;
 }
@@ -170,6 +234,7 @@ export function createGame({
   selectedCharacters,
   standIn,
   extraCopies,
+  almanacUrl = null,
   createdAt = new Date().toISOString(),
   newId = defaultNewId,
 }: CreateGameInput): GameDocument {
@@ -188,6 +253,9 @@ export function createGame({
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
+    dead: false,
+    ghostVoteSpent: false,
+    position: null,
   }));
 
   const characterPool = Array.from(
@@ -205,9 +273,11 @@ export function createGame({
     scriptId,
     scriptName,
     players,
+    reminders: [],
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,
+    almanacUrl,
     createdAt,
     winner: null,
     endedAt: null,

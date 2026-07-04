@@ -489,8 +489,8 @@ describe("the first visible grimoire (issue #12)", () => {
     );
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    expect(within(circle).getByDisplayValue("Player 1")).toBeInTheDocument();
-    expect(within(circle).getByDisplayValue("Player 2")).toBeInTheDocument();
+    expect(within(circle).getByText("Player 1")).toBeInTheDocument();
+    expect(within(circle).getByText("Player 2")).toBeInTheDocument();
     expect(within(circle).getByText("Washerwoman")).toBeInTheDocument();
     expect(within(circle).getByText("Imp")).toBeInTheDocument();
     // The setup controls (draw/manual-assign) are gone — there's nothing
@@ -517,7 +517,11 @@ describe("the first visible grimoire (issue #12)", () => {
     );
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    const seat1Name = within(circle).getByDisplayValue("Player 1");
+    // Renaming from the completed grimoire now happens from the token's
+    // menu (issue #13's living board), not an always-visible input.
+    const seat1Token = within(circle).getByText("Player 1").closest("div")!;
+    await user.click(within(circle).getByText("Player 1"));
+    const seat1Name = within(seat1Token).getByLabelText(/player name/i);
     await user.clear(seat1Name);
     await user.type(seat1Name, "Alice");
 
@@ -584,5 +588,56 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
     expect(
       screen.getByRole("button", { name: /share via qr/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("reminder tokens (issue #14)", () => {
+  async function completedBoard(user: ReturnType<typeof userEvent.setup>) {
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+    return screen.getByRole("region", { name: "Grimoire circle" });
+  }
+
+  it("adds a reminder from the pad and persists it to the game document", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const padControls = circle.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0]).toMatchObject({
+      characterId: "washerwoman",
+      label: "Townsfolk",
+    });
+  });
+
+  it("removes a reminder and persists the removal; undo restores it", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const padControls = circle.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    await user.click(within(circle).getByText("Townsfolk"));
+    await user.click(within(circle).getByRole("button", { name: "Remove reminder" }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(0);
+
+    await user.click(within(circle).getByRole("button", { name: /undo/i }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(1);
   });
 });

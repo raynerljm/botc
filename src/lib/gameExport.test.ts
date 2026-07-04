@@ -107,6 +107,9 @@ describe("buildGameSnapshot", () => {
       isDrunk: false,
       isTraveller: true,
       travellerAlignment: "evil",
+      dead: false,
+      ghostVoteSpent: false,
+      position: null,
     };
     const withTraveller = {
       ...game,
