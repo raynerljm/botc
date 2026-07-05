@@ -583,7 +583,11 @@ describe("bag-draw setup page polish (issue #49)", () => {
   });
 
   it("doesn't reopen the 'Add character' form on its own if the roster empties out and refills while it was left open", async () => {
-    const { user, circle } = await completeSetup(2);
+    const { user, circle } = await completeSetup(2, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("scapegoat")!,
+    ]);
 
     await user.click(screen.getByRole("button", { name: "Add character" }));
     expect(screen.getByLabelText("Character")).toBeInTheDocument();
@@ -606,6 +610,20 @@ describe("bag-draw setup page polish (issue #49)", () => {
     expect(
       screen.queryByRole("button", { name: "Add character" }),
     ).not.toBeInTheDocument();
+
+    // Refill via "Add traveller" (unaffected by the setupComplete gating,
+    // so still reachable with an empty roster) — this flips setupComplete
+    // back to true, which is the actual regression scenario: the stale
+    // open form must not reappear on its own.
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await user.click(
+      screen.getByRole("button", { name: "Add to the circle" }),
+    );
+
+    expect(screen.queryByLabelText("Character")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add character" }),
+    ).toBeInTheDocument();
   });
 });
 
