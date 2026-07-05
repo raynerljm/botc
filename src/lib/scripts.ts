@@ -26,6 +26,7 @@ export interface ScriptSummary {
   source: "base" | "library";
   characterCount: number;
   travellerCount: number;
+  isTeensyville: boolean;
 }
 
 function toSummary(
@@ -42,6 +43,7 @@ function toSummary(
     source,
     characterCount: script.characters.length - travellerCount,
     travellerCount,
+    isTeensyville: script.meta.teensyville === true,
   };
 }
 

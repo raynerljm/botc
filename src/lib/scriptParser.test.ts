@@ -207,6 +207,24 @@ describe("parseScript: _meta", () => {
     expect(result.script.meta).toEqual({});
   });
 
+  it("extracts the teensyville flag when true", () => {
+    const result = parseScript(
+      JSON.stringify([{ id: "_meta", name: "Small Script", teensyville: true }, "washerwoman"]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta.teensyville).toBe(true);
+  });
+
+  it("omits the teensyville flag when absent or not exactly true", () => {
+    const result = parseScript(
+      JSON.stringify([{ id: "_meta", name: "Regular Script", teensyville: "yes" }, "washerwoman"]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta.teensyville).toBeUndefined();
+  });
+
   it("finds _meta regardless of its position in the array", () => {
     const result = parseScript(
       JSON.stringify([

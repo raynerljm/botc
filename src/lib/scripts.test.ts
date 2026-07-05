@@ -26,7 +26,14 @@ describe("listScriptSummaries", () => {
     expect(librarySummaries[0]).toMatchObject({
       name: "Sample Homebrew Script",
       author: "BotC Grimoire",
+      isTeensyville: false,
     });
+  });
+
+  it("flags a script whose _meta marks it teensyville", () => {
+    const summaries = listScriptSummaries();
+    const script = summaries.find((s) => s.id === "sample-homebrew");
+    expect(script?.isTeensyville).toBe(false);
   });
 });
 

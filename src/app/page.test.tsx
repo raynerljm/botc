@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCharacter } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
+import * as scripts from "@/lib/scripts";
 
 import Home from "./page";
 
@@ -45,6 +46,43 @@ describe("script picker", () => {
 
     expect(screen.getByText("Your scripts")).toBeInTheDocument();
     expect(screen.getByText("Add a script")).toBeInTheDocument();
+  });
+
+  it("visually distinguishes Teensyville library scripts from regular ones", () => {
+    vi.spyOn(scripts, "listScriptSummaries").mockReturnValue([
+      {
+        id: "tb",
+        name: "Trouble Brewing",
+        source: "base",
+        characterCount: 22,
+        travellerCount: 0,
+        isTeensyville: false,
+      },
+      {
+        id: "regular-script",
+        name: "A Regular Script",
+        source: "library",
+        characterCount: 22,
+        travellerCount: 0,
+        isTeensyville: false,
+      },
+      {
+        id: "teensy-script",
+        name: "A Teensy Script",
+        source: "library",
+        characterCount: 12,
+        travellerCount: 0,
+        isTeensyville: true,
+      },
+    ]);
+
+    render(<Home />);
+
+    const teensyLink = screen.getByRole("link", { name: /A Teensy Script/i });
+    expect(teensyLink).toHaveTextContent(/teensyville/i);
+
+    const regularLink = screen.getByRole("link", { name: /A Regular Script/i });
+    expect(regularLink).not.toHaveTextContent(/teensyville/i);
   });
 
   it("shows saved games above the picker, with a way to resume them", () => {
