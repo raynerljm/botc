@@ -368,6 +368,62 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
   });
 });
 
+describe("naming the drawn seat's player (issue #54)", () => {
+  it("saves a name picked from the regular players list as the drawn seat's player name", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+
+    await user.click(screen.getByRole("button", { name: "Bailey" }));
+
+    expect(loadGame()!.players[0].name).toBe("Bailey");
+  });
+
+  it("saves a typed custom name as the drawn seat's player name when they aren't in the list", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+
+    await user.type(screen.getByLabelText(/custom player name/i), "Substitute Sam");
+    await user.click(screen.getByRole("button", { name: /use this name/i }));
+
+    expect(loadGame()!.players[0].name).toBe("Substitute Sam");
+  });
+
+  it("offers the name picker only once a token has been revealed, not while still choosing", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+
+    expect(screen.queryByRole("button", { name: /use this name/i })).not.toBeInTheDocument();
+  });
+
+  it("hides the drawn seat's plain name field while its reveal is on-screen, so only the picker edits it (code review finding)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+
+    expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Once the reveal is dismissed, the plain field is back for later edits.
+    expect(screen.getByLabelText("Seat 1 name")).toHaveValue("Player 1");
+  });
+});
+
 describe("manual assignment mode (mixable with draw)", () => {
   it("assigns any seat directly from the bag, skipping the reveal entirely", async () => {
     const user = userEvent.setup();
