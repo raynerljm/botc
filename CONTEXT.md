@@ -52,7 +52,7 @@ A living player proposing another player for execution. One made per living play
 The player currently due for execution today: their nomination tally met the execution threshold (`ceil(living players / 2)`) and strictly beat the previous block-holder's tally. An exact tie clears the block.
 
 **Exile**:
-The Traveller equivalent of an execution. Threshold is `ceil(all players / 2)` (dead included) and ghost votes are not spent on it.
+The Traveller equivalent of an execution. Threshold is `ceil(all players / 2)` (dead included) and ghost votes are not spent on it. An exiled Traveller dies like an executed player and, once dead, retains a ghost vote as usual.
 
 **Game document**:
 The single serializable JSON object holding one game's entire state, identified by a `schemaVersion`. It is the unit of persistence (localStorage) and of export.
