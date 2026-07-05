@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getCharacter,
@@ -149,6 +149,39 @@ export function BagBuilder({
   const [extraCopies, setExtraCopies] = useState<Record<string, number>>({});
   const [standInId, setStandInId] = useState<string | null>(null);
   const [showCountWarning, setShowCountWarning] = useState(false);
+  const countWarningDialogRef = useRef<HTMLDivElement>(null);
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Traps Tab/Shift+Tab within the warning dialog's own controls while it's
+  // open (its overlay only visually covers the rest of the page — nothing
+  // stops keyboard focus from reaching a covered control otherwise), and
+  // returns focus to Continue once it closes so a keyboard user doesn't lose
+  // their place.
+  useEffect(() => {
+    if (!showCountWarning) return;
+    const dialog = countWarningDialogRef.current;
+    const focusable = dialog?.querySelectorAll<HTMLElement>("button") ?? [];
+    focusable[0]?.focus();
+
+    function trapTab(event: KeyboardEvent) {
+      if (event.key !== "Tab" || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", trapTab);
+    const continueButton = continueButtonRef.current;
+    return () => {
+      document.removeEventListener("keydown", trapTab);
+      continueButton?.focus();
+    };
+  }, [showCountWarning]);
 
   // The selectable pool is the script's characters plus anything a special
   // flow auto-adds (e.g. Huntsman pulling in the Damsel) that the script
@@ -370,19 +403,26 @@ export function BagBuilder({
       0,
     );
 
-  // Same official-team/target rules the per-team counters below use (and
-  // suppressed the same way by a relaxed-validation script) — surfaced here
-  // too so Continue can warn on any mismatch before handing off to a game.
-  const countMismatches: { team: Team; selected: number; target: number }[] =
-    relaxValidation
-      ? []
-      : CORE_TEAMS.filter(isOfficialTeam).flatMap((team) => {
-          const selected =
-            pool.filter((c) => c.team === team && selectedIds.has(c.id))
-              .length + (team === "townsfolk" ? extraTownsfolkTokens : 0);
-          const target = targetFor(team);
-          return selected === target ? [] : [{ team, selected, target }];
-        });
+  // The single source of truth for each official team's selected/target
+  // counts — the per-team counter rows below and the Continue mismatch
+  // warning both read from this instead of each re-deriving their own copy.
+  const officialTeamCounts: { team: Team; selected: number; target: number }[] =
+    CORE_TEAMS.filter(isOfficialTeam).map((team) => ({
+      team,
+      selected:
+        selectedCharacters.filter((c) => c.team === team).length +
+        (team === "townsfolk" ? extraTownsfolkTokens : 0),
+      target: targetFor(team),
+    }));
+  const officialTeamCountsByTeam = new Map(
+    officialTeamCounts.map((counts) => [counts.team, counts] as const),
+  );
+  // Suppressed the same way the per-team counters are by a
+  // relaxed-validation script — surfaced here too so Continue can warn on
+  // any mismatch before handing off to a game.
+  const countMismatches = relaxValidation
+    ? []
+    : officialTeamCounts.filter(({ selected, target }) => selected !== target);
 
   return (
     <div className={styles.main}>
@@ -438,6 +478,7 @@ export function BagBuilder({
         {scriptId && scriptName && (
           <button
             type="button"
+            ref={continueButtonRef}
             className={styles.continue}
             onClick={handleContinue}
           >
@@ -449,6 +490,7 @@ export function BagBuilder({
       {showCountWarning && (
         <div className={styles.overlay}>
           <div
+            ref={countWarningDialogRef}
             className={styles.dialog}
             role="dialog"
             aria-modal="true"
@@ -523,10 +565,13 @@ export function BagBuilder({
       )}
 
       {groups.map((group) => {
-        const target = targetFor(group.team);
-        const selectedCount =
-          group.characters.filter((c) => selectedIds.has(c.id)).length +
-          (group.team === "townsfolk" ? extraTownsfolkTokens : 0);
+        const official = officialTeamCountsByTeam.get(group.team);
+        const target = official
+          ? official.target
+          : targetFor(group.team);
+        const selectedCount = official
+          ? official.selected
+          : group.characters.filter((c) => selectedIds.has(c.id)).length;
         const showValidation = !relaxValidation && isOfficialTeam(group.team);
         const state = !showValidation
           ? undefined

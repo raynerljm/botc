@@ -635,6 +635,41 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
   });
+
+  it("moves focus into the dialog when it opens, traps Tab within it, and restores focus on dismiss", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    const continueButton = screen.getByRole("button", {
+      name: /Continue to seating/i,
+    });
+    await user.click(continueButton);
+
+    const dialog = screen.getByRole("dialog", { name: /count/i });
+    const goBack = within(dialog).getByRole("button", { name: /Go back/i });
+    const continueAnyway = within(dialog).getByRole("button", {
+      name: /Continue anyway/i,
+    });
+    // Opening moves focus inside the dialog rather than leaving it on the
+    // trigger, so a keyboard user starts able to act on the warning itself.
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    // Tab cycles only between the dialog's own controls — it never escapes
+    // to a covered background element (e.g. a character toggle) while the
+    // dialog is open.
+    await user.tab();
+    expect(document.activeElement).toBe(continueAnyway);
+    await user.tab();
+    expect(document.activeElement).toBe(goBack);
+
+    await user.click(goBack);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(continueButton);
+  });
 });
 
 describe("continue to seating hands off into a new game (issue #12)", () => {
