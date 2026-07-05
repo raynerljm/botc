@@ -17,6 +17,19 @@ beforeEach(() => {
   routerBack.mockClear();
 });
 
+// Setup-walkthrough player options now carry "Name — Role" (issue #56); select
+// by the name prefix so tests don't hardcode the exact role suffix. The \b
+// boundary (rather than plain startsWith) is what keeps "Player 1" from
+// also matching "Player 10" — escaping first is what keeps a name with
+// regex-special characters from building a broken pattern (code review
+// finding).
+function selectPlayerNamed(select: HTMLElement, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return within(select).getByRole("option", {
+    name: new RegExp(`^${escaped}\\b`),
+  });
+}
+
 function makeGame(overrides: Partial<Parameters<typeof createGame>[0]> = {}) {
   return createGame({
     scriptId: "tb",
@@ -87,7 +100,7 @@ describe("seat list generated from player count", () => {
   });
 });
 
-describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
+describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
   function twoSeatTwoCharacterGame() {
     return makeGame({ playerCount: 2 });
   }
@@ -101,7 +114,7 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     ).toBeInTheDocument();
   });
 
-  it("walks a full draw: tap, confirm, private reveal, hide & pass, next seat", async () => {
+  it("walks a full draw: tap, immediate private reveal, hide & pass, next seat", async () => {
     const user = userEvent.setup();
     const washerwoman = getCharacter("washerwoman")!;
     const imp = getCharacter("imp")!;
@@ -123,11 +136,9 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
 
     await user.click(faceDownTokens[0]);
 
-    // Deliberate confirm step before anything is revealed or committed.
-    expect(screen.getByText("Keep this token?")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
-
-    // Full-screen private reveal: character name + ability.
+    // No intermediate "keep this token?" step — tapping goes straight to a
+    // full-screen private reveal: character name + ability.
+    expect(screen.queryByText("Keep this token?")).not.toBeInTheDocument();
     const firstDrawnName = [washerwoman.name, imp.name].find((name) =>
       screen.queryByRole("heading", { name }),
     );
@@ -135,14 +146,14 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     const firstDrawn = firstDrawnName === washerwoman.name ? washerwoman : imp;
     const secondDrawn = firstDrawn === washerwoman ? imp : washerwoman;
     expect(screen.getByText(firstDrawn.ability)).toBeInTheDocument();
+    expect(loadGame()!.players[0].characterId).toBe(firstDrawn.id);
+    expect(loadGame()!.bag).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
     // Privacy guard: the reveal is gone until the next player confirms.
     expect(screen.queryByText(firstDrawn.ability)).not.toBeInTheDocument();
     expect(screen.getByText(/Pass the device to Player 2/)).toBeInTheDocument();
-    expect(loadGame()!.players[0].characterId).toBe(firstDrawn.id);
-    expect(loadGame()!.bag).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
@@ -154,7 +165,6 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     expect(faceDownTokens).toHaveLength(1);
 
     await user.click(faceDownTokens[0]);
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
 
     expect(
       screen.getByRole("heading", { name: secondDrawn.name }),
@@ -190,7 +200,6 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
 
     // Capture whichever character seat 1 actually drew.
     const seat1Character = candidates.find((c) =>
@@ -207,7 +216,7 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     expect(screen.queryByText(seat1Character.name)).not.toBeInTheDocument();
   });
 
-  it("obscures the whole setup screen — not just the draw region — while a card is hidden mid-pass", async () => {
+  it("obscures the whole setup screen — not just the draw region — while the character reveal is showing", async () => {
     const user = userEvent.setup();
     const game = makeGame({
       playerCount: 3,
@@ -224,7 +233,19 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
+
+    // The reveal itself is full-screen: nothing else on the setup screen —
+    // seat names, manual-assign dropdowns (which would list the remaining
+    // bag characters by name), or the traveller control — should render
+    // alongside it, exactly like the privacy guard after Hide & pass.
+    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/Assign seat \d manually/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add traveller" }),
+    ).not.toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
     // Mid pass-around: the privacy message is up, and nothing else on the
@@ -248,10 +269,10 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     expect(screen.getByLabelText("Seat 1 name")).toBeInTheDocument();
   });
 
-  it("recovers gracefully if the pending token gets manually assigned to another seat first", async () => {
+  it("ignores a tap on a token that's since been manually assigned to another seat", async () => {
     const user = userEvent.setup();
     // A single official token so seat 2's manual-assign dropdown and seat
-    // 1's pending draw are racing over the exact same token.
+    // 1's face-down token are racing over the exact same token.
     const game = makeGame({
       playerCount: 2,
       selectedCharacters: [getCharacter("washerwoman")!],
@@ -259,25 +280,26 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
-    await user.click(
-      screen.getAllByRole("button", { name: /Face-down token/ })[0],
-    );
-    expect(screen.getByText("Keep this token?")).toBeInTheDocument();
+    const faceDownToken = screen.getAllByRole("button", {
+      name: /Face-down token/,
+    })[0];
 
-    // Before confirming, the storyteller manually grabs the same (only)
-    // token for the other seat instead.
+    // Before tapping, the storyteller manually grabs the same (only) token
+    // for the other seat instead — the face-down button on screen is now
+    // stale.
     await user.selectOptions(
       screen.getByLabelText("Assign seat 2 manually"),
       "Washerwoman",
     );
 
-    // Confirming a token that's since vanished must not leave the dialog
-    // stuck — it falls back to choosing from whatever's left.
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
+    // Tapping the now-stale token must not double-assign it or crash —
+    // it's simply ignored, and the grid resyncs to what's actually left
+    // (zero tokens) instead of leaving the stale button on screen forever.
+    await user.click(faceDownToken);
 
-    expect(screen.queryByText("Keep this token?")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Washerwoman" })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Keep this token" }),
+      screen.queryByRole("button", { name: /Face-down token/ }),
     ).not.toBeInTheDocument();
 
     const reloaded = loadGame()!;
@@ -286,7 +308,43 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     expect(reloaded.bag).toHaveLength(0);
   });
 
-  it("lets the storyteller choose again before committing to a token", async () => {
+  it("keeps the grimoire board and end-game controls hidden behind the reveal when the very last seat is drawn", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
+
+    // Seat 1 first, out of the way.
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Seat 2 is the last unassigned seat — drawing it flips setupComplete
+    // true in the same tick the reveal appears, so the grimoire board must
+    // stay hidden behind the reveal rather than mounting alongside it.
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+
+    expect(
+      screen.queryByRole("region", { name: "Grimoire circle" }),
+    ).not.toBeInTheDocument();
+    // Export/end-game stay reachable even here (issue #21 AC) — only the
+    // board/bluffs/claims (which would show every player's identity) hide.
+    expect(
+      screen.getByRole("button", { name: "Export game" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    // Draw session is over — the board is back.
+    expect(
+      screen.getByRole("region", { name: "Grimoire circle" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps export and end-game controls reachable through a private reveal (issue #21 AC), hiding them only during the pass-around itself", async () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
 
@@ -294,13 +352,19 @@ describe("bag draw: shuffle, confirm, reveal, hide & pass", () => {
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
-    await user.click(screen.getByRole("button", { name: "Choose again" }));
 
-    // Nothing was committed: still 2 undrawn tokens, no seat assigned.
+    // Reveal is up, but this isn't the last seat — export/end-game stay
+    // reachable through it.
     expect(
-      screen.getAllByRole("button", { name: /Face-down token/ }),
-    ).toHaveLength(2);
-    expect(loadGame()).toBeNull();
+      screen.getByRole("button", { name: "Export game" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    // Mid pass-around: now they're hidden, same as before this change.
+    expect(
+      screen.queryByRole("button", { name: "Export game" }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -423,7 +487,6 @@ describe("manual assignment mode (mixable with draw)", () => {
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
     await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
@@ -580,6 +643,91 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     expect(
       within(seat1).queryByText(/actually the Drunk/i),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52)", () => {
+  async function drunkBoard(user: ReturnType<typeof userEvent.setup>) {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: [
+        getCharacter("drunk")!,
+        getCharacter("chef")!,
+        getCharacter("grandmother")!,
+      ],
+      standIn: getCharacter("washerwoman")!,
+      extraCopies: {},
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Chef",
+    );
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", {
+      name: /drunk — review the stand-in/i,
+    });
+    return { dialog, step };
+  }
+
+  it("changes what the grimoire records without ending the disguise", async () => {
+    const user = userEvent.setup();
+    const { step } = await drunkBoard(user);
+
+    await user.selectOptions(
+      within(step).getByLabelText(/new stand-in/i),
+      "Grandmother",
+    );
+    await user.click(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const drunkPlayer = reloaded.players.find((p) => p.isDrunk)!;
+    expect(drunkPlayer.characterId).toBe("grandmother");
+    expect(drunkPlayer.isDrunk).toBe(true);
+    expect(drunkPlayer.startingCharacterId).toBe("washerwoman");
+  });
+
+  it("updates what the Drunk's player is told they are on the board", async () => {
+    const user = userEvent.setup();
+    const { step } = await drunkBoard(user);
+
+    await user.selectOptions(
+      within(step).getByLabelText(/new stand-in/i),
+      "Grandmother",
+    );
+    await user.click(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const summary = wrap.querySelector("details > summary") as HTMLElement;
+    expect(within(summary).getByText("Grandmother")).toBeInTheDocument();
+    expect(within(summary).getByText(/actually the Drunk/i)).toBeInTheDocument();
+  });
+
+  it("excludes a Townsfolk already held by another player from the picker", async () => {
+    const user = userEvent.setup();
+    const { step } = await drunkBoard(user);
+
+    const options = Array.from(
+      within(step).getByLabelText(/new stand-in/i).querySelectorAll("option"),
+    ).map((o) => o.textContent);
+
+    expect(options).not.toContain("Chef");
+    expect(options).toContain("Grandmother");
   });
 });
 
@@ -1312,7 +1460,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const step = within(dialog).getByRole("group", {
       name: /fortune teller/i,
     });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -1332,7 +1481,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(within(dialog).getByRole("button", { name: /close/i }));
 
@@ -1379,14 +1529,10 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /washerwoman/i });
     await user.selectOptions(within(step).getByLabelText("Character"), "Chef");
-    await user.selectOptions(
-      within(step).getByLabelText(/shown as townsfolk/i),
-      "Player 2",
-    );
-    await user.selectOptions(
-      within(step).getByLabelText(/shown as wrong/i),
-      "Player 3",
-    );
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    await user.selectOptions(trueSelect, selectPlayerNamed(trueSelect, "Player 2"));
+    const falseSelect = within(step).getByLabelText(/shown as wrong/i);
+    await user.selectOptions(falseSelect, selectPlayerNamed(falseSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -1410,14 +1556,16 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     const firstPosition = (loadGame() as GameDocument).reminders.find(
       (r) => r.label === "Red herring",
     )!.position;
 
     await user.click(within(step).getByRole("button", { name: /redo/i }));
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 4");
+    const playerSelectAgain = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelectAgain, selectPlayerNamed(playerSelectAgain, "Player 4"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -1459,7 +1607,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     // Simulate a page reload: tear down this component instance entirely
@@ -1472,7 +1621,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog2 = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step2 = within(dialog2).getByRole("group", { name: /fortune teller/i });
     await user.click(within(step2).getByRole("button", { name: /redo/i }));
-    await user.selectOptions(within(step2).getByLabelText("Player"), "Player 4");
+    const playerSelect2 = within(step2).getByLabelText("Player");
+    await user.selectOptions(playerSelect2, selectPlayerNamed(playerSelect2, "Player 4"));
     await user.click(within(step2).getByRole("button", { name: /confirm/i }));
 
     const final = loadGame() as GameDocument;
@@ -1505,7 +1655,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(screen.getByRole("button", { name: /close/i }));
 

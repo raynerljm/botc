@@ -42,13 +42,11 @@ export interface GrimoireSetupProps {
   game: GameDocument;
 }
 
-type DrawStage = "choosing" | "confirming" | "revealed" | "hidden";
+type DrawStage = "choosing" | "revealed" | "hidden";
 
 interface DrawState {
   seatId: string;
   stage: DrawStage;
-  chosenTokenId?: string;
-  revealedCharacterId?: string;
   // Shuffled once per seat's turn — tokens are face-down either way, but
   // this keeps faith with the physical bag-draw ritual (issue #12 AC).
   tokenOrder: BagToken[];
@@ -357,16 +355,31 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
-  // isDrunk always clears: a deliberate swap — whether it's the dedicated
-  // Drunk reveal or a storyteller correction to some other character — ends
-  // the stand-in illusion either way, so there's nothing left to disguise.
-  function swapCharacter(playerId: string, characterId: string) {
+  // isDrunk clears by default: a deliberate swap — whether it's the
+  // dedicated Drunk reveal or a storyteller correction to some other
+  // character — ordinarily ends the stand-in illusion, since there's
+  // nothing left to disguise. The one exception is reassigning the Drunk's
+  // stand-in itself (issue #52's reassignStandIn below) — that only changes
+  // which Townsfolk the disguise is, not whether there's a disguise at all,
+  // so it opts out via endDisguise: false.
+  function swapCharacter(
+    playerId: string,
+    characterId: string,
+    { endDisguise = true }: { endDisguise?: boolean } = {},
+  ) {
     const character = getCharacter(characterId);
     update({
       ...game,
-      players: updatePlayer(playerId, { characterId, isDrunk: false }),
+      players: updatePlayer(
+        playerId,
+        endDisguise ? { characterId, isDrunk: false } : { characterId },
+      ),
       characterPool: withCharacterInPool(game.characterPool, character),
     });
+  }
+
+  function reassignStandIn(playerId: string, characterId: string) {
+    swapCharacter(playerId, characterId, { endDisguise: false });
   }
 
   function removePlayer(playerId: string) {
@@ -441,47 +454,34 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // Builds off gameRef.current, not the `game` this render closed over — two
+  // taps on different face-down tokens landing before React re-renders (a
+  // fast double-tap) would otherwise both commit from the same stale bag
+  // snapshot, and the second update() would silently overwrite the first's
+  // removal instead of compounding it (code review finding).
   function chooseToken(tokenId: string) {
-    setDraw((current) =>
-      current ? { ...current, stage: "confirming", chosenTokenId: tokenId } : current,
-    );
-  }
-
-  function chooseAgain() {
-    setDraw((current) =>
-      current
-        ? { ...current, stage: "choosing", chosenTokenId: undefined }
-        : current,
-    );
-  }
-
-  function keepToken() {
-    if (!draw?.chosenTokenId) return;
-    const token = game.bag.find((t) => t.id === draw.chosenTokenId);
-    // The chosen token can vanish from the bag if it was manually assigned
-    // to a different seat while this one was still confirming — fall back
-    // to choosing again from what's actually left rather than leaving the
-    // confirm dialog stuck on a token that no longer exists.
+    if (!draw) return;
+    const currentGame = gameRef.current;
+    const token = currentGame.bag.find((t) => t.id === tokenId);
+    // The tapped token can already be gone from the bag if it was manually
+    // assigned to a different seat while still shown face-down here —
+    // reshuffle the grid from what's actually left rather than leaving a
+    // dead, stale button on screen.
     if (!token) {
-      setDraw({
-        ...draw,
-        stage: "choosing",
-        chosenTokenId: undefined,
-        tokenOrder: shuffleTokens(game.bag),
-      });
+      setDraw({ ...draw, tokenOrder: shuffleTokens(currentGame.bag) });
       return;
     }
 
     update({
-      ...game,
-      bag: game.bag.filter((t) => t.id !== token.id),
-      players: updatePlayer(draw.seatId, tokenAssignmentPatch(token)),
+      ...currentGame,
+      bag: currentGame.bag.filter((t) => t.id !== token.id),
+      players: currentGame.players.map((player) =>
+        player.id === draw.seatId
+          ? { ...player, ...tokenAssignmentPatch(token) }
+          : player,
+      ),
     });
-    setDraw({
-      ...draw,
-      stage: "revealed",
-      revealedCharacterId: token.characterId,
-    });
+    setDraw({ ...draw, stage: "revealed" });
   }
 
   // The privacy guard only matters when someone else still needs to draw —
@@ -604,18 +604,31 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const drawingSeat = draw
     ? game.players.find((p) => p.id === draw.seatId)
     : undefined;
-  const revealedCharacter: Character | undefined = draw?.revealedCharacterId
-    ? characterById.get(draw.revealedCharacterId)
-    : undefined;
+  // The seat's characterId is stamped in the same update() call that moves
+  // the stage to "revealed" (chooseToken), so it's always in lockstep with
+  // what was just drawn — no separate field needed to track it.
+  const revealedCharacter: Character | undefined =
+    draw?.stage === "revealed" && drawingSeat?.characterId
+      ? characterById.get(drawingSeat.characterId)
+      : undefined;
   // Every seat filled — the setup screens give way to the grimoire itself.
   const setupComplete =
     game.players.length > 0 &&
     game.players.every((p) => p.characterId !== null);
-  // "Screen blurred/obscured until the next player deliberately confirms"
-  // means the *whole* screen, not just the draw card — every other control
-  // (seat names, manual-assign dropdowns listing bag characters, traveller
-  // add) has to disappear too while the device is mid pass-around.
-  const screenObscured = draw?.stage === "hidden";
+  // "Screen blurred/obscured" means the *whole* screen, not just the draw
+  // card — every other control (seat names, manual-assign dropdowns listing
+  // bag characters, traveller add, the grimoire board once every seat is
+  // filled) has to disappear too, both while a character is privately on
+  // screen and while the device is mid pass-around — i.e. whenever a draw is
+  // active and it isn't the safe "choosing" stage. Written as a deny-list
+  // (not `stage === "revealed" || stage === "hidden"`) so a future
+  // privacy-sensitive stage is obscured by default instead of needing this
+  // line remembered.
+  const screenObscured = draw !== null && draw.stage !== "choosing";
+  // Export/end-game/script-sharing stay reachable through a private reveal
+  // (issue #21 AC: always reachable) — only the pass-around hand-off itself
+  // hides them, so a drawing player can't see them mid-pass.
+  const passAroundHidden = draw?.stage === "hidden";
 
   return (
     <div className={styles.main}>
@@ -670,20 +683,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             </>
           )}
 
-          {draw.stage === "confirming" && (
-            <div className={styles.confirm}>
-              <p>Keep this token?</p>
-              <button type="button" onClick={keepToken}>
-                Keep this token
-              </button>
-              <button type="button" onClick={chooseAgain}>
-                Choose again
-              </button>
-            </div>
-          )}
-
           {draw.stage === "revealed" && revealedCharacter && (
-            <div className={styles.reveal}>
+            <div
+              className={styles.reveal}
+              role="dialog"
+              aria-label={revealedCharacter.name}
+              aria-modal="true"
+            >
               <CharacterToken character={revealedCharacter} />
               <h2>{revealedCharacter.name}</h2>
               <p>{revealedCharacter.ability}</p>
@@ -820,6 +826,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       {setupComplete ? (
         <>
           {!showWalkthrough &&
+            !screenObscured &&
             walkthroughSteps.length > 0 &&
             !game.setupWalkthroughOffered && (
               <div
@@ -846,8 +853,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               remove reminder" window) that unmounting would silently discard
               (code review finding). `hidden` also drops it from the
               accessibility tree, matching the old unmounted behavior for
-              anything that queries by role. */}
-          <div className={styles.circleLayout} hidden={showWalkthrough}>
+              anything that queries by role. Also hidden while a draw is
+              obscured — the very last seat's draw can flip setupComplete
+              true mid-reveal, and without this the board's player names
+              would mount underneath the reveal overlay (code review
+              finding). */}
+          <div
+            className={styles.circleLayout}
+            hidden={showWalkthrough || screenObscured}
+          >
             <div role="region" aria-label="Grimoire circle">
               <GrimoireBoard
                 players={game.players}
@@ -887,8 +901,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           {/* Hidden rather than unmounted while the walkthrough is open, same
               reasoning as the circle above — DemonBluffsPanel owns its own
               session-only state ("Show all characters", an in-flight "Show
-              to Demon" overlay) that unmounting would silently discard. */}
-          <div hidden={showWalkthrough}>
+              to Demon" overlay) that unmounting would silently discard. Also
+              hidden while a draw is obscured, same reasoning as the circle
+              above. */}
+          <div hidden={showWalkthrough || screenObscured}>
             <DemonBluffsPanel game={game} onChange={update} />
             <ClaimsList players={game.players} characterById={scriptCharacterById} />
           </div>
@@ -899,6 +915,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               players={game.players}
               characterPool={game.characterPool}
               onResolveStep={resolveWalkthroughStep}
+              onReassignStandIn={reassignStandIn}
               onClose={() => setShowWalkthrough(false)}
             />
           )}
@@ -982,10 +999,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         )
       )}
 
-      {/* End-game, export, and script sharing are always reachable (export
-          works mid-game too, issue #21 AC), but hidden while the device is
-          mid pass-around so a drawing player can't see it. */}
-      {!screenObscured && (
+      {/* End-game, export, and script sharing are always reachable — even
+          through a private character reveal (export works mid-game too,
+          issue #21 AC) — but hidden while the device is mid pass-around so a
+          drawing player can't see it. */}
+      {!passAroundHidden && (
         <>
           <ShareScriptButton
             meta={shareableScriptMeta}

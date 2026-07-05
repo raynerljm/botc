@@ -5,6 +5,8 @@ import { useState } from "react";
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
   circlePosition,
+  DRUNK_ID,
+  heldCharacterIds,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -40,6 +42,10 @@ export interface SetupWalkthroughProps {
     status: SetupWalkthroughStepStatus,
     reminders: SetupWalkthroughReminderInput[],
   ) => void;
+  // Changes which Townsfolk the Drunk's player believes they are (issue
+  // #52) — a separate channel from onResolveStep since it isn't a reminder
+  // and doesn't touch this step's answered/skipped status.
+  onReassignStandIn: (playerId: string, characterId: string) => void;
   onClose: () => void;
 }
 
@@ -58,6 +64,13 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
   return parkBeside(base);
 }
 
+function characterOf(
+  player: Player,
+  characterById: Map<string, Character>,
+): Character | undefined {
+  return player.characterId ? characterById.get(player.characterId) : undefined;
+}
+
 // Fortune Teller's red herring, Grandmother's grandchild, and the Evil
 // Twin's counterpart must all be a *good* player (each ability's text says
 // so explicitly) — a player's real alignment, not what they believe
@@ -66,8 +79,26 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
 // correctly included.
 function isGoodPlayer(player: Player, characterById: Map<string, Character>): boolean {
   if (player.isTraveller) return player.travellerAlignment === "good";
-  const character = player.characterId ? characterById.get(player.characterId) : undefined;
+  const character = characterOf(player, characterById);
   return character?.team === "townsfolk" || character?.team === "outsider";
+}
+
+// The storyteller already knows every player's assigned character, so
+// showing it alongside their name (issue #56) makes a player-pick faster
+// and less error-prone than matching bare names to seats by memory. A
+// disguised Drunk gets the same "(actually the Drunk)" flag GrimoireBoard
+// already shows on their token, so picking them here doesn't read as
+// picking their apparent character for real (code review finding).
+function playerOptionLabel(
+  player: Player,
+  characterById: Map<string, Character>,
+): string {
+  const character = characterOf(player, characterById);
+  if (!character) return player.name;
+  const label = `${player.name} — ${character.name}`;
+  return player.isDrunk && character.id !== DRUNK_ID
+    ? `${label} (actually the Drunk)`
+    : label;
 }
 
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
@@ -90,6 +121,7 @@ interface StepPanelProps {
   players: Player[];
   characterPool: Character[];
   onResolveStep: SetupWalkthroughProps["onResolveStep"];
+  onReassignStandIn: SetupWalkthroughProps["onReassignStandIn"];
 }
 
 function StepPanel({
@@ -98,6 +130,7 @@ function StepPanel({
   players,
   characterPool,
   onResolveStep,
+  onReassignStandIn,
 }: StepPanelProps) {
   const [forceEditing, setForceEditing] = useState(false);
   const editing = forceEditing || status === undefined;
@@ -127,6 +160,22 @@ function StepPanel({
       <legend>{step.title}</legend>
       <p>{step.ruleText}</p>
 
+      {/* Reassigning the stand-in is a separate action from resolving this
+          step's reminder (issue #52) — it stays available even once the
+          step is answered/skipped, not gated behind editing/Redo like the
+          rest of this panel. */}
+      {step.kind === "review" && (
+        <StandInReassignControls
+          currentCharacterId={step.characterId}
+          currentCharacterName={step.characterName}
+          heldElsewhereIds={heldCharacterIds(otherPlayers)}
+          characterPool={characterPool}
+          onConfirm={(characterId) =>
+            onReassignStandIn(step.playerId, characterId)
+          }
+        />
+      )}
+
       {!editing && (
         <p className={styles.statusNote}>
           {status === "answered" ? "Answered" : "Skipped"}
@@ -141,6 +190,7 @@ function StepPanel({
           {step.kind === "playerPick" && (
             <PlayerPickControls
               otherPlayers={goodOtherPlayers}
+              characterById={characterById}
               onConfirm={(playerId) =>
                 resolve("answered", [
                   {
@@ -158,6 +208,7 @@ function StepPanel({
               step={step}
               otherPlayers={otherPlayers}
               characterPool={characterPool}
+              characterById={characterById}
               onConfirm={(character, truePlayerId, falsePlayerId) =>
                 resolve("answered", [
                   {
@@ -279,9 +330,11 @@ function StepPanel({
 
 function PlayerPickControls({
   otherPlayers,
+  characterById,
   onConfirm,
 }: {
   otherPlayers: Player[];
+  characterById: Map<string, Character>;
   onConfirm: (playerId: string) => void;
 }) {
   const [playerId, setPlayerId] = useState("");
@@ -293,7 +346,7 @@ function PlayerPickControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -332,11 +385,13 @@ function CharacterAndTwoPlayersControls({
   step,
   otherPlayers,
   characterPool,
+  characterById,
   onConfirm,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "characterAndTwoPlayers" }>;
   otherPlayers: Player[];
   characterPool: Character[];
+  characterById: Map<string, Character>;
   onConfirm: (
     character: Character,
     truePlayerId: string,
@@ -393,7 +448,7 @@ function CharacterAndTwoPlayersControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -407,7 +462,7 @@ function CharacterAndTwoPlayersControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -500,6 +555,69 @@ function BelievedDemonControls({
   );
 }
 
+// Lets the storyteller revise the Drunk's stand-in after bag-building's
+// initial pick (issue #52) — a separate action from the reminder-toggle
+// below it, since it changes what the grimoire records rather than placing
+// a reminder, and doesn't move this step's answered/skipped status.
+function StandInReassignControls({
+  currentCharacterId,
+  currentCharacterName,
+  heldElsewhereIds,
+  characterPool,
+  onConfirm,
+}: {
+  currentCharacterId: string;
+  currentCharacterName: string;
+  // Townsfolk currently held by some other seated player — excluded from
+  // the picker (issue #52 AC: "not already in play as another character").
+  heldElsewhereIds: Set<string>;
+  characterPool: Character[];
+  onConfirm: (characterId: string) => void;
+}) {
+  const { list, showAll, setShowAll } = useCandidateCharacters(
+    "townsfolk",
+    characterPool,
+  );
+  const candidates = list.filter((c) => !heldElsewhereIds.has(c.id));
+  const [characterId, setCharacterId] = useState("");
+  const chosen = candidates.find((c) => c.id === characterId);
+
+  function handleShowAllChange(next: boolean) {
+    setShowAll(next);
+    if (!next && characterId && !characterPool.some((c) => c.id === characterId)) {
+      setCharacterId("");
+    }
+  }
+
+  return (
+    <div className={styles.controls}>
+      <p>{`Current stand-in: ${currentCharacterName}`}</p>
+      <label>
+        New stand-in
+        <select
+          value={characterId}
+          onChange={(e) => setCharacterId(e.target.value)}
+        >
+          <option value="">Choose a character…</option>
+          {candidates.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
+      <button
+        type="button"
+        disabled={!chosen || chosen.id === currentCharacterId}
+        onClick={() => chosen && onConfirm(chosen.id)}
+      >
+        Change stand-in
+      </button>
+    </div>
+  );
+}
+
 function GenericControls({
   step,
   onDone,
@@ -546,6 +664,7 @@ export function SetupWalkthrough({
   players,
   characterPool,
   onResolveStep,
+  onReassignStandIn,
   onClose,
 }: SetupWalkthroughProps) {
   const resolvedCount = steps.filter((s) => stepStatuses[s.id]).length;
@@ -574,6 +693,7 @@ export function SetupWalkthrough({
               players={players}
               characterPool={characterPool}
               onResolveStep={onResolveStep}
+              onReassignStandIn={onReassignStandIn}
             />
           </li>
         ))}

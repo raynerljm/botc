@@ -22,6 +22,7 @@ import {
   circlePosition,
   clampPct,
   DRUNK_ID,
+  heldCharacterIds,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -215,15 +216,7 @@ export function GrimoireBoard({
   );
   const total = sorted.length;
   const tokenSize = tokenSizeRem(total);
-  const inPlayCharacterIds = useMemo(
-    () =>
-      new Set(
-        players
-          .map((p) => p.characterId)
-          .filter((id): id is string => id !== null),
-      ),
-    [players],
-  );
+  const inPlayCharacterIds = useMemo(() => heldCharacterIds(players), [players]);
 
   function handlePointerDown(
     event: ReactPointerEvent<HTMLElement>,
