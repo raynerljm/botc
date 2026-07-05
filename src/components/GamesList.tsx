@@ -11,6 +11,11 @@ import {
 } from "@/lib/gameDocument";
 import { downloadGameSnapshot } from "@/lib/gameExport";
 import {
+  formatElapsed,
+  formatGameDuration,
+  formatStartTimeSGT,
+} from "@/lib/gameTime";
+import {
   deleteGame,
   getGamesSnapshot,
   setActiveGame,
@@ -25,6 +30,13 @@ function statusOf(game: GameDocument): string {
   return isGameEnded(game)
     ? `${alignmentLabel(game.winner!)} won`
     : "In progress";
+}
+
+function timeSummaryOf(game: GameDocument): string {
+  const started = `Started ${formatStartTimeSGT(game.createdAt)}`;
+  return isGameEnded(game)
+    ? `${started} · Lasted ${formatGameDuration(game.createdAt, game.endedAt!)}`
+    : `${started} · Elapsed ${formatElapsed(game.createdAt)}`;
 }
 
 export function GamesList() {
@@ -61,9 +73,9 @@ export function GamesList() {
             <div className={styles.summary}>
               <span className={styles.name}>{game.scriptName}</span>
               <span className={styles.meta}>
-                {seatedPlayerCount(game)} players · {statusOf(game)} ·{" "}
-                {game.createdAt.slice(0, 10)}
+                {seatedPlayerCount(game)} players · {statusOf(game)}
               </span>
+              <span className={styles.meta}>{timeSummaryOf(game)}</span>
             </div>
             <div className={styles.actions}>
               <button

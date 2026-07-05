@@ -72,6 +72,39 @@ describe("GamesList", () => {
     expect(within(inProgress).getByText(/in progress/i)).toBeInTheDocument();
   });
 
+  it("shows each game's SGT start time and elapsed time since start", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T02:15:00.000Z"));
+    saveGame(makeGame("Trouble Brewing"));
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Trouble Brewing").closest("li")!;
+    expect(
+      within(row).getByText(/started 4 jul, 08:00 sgt/i),
+    ).toBeInTheDocument();
+    expect(within(row).getByText(/elapsed 2h 15m/i)).toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it("shows an ended game's total duration instead of elapsed time", () => {
+    saveGame(
+      makeGame("Sects & Violets", {
+        winner: "good",
+        endedAt: "2026-07-04T02:00:00.000Z",
+      }),
+    );
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Sects & Violets").closest("li")!;
+    expect(
+      within(row).getByText(/started 4 jul, 08:00 sgt/i),
+    ).toBeInTheDocument();
+    expect(within(row).getByText(/lasted 2h 0m/i)).toBeInTheDocument();
+  });
+
   it("resumes a game: makes it active and navigates to the grimoire", async () => {
     const user = userEvent.setup();
     const first = makeGame("Trouble Brewing");
