@@ -162,15 +162,15 @@ function resolveNightAction(
   oneShot: boolean,
 ): NightAction {
   const primaryValue = phase === "first" ? character.firstNight : character.otherNight;
-  const overrideRank = metaRank(order, character.id, true);
-  const actsPrimary = primaryValue > 0 || overrideRank !== undefined;
+  const overrideRankThisPhase = metaRank(order, character.id, true);
+  const actsPrimary = primaryValue > 0 || overrideRankThisPhase !== undefined;
 
+  const firstNightOverrideRank = metaRank(firstNightOrder, character.id, true);
   const oneShotEligible =
     !actsPrimary &&
     phase === "other" &&
     oneShot &&
-    (character.firstNight > 0 ||
-      metaRank(firstNightOrder, character.id, true) !== undefined);
+    (character.firstNight > 0 || firstNightOverrideRank !== undefined);
 
   const acts = actsPrimary || oneShotEligible;
   const nightValue = actsPrimary
@@ -178,6 +178,13 @@ function resolveNightAction(
     : oneShotEligible
       ? character.firstNight
       : Number.MAX_SAFE_INTEGER;
+  // A one-shot eligibility that comes purely from a first-night override
+  // (character.firstNight is 0 in the dataset) has no meaningful nightValue
+  // to sort by — surface that override's own rank instead, so it sorts via
+  // the same rank-supremacy path any script-named character already gets,
+  // rather than a bare nightValue of 0 sorting it before every real actor.
+  const overrideRank =
+    overrideRankThisPhase ?? (oneShotEligible ? firstNightOverrideRank : undefined);
   const reminderText =
     phase === "first" || oneShotEligible
       ? character.firstNightReminder

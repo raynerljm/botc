@@ -552,6 +552,15 @@ describe("computeNightList: acts-as (issue #17)", () => {
     const entry = entries.find((e) => e.id === `actsas:${philosopher.id}`);
     expect(entry).toBeDefined();
     expect(entry!.reminderText).toBe("Reveal a card.");
+    // Regression (code review): an override-only one-shot has no real
+    // nightValue to sort by (the dataset firstNight is 0), so it must sort
+    // via the override's own rank — like any other script-named entry ranks
+    // ahead of unranked ones — not by a bare nightValue of 0, which would
+    // misplace it at the very start of the acting bucket regardless of
+    // where the override actually named it.
+    const impIndex = entries.findIndex((e) => e.characterId === "imp");
+    const entryIndex = entries.indexOf(entry!);
+    expect(entryIndex).toBeLessThan(impIndex);
   });
 
   it("inserts a first-night-only target chosen on a later night for that night only, then never again", () => {
