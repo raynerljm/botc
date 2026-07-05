@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import {
   canRecordVote,
   computeBlock,
   currentDay,
   hasNominatedToday,
+  hasSpentGhostVoteElsewhereToday,
   nominationThreshold,
   wasNominatedToday,
 } from "@/lib/dayPhase";
@@ -19,33 +20,10 @@ export interface DayPhaseProps {
   onChange: (next: GameDocument) => void;
 }
 
-interface GhostSpend {
-  nominationId: string;
-  playerId: string;
-}
-
-function spendKey(spend: GhostSpend): string {
-  return `${spend.nominationId}:${spend.playerId}`;
-}
-
 export function DayPhase({ game, onChange }: DayPhaseProps) {
   const secondPlayerId = game.players[1]?.id ?? game.players[0]?.id ?? "";
   const [nominatorId, setNominatorId] = useState(game.players[0]?.id ?? "");
   const [nomineeId, setNomineeId] = useState(secondPlayerId);
-  // A brief per-spend banner offering to reverse the one automatic side
-  // effect (issue #20 AC: "spends their ghost vote automatically, with
-  // undo") — a list rather than a single slot, so a second dead player's
-  // vote doesn't silently drop the first spend's undo option.
-  const [ghostSpends, setGhostSpends] = useState<GhostSpend[]>([]);
-  const undoTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-
-  useEffect(() => {
-    const timeouts = undoTimeoutsRef.current;
-    return () => {
-      for (const timeout of timeouts.values()) clearTimeout(timeout);
-      timeouts.clear();
-    };
-  }, []);
 
   const playerById = useMemo(
     () => new Map(game.players.map((player) => [player.id, player] as const)),
@@ -72,25 +50,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   const blockNomineeId = computeBlock(game.nominations, game.players);
   const blockHolder = playerById.get(blockNomineeId ?? "");
 
-  function recordSpend(spend: GhostSpend) {
-    setGhostSpends((current) => [...current, spend]);
-    const key = spendKey(spend);
-    const timeout = setTimeout(() => {
-      setGhostSpends((current) => current.filter((s) => spendKey(s) !== key));
-      undoTimeoutsRef.current.delete(key);
-    }, 6000);
-    undoTimeoutsRef.current.set(key, timeout);
-  }
-
-  function clearSpend(spend: GhostSpend) {
-    const key = spendKey(spend);
-    const timeout = undoTimeoutsRef.current.get(key);
-    if (timeout) clearTimeout(timeout);
-    undoTimeoutsRef.current.delete(key);
-    setGhostSpends((current) => current.filter((s) => spendKey(s) !== key));
-  }
-
-  function recordNomination(event: React.FormEvent) {
+  function recordNomination(event: FormEvent) {
     event.preventDefault();
     const nomination: Nomination = {
       id: crypto.randomUUID(),
@@ -110,39 +70,35 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     const nominations = game.nominations.map((n) =>
       n.id === nomination.id ? { ...n, votes } : n,
     );
+    const isExecution = !!nominee && !nominee.isTraveller;
 
-    // Recording a dead player's vote spends their ghost vote automatically,
-    // but only for an execution — an exile never touches it (CONTEXT.md:
-    // Exile) — and only on the way in; un-checking a vote never un-spends
-    // it on its own (that's what Undo is for).
-    if (!alreadyVoted && player.dead && nominee && !nominee.isTraveller) {
+    // Recording a dead player's vote on an execution spends their ghost
+    // vote; un-recording it restores the vote, but only when no *other*
+    // nomination recorded today still holds their one vote (otherwise
+    // they're genuinely still spent, and this would wrongly refund them).
+    // An exile never touches the ghost vote either way (CONTEXT.md: Exile).
+    // Never blocked (ADR 0003) — a storyteller can always record or remove
+    // a vote regardless of the advisory "already spent" state.
+    if (player.dead && isExecution) {
+      const ghostVoteSpent = !alreadyVoted
+        ? true
+        : hasSpentGhostVoteElsewhereToday(
+            game.nominations,
+            game.players,
+            player.id,
+            nomination.id,
+          );
       onChange({
         ...game,
         nominations,
         players: game.players.map((p) =>
-          p.id === player.id ? { ...p, ghostVoteSpent: true } : p,
+          p.id === player.id ? { ...p, ghostVoteSpent } : p,
         ),
       });
-      recordSpend({ nominationId: nomination.id, playerId: player.id });
       return;
     }
 
     onChange({ ...game, nominations });
-  }
-
-  function undoGhostSpend(spend: GhostSpend) {
-    onChange({
-      ...game,
-      nominations: game.nominations.map((n) =>
-        n.id === spend.nominationId
-          ? { ...n, votes: n.votes.filter((id) => id !== spend.playerId) }
-          : n,
-      ),
-      players: game.players.map((p) =>
-        p.id === spend.playerId ? { ...p, ghostVoteSpent: false } : p,
-      ),
-    });
-    clearSpend(spend);
   }
 
   return (
@@ -182,6 +138,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
             {game.players.map((player) => (
               <option key={player.id} value={player.id}>
                 {player.name}
+                {player.dead ? " (dead)" : ""}
                 {wasNominatedToday(game.nominations, player.id)
                   ? " (already nominated)"
                   : ""}
@@ -191,15 +148,6 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         </label>
         <button type="submit">Record nomination</button>
       </form>
-
-      {ghostSpends.map((spend) => (
-        <div key={spendKey(spend)} className={styles.undoBanner}>
-          <span>{playerById.get(spend.playerId)?.name ?? "Player"}&apos;s ghost vote spent</span>
-          <button type="button" onClick={() => undoGhostSpend(spend)}>
-            Undo
-          </button>
-        </div>
-      ))}
 
       <ul className={styles.nominations}>
         {game.nominations.map((nomination) => {
@@ -232,18 +180,25 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                   <legend>Record votes</legend>
                   {game.players.map((player) => {
                     const voted = nomination.votes.includes(player.id);
-                    const eligible = canRecordVote(player, nominee);
+                    // Advisory only (ADR 0003) — never disables the
+                    // checkbox, just labels a dead voter whose ghost vote
+                    // is already spent so the storyteller can see it before
+                    // choosing to record (or not record) the vote anyway.
+                    const alreadySpent =
+                      player.dead && !voted && !canRecordVote(player, nominee);
                     return (
                       <label key={player.id} className={styles.voter}>
                         <input
                           type="checkbox"
                           checked={voted}
-                          disabled={!voted && !eligible}
                           onChange={() => toggleVote(nomination, player)}
                         />
                         {player.name}
                         {player.dead && (
-                          <span className={styles.note}> (ghost vote)</span>
+                          <span className={styles.note}>
+                            {" "}
+                            (ghost vote{alreadySpent ? " — already spent" : ""})
+                          </span>
                         )}
                       </label>
                     );

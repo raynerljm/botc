@@ -5,6 +5,7 @@ import {
   computeBlock,
   currentDay,
   hasNominatedToday,
+  hasSpentGhostVoteElsewhereToday,
   livingPlayerCount,
   nominationThreshold,
   wasNominatedToday,
@@ -220,6 +221,50 @@ describe("canRecordVote", () => {
 
     expect(canRecordVote(unspent, exile)).toBe(true);
     expect(canRecordVote(spent, exile)).toBe(true);
+  });
+});
+
+describe("hasSpentGhostVoteElsewhereToday", () => {
+  it("is false when the player has no other recorded execution vote today", () => {
+    const nominations = [
+      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"] }),
+    ];
+    const players = [makePlayer({ id: "execution-nominee" })];
+
+    expect(
+      hasSpentGhostVoteElsewhereToday(nominations, players, "ghost", "n1"),
+    ).toBe(false);
+  });
+
+  it("is true when a different, earlier execution nomination already recorded their vote", () => {
+    const nominations = [
+      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"] }),
+      makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
+    ];
+    const players = [makePlayer({ id: "execution-nominee" })];
+
+    expect(
+      hasSpentGhostVoteElsewhereToday(nominations, players, "ghost", "n2"),
+    ).toBe(true);
+  });
+
+  it("ignores an exile nomination — voting on an exile never spends the ghost vote", () => {
+    const nominations = [
+      makeNomination({
+        id: "n1",
+        nomineeId: "traveller",
+        votes: ["ghost"],
+      }),
+      makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
+    ];
+    const players = [
+      makePlayer({ id: "execution-nominee" }),
+      makePlayer({ id: "traveller", isTraveller: true, travellerAlignment: "good" }),
+    ];
+
+    expect(
+      hasSpentGhostVoteElsewhereToday(nominations, players, "ghost", "n2"),
+    ).toBe(false);
   });
 });
 

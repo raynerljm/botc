@@ -204,7 +204,7 @@ describe("Day phase: the block", () => {
 });
 
 describe("Day phase: ghost votes", () => {
-  it("auto-spends a dead player's ghost vote when recording their vote, with an undo", async () => {
+  it("auto-spends a dead player's ghost vote when recording their vote, and un-checking restores it", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
     const dead: GameDocument = {
@@ -222,13 +222,14 @@ describe("Day phase: ghost votes", () => {
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    const ghostCheckbox = screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` });
+    await user.click(ghostCheckbox);
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
     expect(latest.nominations[0].votes).toContain(ghost.id);
 
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    await user.click(screen.getByRole("button", { name: "Undo" }));
+    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
     expect(latest.nominations[0].votes).not.toContain(ghost.id);
@@ -275,10 +276,9 @@ describe("Day phase: ghost votes", () => {
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
     expect(latest.nominations[0].votes).toContain(ghost.id);
-    expect(screen.queryByText(/ghost vote spent/i)).not.toBeInTheDocument();
   });
 
-  it("disables (but doesn't hide) a dead player's checkbox once their ghost vote is already spent, for an execution", async () => {
+  it("advisory-labels (but never disables) a dead player's checkbox once their ghost vote is already spent, for an execution", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
     const dead: GameDocument = {
@@ -298,48 +298,64 @@ describe("Day phase: ghost votes", () => {
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    expect(
-      screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
-    ).toBeDisabled();
+    const ghostCheckbox = screen.getByRole("checkbox", {
+      name: `${ghost.name} (ghost vote — already spent)`,
+    });
+    expect(ghostCheckbox).toBeEnabled();
+
+    // Never blocked (ADR 0003) — the storyteller can still record the vote.
+    await user.click(ghostCheckbox);
+    expect(latest.nominations[0].votes).toContain(ghost.id);
   });
 
-  it("lets two dead players' ghost-vote spends be undone independently", async () => {
+  it("doesn't wrongly refund a ghost vote still held by a different, earlier nomination today", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron", "monk"]);
     const dead: GameDocument = {
       ...game,
-      players: game.players.map((p, i) =>
-        i === 2 || i === 3 ? { ...p, dead: true } : p,
-      ),
+      players: game.players.map((p, i) => (i === 2 ? { ...p, dead: true } : p)),
     };
     let latest = dead;
     const { rerender } = renderDayPhase(dead, (next) => {
       latest = next;
     });
+    const ghost = dead.players[2];
 
-    const [nominator, nominee, ghost1, ghost2] = dead.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    // First nomination: the ghost votes, spending their one vote for the day.
+    await user.selectOptions(screen.getByLabelText("Nominator"), dead.players[0].id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), dead.players[1].id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+
+    // Second nomination opens (the first is now closed/read-only); the
+    // storyteller records — then un-records — the same ghost's vote here.
+    // Un-checking must NOT refund the ghost vote, since the first
+    // nomination still genuinely holds their one vote for the day.
+    await user.selectOptions(screen.getByLabelText("Nominator"), dead.players[3].id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), dead.players[4].id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    await user.click(screen.getByRole("checkbox", { name: `${ghost1.name} (ghost vote)` }));
+    const ghostCheckboxOnSecond = screen.getByRole("checkbox", {
+      name: `${ghost.name} (ghost vote — already spent)`,
+    });
+    await user.click(ghostCheckboxOnSecond);
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    await user.click(screen.getByRole("checkbox", { name: `${ghost2.name} (ghost vote)` }));
-    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    // Now checked, the label drops "already spent" (that note only applies
+    // to the not-yet-voted state) — uncheck via the plain label instead.
+    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
 
-    expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(2);
-
-    await user.click(screen.getByText(`${ghost1.name}'s ghost vote spent`).parentElement!.querySelector("button")!);
-
-    expect(latest.players.find((p) => p.id === ghost1.id)?.ghostVoteSpent).toBe(false);
-    expect(latest.players.find((p) => p.id === ghost2.id)?.ghostVoteSpent).toBe(true);
-    expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.nominations[0].votes).toContain(ghost.id);
+    expect(latest.nominations[1].votes).not.toContain(ghost.id);
   });
 });
 
-describe("Day phase: dead players as nominators", () => {
-  it("advisory-labels a dead player in the nominator options, without removing them", () => {
+describe("Day phase: dead players in the nominator and nominee pickers", () => {
+  it("advisory-labels a dead player in both pickers, without removing them", () => {
     const game = gameWith(["washerwoman", "imp", "recluse"]);
     const dead: GameDocument = {
       ...game,
@@ -348,9 +364,12 @@ describe("Day phase: dead players as nominators", () => {
     renderDayPhase(dead);
 
     const nominatorSelect = screen.getByLabelText("Nominator") as HTMLSelectElement;
-    const option = Array.from(nominatorSelect.options).find(
-      (o) => o.value === dead.players[0].id,
-    );
-    expect(option?.text).toContain("(dead)");
+    const nomineeSelect = screen.getByLabelText("Nominee") as HTMLSelectElement;
+    expect(
+      Array.from(nominatorSelect.options).find((o) => o.value === dead.players[0].id)?.text,
+    ).toContain("(dead)");
+    expect(
+      Array.from(nomineeSelect.options).find((o) => o.value === dead.players[0].id)?.text,
+    ).toContain("(dead)");
   });
 });

@@ -60,11 +60,32 @@ export function computeBlock(
 // exile (Traveller nominee) neither needs nor spends it (CONTEXT.md: Exile
 // "ghost votes are not spent on it"), so a ghost with no votes left can
 // still vote on an exile, and voting on an exile never uses up the vote
-// they'd need for a later execution.
+// they'd need for a later execution. Advisory only (ADR 0003) — nothing
+// in this file disables recording a vote based on this; it's for the
+// advisory label next to a dead voter's name.
 export function canRecordVote(voter: Player, nominee: Player): boolean {
   if (!voter.dead) return true;
   if (nominee.isTraveller) return true;
   return !voter.ghostVoteSpent;
+}
+
+// Whether a dead player's ghost vote is already accounted for by some
+// *other* execution nomination recorded today. Un-checking a vote restores
+// `ghostVoteSpent` only when this really was the nomination that spent it —
+// not when an earlier (now-closed) nomination still holds their one vote
+// for the day, which would otherwise wrongly refund it.
+export function hasSpentGhostVoteElsewhereToday(
+  nominations: Nomination[],
+  players: Player[],
+  playerId: string,
+  currentNominationId: string,
+): boolean {
+  return nominations.some((nomination) => {
+    if (nomination.id === currentNominationId) return false;
+    if (!nomination.votes.includes(playerId)) return false;
+    const nominee = players.find((player) => player.id === nomination.nomineeId);
+    return !!nominee && !nominee.isTraveller;
+  });
 }
 
 export function hasNominatedToday(

@@ -283,6 +283,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({
       ...game,
       players: game.players.filter((p) => p.id !== playerId),
+      // A removed player's recorded vote must not go on counting toward a
+      // nomination's tally forever (issue #20).
+      nominations: game.nominations.map((n) => ({
+        ...n,
+        votes: n.votes.filter((id) => id !== playerId),
+      })),
     });
   }
 
