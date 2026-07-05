@@ -125,8 +125,7 @@
 }
 
 .character[data-standin="true"] {
-  border-color: var(--team-outsider);
-  border-style: dashed;
+  border: 1px dashed var(--team-outsider);
 }
 
 .standInBadge {
