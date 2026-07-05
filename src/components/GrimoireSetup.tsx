@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -620,6 +621,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   return (
     <div className={styles.main}>
+      {!setupComplete && !screenObscured && (
+        <Link
+          href={`/scripts/${game.scriptId}/bag`}
+          className={styles.back}
+        >
+          ← {game.scriptName}
+        </Link>
+      )}
       <h1 className={styles.title}>{game.scriptName}</h1>
 
       <p className={styles.progress}>
@@ -756,7 +765,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </form>
       )}
 
-      {!screenObscured && !tokenFormOpen && (
+      {setupComplete && !screenObscured && !tokenFormOpen && (
         <button
           type="button"
           className={styles.addTraveller}
@@ -766,7 +775,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </button>
       )}
 
-      {!screenObscured && tokenFormOpen && (
+      {setupComplete && !screenObscured && tokenFormOpen && (
         <form className={styles.travellerForm} onSubmit={addToken}>
           <label>
             Character

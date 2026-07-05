@@ -9,6 +9,17 @@
   margin-bottom: 1rem;
 }
 
+.back {
+  display: inline-block;
+  color: var(--muted);
+  font-size: 0.95rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+}
+
+.back:hover {
+  color: var(--foreground);
+}
+
 .seats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));

@@ -489,6 +489,41 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
   });
 });
 
+describe("bag-draw setup page polish (issue #49)", () => {
+  it("does not offer to add a new character before every seat is assigned", () => {
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Add character" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still offers to add a traveller before every seat is assigned", () => {
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        getCharacter("scapegoat")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    expect(
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers a back link out of the bag-draw setup page, to the bag builder it came from", () => {
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    const back = screen.getByRole("link", { name: `← ${game.scriptName}` });
+    expect(back).toHaveAttribute("href", `/scripts/${game.scriptId}/bag`);
+  });
+});
+
 describe("mid-game token management (issue #15)", () => {
   async function completeSetup(
     playerCount = 2,
