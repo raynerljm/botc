@@ -376,7 +376,6 @@ describe("naming the drawn seat's player (issue #54)", () => {
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
     await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
 
     await user.click(screen.getByRole("button", { name: "Bailey" }));
 
@@ -390,7 +389,6 @@ describe("naming the drawn seat's player (issue #54)", () => {
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
     await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
 
     await user.type(screen.getByLabelText(/custom player name/i), "Substitute Sam");
     await user.click(screen.getByRole("button", { name: /use this name/i }));
@@ -415,7 +413,6 @@ describe("naming the drawn seat's player (issue #54)", () => {
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
     await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
-    await user.click(screen.getByRole("button", { name: "Keep this token" }));
 
     expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
 
