@@ -356,29 +356,31 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
-  // isDrunk always clears: a deliberate swap — whether it's the dedicated
-  // Drunk reveal or a storyteller correction to some other character — ends
-  // the stand-in illusion either way, so there's nothing left to disguise.
-  function swapCharacter(playerId: string, characterId: string) {
+  // isDrunk clears by default: a deliberate swap — whether it's the
+  // dedicated Drunk reveal or a storyteller correction to some other
+  // character — ordinarily ends the stand-in illusion, since there's
+  // nothing left to disguise. The one exception is reassigning the Drunk's
+  // stand-in itself (issue #52's reassignStandIn below) — that only changes
+  // which Townsfolk the disguise is, not whether there's a disguise at all,
+  // so it opts out via endDisguise: false.
+  function swapCharacter(
+    playerId: string,
+    characterId: string,
+    { endDisguise = true }: { endDisguise?: boolean } = {},
+  ) {
     const character = getCharacter(characterId);
     update({
       ...game,
-      players: updatePlayer(playerId, { characterId, isDrunk: false }),
+      players: updatePlayer(
+        playerId,
+        endDisguise ? { characterId, isDrunk: false } : { characterId },
+      ),
       characterPool: withCharacterInPool(game.characterPool, character),
     });
   }
 
-  // Revises the Drunk's stand-in from the setup walkthrough (issue #52) —
-  // unlike swapCharacter, isDrunk and startingCharacterId are left
-  // untouched, since this only changes which Townsfolk the disguise is,
-  // not whether there's a disguise at all.
   function reassignStandIn(playerId: string, characterId: string) {
-    const character = getCharacter(characterId);
-    update({
-      ...game,
-      players: updatePlayer(playerId, { characterId }),
-      characterPool: withCharacterInPool(game.characterPool, character),
-    });
+    swapCharacter(playerId, characterId, { endDisguise: false });
   }
 
   function removePlayer(playerId: string) {

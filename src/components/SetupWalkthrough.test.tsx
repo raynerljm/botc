@@ -423,6 +423,20 @@ describe("review step (Drunk)", () => {
     expect(within(step).getByLabelText(/new stand-in/i)).toBeInTheDocument();
   });
 
+  it("keeps the stand-in picker visible after the step is answered, unlike the reminder controls (code review finding)", () => {
+    renderWalkthrough({
+      steps: [drunkStep],
+      stepStatuses: { p1: "answered" },
+    });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    expect(within(step).getByText(/answered/i)).toBeInTheDocument();
+    expect(within(step).getByLabelText(/new stand-in/i)).toBeInTheDocument();
+    expect(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    ).toBeInTheDocument();
+  });
+
   it("reassigns the stand-in without touching the reminder/status resolution", async () => {
     const user = userEvent.setup();
     const { onReassignStandIn, onResolveStep } = renderWalkthrough({

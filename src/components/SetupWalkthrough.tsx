@@ -5,6 +5,7 @@ import { useState } from "react";
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
   circlePosition,
+  heldCharacterIds,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -133,6 +134,22 @@ function StepPanel({
       <legend>{step.title}</legend>
       <p>{step.ruleText}</p>
 
+      {/* Reassigning the stand-in is a separate action from resolving this
+          step's reminder (issue #52) — it stays available even once the
+          step is answered/skipped, not gated behind editing/Redo like the
+          rest of this panel. */}
+      {step.kind === "review" && (
+        <StandInReassignControls
+          currentCharacterId={step.characterId}
+          currentCharacterName={step.characterName}
+          heldElsewhereIds={heldCharacterIds(otherPlayers)}
+          characterPool={characterPool}
+          onConfirm={(characterId) =>
+            onReassignStandIn(step.playerId, characterId)
+          }
+        />
+      )}
+
       {!editing && (
         <p className={styles.statusNote}>
           {status === "answered" ? "Answered" : "Skipped"}
@@ -235,44 +252,27 @@ function StepPanel({
           )}
 
           {step.kind === "review" && (
-            <>
-              <StandInReassignControls
-                currentCharacterId={step.characterId}
-                currentCharacterName={step.characterName}
-                heldElsewhereIds={
-                  new Set(
-                    otherPlayers
-                      .filter((p) => p.characterId)
-                      .map((p) => p.characterId as string),
-                  )
-                }
-                characterPool={characterPool}
-                onConfirm={(characterId) =>
-                  onReassignStandIn(step.playerId, characterId)
-                }
-              />
-              <ReminderToggleControls
-                reminderLabel={step.reminderLabel}
-                onConfirm={(placeReminder) =>
-                  resolve(
-                    "answered",
-                    placeReminder
-                      ? [
-                          {
-                            // The Drunk's own reminder, not the stand-in
-                            // character's — step.characterId is the stand-in
-                            // (e.g. "washerwoman"), which isn't who this
-                            // reminder is about.
-                            characterId: "drunk",
-                            label: step.reminderLabel,
-                            position: anchorPosition(step.playerId, players),
-                          },
-                        ]
-                      : [],
-                  )
-                }
-              />
-            </>
+            <ReminderToggleControls
+              reminderLabel={step.reminderLabel}
+              onConfirm={(placeReminder) =>
+                resolve(
+                  "answered",
+                  placeReminder
+                    ? [
+                        {
+                          // The Drunk's own reminder, not the stand-in
+                          // character's — step.characterId is the stand-in
+                          // (e.g. "washerwoman"), which isn't who this
+                          // reminder is about.
+                          characterId: "drunk",
+                          label: step.reminderLabel,
+                          position: anchorPosition(step.playerId, players),
+                        },
+                      ]
+                    : [],
+                )
+              }
+            />
           )}
 
           {step.kind === "generic" && (
