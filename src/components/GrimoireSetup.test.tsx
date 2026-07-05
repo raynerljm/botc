@@ -1,12 +1,21 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
 import { clearGames, loadGame } from "@/lib/gameStorage";
 
 import { GrimoireSetup } from "./GrimoireSetup";
+
+const routerBack = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ back: routerBack }),
+}));
+
+beforeEach(() => {
+  routerBack.mockClear();
+});
 
 function makeGame(overrides: Partial<Parameters<typeof createGame>[0]> = {}) {
   return createGame({
@@ -21,6 +30,32 @@ function makeGame(overrides: Partial<Parameters<typeof createGame>[0]> = {}) {
     extraCopies: {},
     ...overrides,
   });
+}
+
+// Reaches setupComplete by manually assigning every seat — shared by any
+// test that needs the mid-game (post-setup) side of GrimoireSetup.
+async function completeSetup(
+  playerCount = 2,
+  selectedCharacters = [getCharacter("washerwoman")!, getCharacter("imp")!],
+) {
+  const user = userEvent.setup();
+  const game = makeGame({ playerCount, selectedCharacters });
+  render(<GrimoireSetup game={game} />);
+
+  for (let seat = 1; seat <= playerCount; seat++) {
+    const remainingOption = within(
+      screen.getByLabelText(`Assign seat ${seat} manually`),
+    )
+      .getAllByRole("option")
+      .find((option) => option.textContent !== "Choose a character…")!;
+    await user.selectOptions(
+      screen.getByLabelText(`Assign seat ${seat} manually`),
+      remainingOption.textContent!,
+    );
+  }
+
+  const circle = screen.getByRole("region", { name: "Grimoire circle" });
+  return { user, circle };
 }
 
 afterEach(() => {
@@ -515,40 +550,66 @@ describe("bag-draw setup page polish (issue #49)", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers a back link out of the bag-draw setup page, to the bag builder it came from", () => {
+  it("offers a back button out of the bag-draw setup page, navigating to the previous step", async () => {
+    const user = userEvent.setup();
     const game = makeGame({ playerCount: 2 });
     render(<GrimoireSetup game={game} />);
 
-    const back = screen.getByRole("link", { name: `← ${game.scriptName}` });
-    expect(back).toHaveAttribute("href", `/scripts/${game.scriptId}/bag`);
+    await user.click(
+      screen.getByRole("button", { name: `← ${game.scriptName}` }),
+    );
+
+    expect(routerBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the back button once a bag draw is in progress, so a mid-draw tap can't discard it", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+
+    expect(
+      screen.queryByRole("button", { name: `← ${game.scriptName}` }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the back button once every seat is assigned", async () => {
+    await completeSetup();
+
+    expect(
+      screen.queryByRole("button", { name: /^← / }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("doesn't reopen the 'Add character' form on its own if the roster empties out and refills while it was left open", async () => {
+    const { user, circle } = await completeSetup(2);
+
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+    expect(screen.getByLabelText("Character")).toBeInTheDocument();
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    for (const name of ["Player 1", "Player 2"]) {
+      const wrap = within(circle)
+        .getByText(name)
+        .closest("[data-player-id]") as HTMLElement;
+      await user.click(within(wrap).getByText(name));
+      await user.click(
+        within(wrap).getByRole("button", { name: /remove player/i }),
+      );
+    }
+    confirmSpy.mockRestore();
+
+    // Roster is empty — setupComplete is false, so the token form is
+    // gone (not just visually swapped for the button).
+    expect(screen.queryByLabelText("Character")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add character" }),
+    ).not.toBeInTheDocument();
   });
 });
 
 describe("mid-game token management (issue #15)", () => {
-  async function completeSetup(
-    playerCount = 2,
-    selectedCharacters = [getCharacter("washerwoman")!, getCharacter("imp")!],
-  ) {
-    const user = userEvent.setup();
-    const game = makeGame({ playerCount, selectedCharacters });
-    render(<GrimoireSetup game={game} />);
-
-    for (let seat = 1; seat <= playerCount; seat++) {
-      const remainingOption = within(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-      )
-        .getAllByRole("option")
-        .find((option) => option.textContent !== "Choose a character…")!;
-      await user.selectOptions(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-        remainingOption.textContent!,
-      );
-    }
-
-    const circle = screen.getByRole("region", { name: "Grimoire circle" });
-    return { user, circle };
-  }
-
   it("swapping a player's character preserves their starting character for export", async () => {
     const { user, circle } = await completeSetup();
 

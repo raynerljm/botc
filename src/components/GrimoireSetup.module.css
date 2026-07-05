@@ -11,9 +11,13 @@
 
 .back {
   display: inline-block;
+  background: none;
+  border: none;
   color: var(--muted);
+  font: inherit;
   font-size: 0.95rem;
   padding: 0.5rem 0.5rem 0.5rem 0;
+  cursor: pointer;
 }
 
 .back:hover {

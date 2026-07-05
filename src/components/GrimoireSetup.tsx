@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -79,6 +79,7 @@ function seatPositionOptions(
 }
 
 export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
+  const router = useRouter();
   const [game, setGame] = useState(initialGame);
   // Mirrors `game`, updated synchronously by every update() call — lets a
   // handler that fires more than once per click (the setup walkthrough's
@@ -371,9 +372,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
     if (!window.confirm(`Remove ${player.name} from the grimoire?`)) return;
+    const remainingPlayers = game.players.filter((p) => p.id !== playerId);
+    // Emptying the roster flips setupComplete back to false, which hides
+    // the "Add character" form — close it here too, or it would silently
+    // reappear pre-filled the moment a new player (e.g. a traveller)
+    // brings setupComplete back to true, with no click to explain it.
+    if (remainingPlayers.length === 0) setTokenFormOpen(false);
     update({
       ...game,
-      players: game.players.filter((p) => p.id !== playerId),
+      players: remainingPlayers,
       // A removed player's recorded vote must not go on counting toward a
       // nomination's tally forever (issue #20).
       nominations: game.nominations.map((n) => ({
@@ -621,13 +628,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   return (
     <div className={styles.main}>
-      {!setupComplete && !screenObscured && (
-        <Link
-          href={`/scripts/${game.scriptId}/bag`}
+      {!setupComplete && !draw && (
+        // Browser-history back, not a hardcoded link to the bag builder —
+        // this page is also reached by resuming an in-progress game from
+        // the home page (GamesList), where the true previous step is the
+        // games list, not a fresh bag build for the same script (which
+        // would abandon this game's already-drawn seats instead of
+        // resuming them). Hidden for the whole draw ritual (any stage, not
+        // just the "hidden" privacy-guard one) so a mid-draw tap can't
+        // discard an in-flight choice or reveal.
+        <button
+          type="button"
           className={styles.back}
+          onClick={() => router.back()}
         >
           ← {game.scriptName}
-        </Link>
+        </button>
       )}
       <h1 className={styles.title}>{game.scriptName}</h1>
 
