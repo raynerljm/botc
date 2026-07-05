@@ -22,7 +22,9 @@ export function formatStartTimeSGT(createdAt: string): string {
 }
 
 function formatDurationMs(ms: number): string {
-  const totalMinutes = Math.max(0, Math.round(ms / 60_000));
+  // Floor, not round: a display with no seconds shouldn't claim "1h 0m" for
+  // a game that's 59m31s in — that reads as a full hour when it isn't one.
+  const totalMinutes = Math.max(0, Math.floor(ms / 60_000));
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;

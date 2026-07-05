@@ -54,6 +54,13 @@ describe("formatDuration", () => {
     expect(formatDuration(start, now)).toBe("1d 3h");
   });
 
+  it("floors instead of rounding up to the next tier", () => {
+    const start = "2026-07-04T00:00:00.000Z";
+    // 59m31s should still read "59m", not round up to a full hour.
+    const now = new Date("2026-07-04T00:59:31.000Z");
+    expect(formatDuration(start, now)).toBe("59m");
+  });
+
   it("reports the total span from start to a given end time", () => {
     expect(
       formatDuration(

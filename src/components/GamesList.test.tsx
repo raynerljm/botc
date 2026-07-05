@@ -109,6 +109,22 @@ describe("GamesList", () => {
     expect(within(row).getByText(/lasted 2h 0m/i)).toBeInTheDocument();
   });
 
+  it("doesn't run a refresh timer when every game has ended", () => {
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    saveGame(
+      makeGame("Sects & Violets", {
+        winner: "good",
+        endedAt: "2026-07-04T02:00:00.000Z",
+      }),
+    );
+
+    render(<GamesList />);
+
+    // 30_000 is GamesList's own elapsed-refresh interval (kept in sync with
+    // its ELAPSED_REFRESH_MS constant) — other calls are React/jsdom internals.
+    expect(setIntervalSpy).not.toHaveBeenCalledWith(expect.any(Function), 30_000);
+  });
+
   it("keeps the elapsed time fresh while the list stays open", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-04T00:00:00.000Z"));

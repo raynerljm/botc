@@ -43,13 +43,16 @@ export function GamesList() {
   );
   // A saved game can stay open on screen indefinitely, so "Elapsed" needs its
   // own clock tick — the store only notifies on save/delete, not on time
-  // passing.
+  // passing. Only ongoing games show "Elapsed", so skip the timer entirely
+  // when every saved game has already ended.
   const [, tick] = useState(0);
+  const hasOngoingGame = games.some((game) => !isGameEnded(game));
 
   useEffect(() => {
+    if (!hasOngoingGame) return;
     const id = setInterval(() => tick((n) => n + 1), ELAPSED_REFRESH_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [hasOngoingGame]);
 
   if (games.length === 0) return null;
 
