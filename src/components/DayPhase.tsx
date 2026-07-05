@@ -197,7 +197,11 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                         {player.dead && (
                           <span className={styles.note}>
                             {" "}
-                            (ghost vote{alreadySpent ? " — already spent" : ""})
+                            (
+                            {nominee.isTraveller
+                              ? "vote free"
+                              : `ghost vote${alreadySpent ? " — already spent" : ""}`}
+                            )
                           </span>
                         )}
                       </label>
