@@ -1,6 +1,7 @@
 import {
   baseEditions,
   getEditionCharacters,
+  SEAT_HOLDING_TEAMS,
   type BaseEditionId,
   type Character,
 } from "./characters";
@@ -36,12 +37,19 @@ function toSummary(
   const travellerCount = script.characters.filter(
     (c) => c.team === "traveller",
   ).length;
+  // Fabled/Loric are storyteller aids never held by a player (see
+  // SEAT_HOLDING_TEAMS), so they count toward neither figure below — a
+  // script's characterCount + travellerCount should always equal its seat
+  // count, not its full character-list length.
+  const characterCount = script.characters.filter((c) =>
+    SEAT_HOLDING_TEAMS.includes(c.team),
+  ).length;
   return {
     id: script.id,
     name: script.name,
     author: script.meta.author,
     source,
-    characterCount: script.characters.length - travellerCount,
+    characterCount,
     travellerCount,
     isTeensyville: script.meta.teensyville === true,
   };

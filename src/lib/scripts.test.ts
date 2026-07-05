@@ -30,10 +30,12 @@ describe("listScriptSummaries", () => {
     });
   });
 
-  it("flags a script whose _meta marks it teensyville", () => {
+  it("excludes Fabled characters from characterCount, same as travellers", () => {
     const summaries = listScriptSummaries();
-    const script = summaries.find((s) => s.id === "sample-homebrew");
-    expect(script?.isTeensyville).toBe(false);
+    const script = summaries.find((s) => s.id === "a-lleech-of-distrust");
+    // 6 townsfolk + 2 outsiders + 2 minions + 1 demon; Sentinel (fabled) is a
+    // storyteller aid, not a seat, so it counts toward neither figure.
+    expect(script).toMatchObject({ characterCount: 11, travellerCount: 0 });
   });
 });
 
@@ -43,8 +45,8 @@ describe("bundled custom scripts (issue #47)", () => {
       { id: "catfishing", isTeensyville: false, characterCount: 25, travellerCount: 5 },
       { id: "everyone-can-play", isTeensyville: false, characterCount: 24, travellerCount: 0 },
       { id: "pies-baking", isTeensyville: false, characterCount: 23, travellerCount: 0 },
-      { id: "a-lleech-of-distrust", isTeensyville: true, characterCount: 12, travellerCount: 0 },
-      { id: "ride-the-cyclone", isTeensyville: false, characterCount: 23, travellerCount: 5 },
+      { id: "a-lleech-of-distrust", isTeensyville: true, characterCount: 11, travellerCount: 0 },
+      { id: "ride-the-cyclone", isTeensyville: false, characterCount: 22, travellerCount: 5 },
       { id: "no-greater-joy", isTeensyville: true, characterCount: 11, travellerCount: 0 },
     ];
 

@@ -18,6 +18,7 @@ function metaToRaw(meta: ScriptMeta): Record<string, unknown> | null {
   if (meta.bootlegger) raw.bootlegger = meta.bootlegger;
   if (meta.firstNight) raw.firstNight = meta.firstNight;
   if (meta.otherNight) raw.otherNight = meta.otherNight;
+  if (meta.teensyville) raw.teensyville = true;
   if (Object.keys(raw).length === 0) return null;
   return { id: META_ENTRY_ID, ...raw };
 }
