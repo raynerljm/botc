@@ -676,18 +676,36 @@ describe("mid-game token management (issue #15)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("adds and removes an active Fabled, displayed outside the circle", async () => {
-    const { user, circle } = await completeSetup();
+  it("removes an active Fabled, displayed outside the circle, with no way to add one", async () => {
+    const user = userEvent.setup();
+    const playerCount = 2;
+    const game = {
+      ...makeGame({
+        playerCount,
+        selectedCharacters: [getCharacter("washerwoman")!, getCharacter("imp")!],
+      }),
+      activeFabled: ["angel"],
+    };
+    render(<GrimoireSetup game={game} />);
 
+    for (let seat = 1; seat <= playerCount; seat++) {
+      const remainingOption = within(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+      )
+        .getAllByRole("option")
+        .find((option) => option.textContent !== "Choose a character…")!;
+      await user.selectOptions(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+        remainingOption.textContent!,
+      );
+    }
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const fabledRow = within(circle).getByRole("region", { name: "Fabled" });
-    await user.selectOptions(
-      within(fabledRow).getByLabelText(/add fabled/i),
-      "angel",
-    );
-
-    expect(loadGame()!.activeFabled).toEqual(["angel"]);
-    expect(loadGame()!.characterPool.map((c) => c.id)).toContain("angel");
     expect(within(fabledRow).getByText("Angel")).toBeInTheDocument();
+    expect(
+      within(fabledRow).queryByLabelText(/add fabled/i),
+    ).not.toBeInTheDocument();
 
     await user.click(
       within(fabledRow).getByRole("button", { name: /remove angel/i }),
