@@ -6,13 +6,33 @@ import {
   circlePosition,
   createGame,
   GAME_SCHEMA_VERSION,
+  insertAtSeat,
   shuffleTokens,
   withRestoredReminder,
+  type Player,
   type ReminderToken,
 } from "./gameDocument";
 
 function characters(...ids: string[]) {
   return ids.map((id) => getCharacter(id)!);
+}
+
+function makePlayer(overrides: Partial<Player> = {}): Player {
+  return {
+    id: "p1",
+    seat: 1,
+    name: "Alice",
+    characterId: "washerwoman",
+    startingCharacterId: "washerwoman",
+    isDrunk: false,
+    isTraveller: false,
+    travellerAlignment: null,
+    dead: false,
+    ghostVoteSpent: false,
+    position: null,
+    claim: null,
+    ...overrides,
+  };
 }
 
 describe("shuffleTokens", () => {
@@ -49,6 +69,30 @@ describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => 
 
   it("doesn't duplicate a reminder whose id is already present", () => {
     expect(withRestoredReminder([reminder], reminder)).toEqual([reminder]);
+  });
+});
+
+describe("insertAtSeat", () => {
+  it("makes room for a new seat by bumping every later seat by one", () => {
+    const players = [
+      makePlayer({ id: "p1", seat: 1 }),
+      makePlayer({ id: "p2", seat: 2 }),
+      makePlayer({ id: "p3", seat: 3 }),
+    ];
+
+    const result = insertAtSeat(players, 2);
+
+    expect(result.find((p) => p.id === "p1")!.seat).toBe(1);
+    expect(result.find((p) => p.id === "p2")!.seat).toBe(3);
+    expect(result.find((p) => p.id === "p3")!.seat).toBe(4);
+  });
+
+  it("leaves every seat untouched when inserting past the last seat", () => {
+    const players = [makePlayer({ id: "p1", seat: 1 })];
+
+    const result = insertAtSeat(players, 2);
+
+    expect(result.find((p) => p.id === "p1")!.seat).toBe(1);
   });
 });
 
@@ -216,6 +260,65 @@ describe("createGame", () => {
     expect(game.almanacUrl).toBeNull();
   });
 
+  it("carries the script's night-order overrides onto the game document when provided", () => {
+    const game = createGame({
+      scriptId: "custom-script",
+      scriptName: "Custom Script",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+      firstNightOrder: ["dusk", "washerwoman", "dawn"],
+      otherNightOrder: ["dusk", "dawn"],
+    });
+
+    expect(game.firstNightOrder).toEqual(["dusk", "washerwoman", "dawn"]);
+    expect(game.otherNightOrder).toEqual(["dusk", "dawn"]);
+  });
+
+  it("defaults the night-order overrides to null when the script doesn't provide them", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.firstNightOrder).toBeNull();
+    expect(game.otherNightOrder).toBeNull();
+  });
+
+  it("starts with no night open and every night-list field empty", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.night).toBe(0);
+    expect(game.nightOpen).toBe(false);
+    expect(game.nightChecked).toEqual([]);
+    expect(game.nightUnskipped).toEqual([]);
+  });
+
+  it("starts with no nominations recorded", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.nominations).toEqual([]);
+  });
+
   it("stamps the schema version, script, and creation time", () => {
     const game = createGame({
       scriptId: "tb",
@@ -248,6 +351,34 @@ describe("createGame", () => {
 
     expect(a.id).toBeTruthy();
     expect(a.id).not.toBe(b.id);
+  });
+
+  it("starts with no active Fabled", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.activeFabled).toEqual([]);
+  });
+
+  it("gives every player a null starting character until one is assigned", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.players.every((p) => p.startingCharacterId === null)).toBe(
+      true,
+    );
   });
 
   it("starts unfinished: no winner, no end time, empty notes", () => {
@@ -337,5 +468,48 @@ describe("createGame", () => {
     });
 
     expect(game.characterPool).toContainEqual(homebrewCharacter);
+  });
+
+  it("starts with three empty Demon bluff slots and no player claims", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman", "imp"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.demonBluffs).toEqual([null, null, null]);
+    expect(game.players.every((p) => p.claim === null)).toBe(true);
+  });
+
+  it("captures the script's full character list for later not-in-play lookups (e.g. Demon bluffs)", () => {
+    const scriptCharacters = characters("washerwoman", "librarian", "imp");
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman", "imp"),
+      standIn: null,
+      extraCopies: {},
+      scriptCharacters,
+    });
+
+    expect(game.scriptCharacters).toEqual(scriptCharacters);
+  });
+
+  it("falls back to the selected characters as the script pool when the full list isn't given", () => {
+    const selected = characters("washerwoman", "imp");
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: selected,
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.scriptCharacters).toEqual(selected);
   });
 });

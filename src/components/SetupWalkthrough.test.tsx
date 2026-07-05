@@ -14,12 +14,14 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     seat: 1,
     name: "Alice",
     characterId: "fortuneteller",
+    startingCharacterId: "fortuneteller",
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
     ghostVoteSpent: false,
     position: null,
+    claim: null,
     ...overrides,
   };
 }

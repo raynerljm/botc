@@ -113,6 +113,8 @@ export interface BagBuilderProps {
   scriptId?: string;
   scriptName?: string;
   almanacUrl?: string;
+  firstNightOrder?: string[];
+  otherNightOrder?: string[];
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -134,6 +136,8 @@ export function BagBuilder({
   scriptId,
   scriptName,
   almanacUrl,
+  firstNightOrder,
+  otherNightOrder,
 }: BagBuilderProps) {
   const router = useRouter();
   const [playerCount, setPlayerCount] = useState<number | "">(MIN_PLAYERS);
@@ -313,6 +317,12 @@ export function BagBuilder({
       standIn: standInId ? (poolById.get(standInId) ?? null) : null,
       extraCopies,
       almanacUrl,
+      firstNightOrder,
+      otherNightOrder,
+      // `pool`, not the raw `characters` prop — a character pulled in by
+      // auto-add (e.g. Huntsman's Damsel) is genuinely in play and must be
+      // offerable as a claim/bluff option too.
+      scriptCharacters: pool,
     });
     saveGame(game);
     router.push("/game");

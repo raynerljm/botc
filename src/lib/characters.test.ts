@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   allCharacters,
   baseEditions,
+  characterPickerPool,
   getCharacter,
   getEditionCharacters,
   groupByTeam,
@@ -98,6 +99,43 @@ describe("official wiki links", () => {
     expect(wikiUrl(getCharacter("devilsadvocate")!)).toBe(
       "https://wiki.bloodontheclocktower.com/Devil%27s_Advocate",
     );
+  });
+});
+
+describe("characterPickerPool", () => {
+  it("lists the script's own characters before the rest of the dataset", () => {
+    const script = [getCharacter("imp")!, getCharacter("washerwoman")!];
+    const pool = characterPickerPool(script);
+
+    expect(pool.slice(0, 2)).toEqual(script);
+    expect(pool.length).toBe(allCharacters.length);
+  });
+
+  it("doesn't list a script character twice", () => {
+    const script = [getCharacter("imp")!];
+    const pool = characterPickerPool(script);
+
+    expect(pool.filter((c) => c.id === "imp")).toHaveLength(1);
+  });
+
+  it("keeps a script's homebrew character (off the vendored dataset) in the pool", () => {
+    const homebrew: Character = {
+      ...getCharacter("imp")!,
+      id: "custom-demon",
+      name: "Custom Demon",
+    };
+    const pool = characterPickerPool([homebrew]);
+
+    expect(pool[0]).toBe(homebrew);
+  });
+
+  it("filters to a single team when given one, script characters still first", () => {
+    const script = [getCharacter("angel")!, getCharacter("imp")!];
+    const pool = characterPickerPool(script, "fabled");
+
+    expect(pool[0]).toEqual(getCharacter("angel"));
+    expect(pool.every((c) => c.team === "fabled")).toBe(true);
+    expect(pool.map((c) => c.id)).not.toContain("imp");
   });
 });
 

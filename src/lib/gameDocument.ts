@@ -1,11 +1,22 @@
 import type { Character } from "./characters";
 import { normalizeCharacterId } from "./scriptParser";
 
-// Bumped for issue #26: GameDocument gained the required
-// `setupWalkthroughOffered`/`setupWalkthroughSteps` fields — a document
-// saved under the old shape must be rejected by gameStorage's version check
-// rather than loaded with them silently undefined.
-export const GAME_SCHEMA_VERSION = 4;
+// Bumped for issue #14 (GameDocument gained the required `reminders` field),
+// again for issue #15 (Player gained startingCharacterId, GameDocument
+// gained activeFabled), again for issue #16 (GameDocument gained the
+// night-list fields: night, nightOpen, nightChecked, nightUnskipped,
+// firstNightOrder, otherNightOrder), again for issue #18 (Player gained
+// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), again
+// for issue #20 (GameDocument gained `nominations`), and again for issue #26
+// (GameDocument gained the required `setupWalkthroughOffered`/
+// `setupWalkthroughSteps` fields) — a document saved under an older shape
+// must be rejected by gameStorage's version check rather than loaded with
+// any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 8;
+
+// Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
+// script-wide, not per-player"), not an open-ended list.
+export const DEMON_BLUFF_SLOTS = 3;
 
 export type Alignment = "good" | "evil";
 
@@ -53,11 +64,27 @@ export interface ReminderToken {
 // every time). Absence of a key means "not yet visited."
 export type SetupWalkthroughStepStatus = "answered" | "skipped";
 
+// A nomination recorded today (CONTEXT.md: Nomination) — tracked for the
+// current day only, with no history kept once dawn resets it (ADR 0002).
+export interface Nomination {
+  id: string;
+  nominatorId: string;
+  nomineeId: string;
+  // Every player id who voted for this nomination, in the order recorded.
+  votes: string[];
+}
+
 export interface Player {
   id: string;
   seat: number;
   name: string;
   characterId: string | null;
+  // Set once, the first time a character reaches this seat (draw, manual
+  // assignment, or a mid-game add), and never touched again — swaps only
+  // ever change characterId. Lets the export tell a starting character from
+  // a final one that diverged (CONTEXT.md: Starting character/Final
+  // character, issue #15).
+  startingCharacterId: string | null;
   isDrunk: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
@@ -67,6 +94,10 @@ export interface Player {
   // one ghost vote was already spent.
   ghostVoteSpent: boolean;
   position: PlayerPosition | null;
+  // The character this player is currently presenting as, good or evil
+  // alike (CONTEXT.md: Claim). Current claim only — no history, matching a
+  // finished game's export (ADR 0002 spirit).
+  claim: string | null;
 }
 
 export interface GameDocument {
@@ -99,10 +130,30 @@ export interface GameDocument {
   // the vendored dataset, so tokens/players resolve display info from here
   // instead of a global lookup.
   characterPool: Character[];
+  // Every character the script offered at bag-build time, whether or not it
+  // made the bag — unlike characterPool, this is the universe a "not in
+  // play" distinction needs (e.g. Demon bluffs). Captured once here because
+  // resolving a script by id needs filesystem access the client-only /game
+  // route doesn't have (ADR 0001).
+  scriptCharacters: Character[];
+  // The three not-in-play good characters shown to the Demon on the first
+  // night (CONTEXT.md: Demon bluffs) — a fixed DEMON_BLUFF_SLOTS-length
+  // array of character ids, null where a slot hasn't been filled yet.
+  demonBluffs: (string | null)[];
   // The script's own almanac link (script-tool _meta.almanac), used for the
   // character-detail popover on homebrew characters, which have no page on
   // the official wiki.
   almanacUrl: string | null;
+  // Fabled currently in play (character ids), shown outside the circle —
+  // they're storyteller aids, not held by any player (issue #15).
+  activeFabled: string[];
+  // The script's own night-order overrides (script-tool _meta.firstNight/
+  // otherNight): ordered lists of character ids and the special tokens
+  // "dusk"/"minioninfo"/"demoninfo"/"dawn". Null when the script didn't
+  // provide one, in which case the night list falls back to the vendored
+  // dataset's per-character night positions (CONTEXT.md: Night list).
+  firstNightOrder: string[] | null;
+  otherNightOrder: string[] | null;
   createdAt: string;
   // End-game state (issue #21). Null winner / null endedAt means the game is
   // still in progress; both are set together when the storyteller declares a
@@ -110,6 +161,21 @@ export interface GameDocument {
   winner: Alignment | null;
   endedAt: string | null;
   notes: string;
+  // Nights fully completed (0 before the first night ever starts). While
+  // `nightOpen` is true, the storyteller is currently walking night
+  // `night + 1`'s checklist.
+  night: number;
+  nightOpen: boolean;
+  // Check-off/un-skip state for the currently open night only — reset to
+  // empty every time a new night starts, so a fresh night always begins with
+  // every box unchecked (issue #16 AC: "Start night" opens with boxes
+  // cleared).
+  nightChecked: string[];
+  nightUnskipped: string[];
+  // Today's nominations only (CONTEXT.md: "tracked for the current day
+  // only") — cleared whenever a night ends and the next day begins (issue
+  // #20 AC: "nomination eligibility resets at dawn").
+  nominations: Nomination[];
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -139,7 +205,10 @@ export function parkBeside(position: PlayerPosition): PlayerPosition {
   return { x: clampPct(position.x + 5), y: clampPct(position.y) };
 }
 
-const DRUNK_ID = "drunk";
+// The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so
+// every place that special-cases the Drunk (bag building here, the reveal
+// action and display in the grimoire components) shares one source of truth.
+export const DRUNK_ID = "drunk";
 
 // A declared winner is what marks a game ended; `winner` and `endedAt` are
 // always set (and cleared) together, so either can stand for "ended" — this
@@ -255,8 +324,15 @@ export interface CreateGameInput {
   standIn: Character | null;
   extraCopies: Record<string, number>;
   almanacUrl?: string | null;
+  firstNightOrder?: string[] | null;
+  otherNightOrder?: string[] | null;
   createdAt?: string;
   newId?: () => string;
+  // The script's full character list, selected or not (BagBuilder already
+  // has this from its own `characters` prop). Defaults to just the selected
+  // characters, so a caller that doesn't have the full script on hand still
+  // gets a valid document — it just can't offer any "not in play" options.
+  scriptCharacters?: Character[];
 }
 
 export function createGame({
@@ -267,8 +343,11 @@ export function createGame({
   standIn,
   extraCopies,
   almanacUrl = null,
+  firstNightOrder = null,
+  otherNightOrder = null,
   createdAt = new Date().toISOString(),
   newId = defaultNewId,
+  scriptCharacters = selectedCharacters,
 }: CreateGameInput): GameDocument {
   const { officialTokens, travellerTokens } = buildBagTokens({
     selectedCharacters,
@@ -282,12 +361,14 @@ export function createGame({
     seat: i + 1,
     name: `Player ${i + 1}`,
     characterId: null,
+    startingCharacterId: null,
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
     ghostVoteSpent: false,
     position: null,
+    claim: null,
   }));
 
   const characterPool = Array.from(
@@ -311,10 +392,30 @@ export function createGame({
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,
+    scriptCharacters,
+    demonBluffs: Array.from({ length: DEMON_BLUFF_SLOTS }, () => null),
     almanacUrl,
+    activeFabled: [],
+    firstNightOrder,
+    otherNightOrder,
     createdAt,
     winner: null,
     endedAt: null,
     notes: "",
+    night: 0,
+    nightOpen: false,
+    nightChecked: [],
+    nightUnskipped: [],
+    nominations: [],
   };
+}
+
+// Makes room at `seat` by bumping every seat at or past it up by one, so a
+// newly created player can take that seat number without colliding — seat
+// order matters mechanically (CONTEXT.md: Seat), so a mid-game addition has
+// to land at a chosen position rather than always the end (issue #15).
+export function insertAtSeat(players: Player[], seat: number): Player[] {
+  return players.map((player) =>
+    player.seat >= seat ? { ...player, seat: player.seat + 1 } : player,
+  );
 }

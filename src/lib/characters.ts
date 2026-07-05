@@ -101,6 +101,42 @@ export function groupByTeam(characters: Character[]): TeamGroup[] {
     .filter((group) => group.characters.length > 0);
 }
 
+// Teams a single seat can actually hold. Travellers carry their own explicit
+// alignment field rather than deriving it from a character's team, so
+// swapping a non-traveller seat to one would leave isTraveller/
+// travellerAlignment unset and the export unable to derive an alignment at
+// all; Fabled/Loric are storyteller aids never held by any player. Shared by
+// the mid-game "Add character" flow and the "Swap character" picker (issue
+// #15) so both stay in sync.
+export const SEAT_HOLDING_TEAMS: Team[] = [
+  "townsfolk",
+  "outsider",
+  "minion",
+  "demon",
+];
+
+// The "script's characters first, then everything in the dataset" picker
+// pool (issue #15: swap, mid-game add, Fabled) — a script's own characters
+// (including homebrew ones with no vendored entry) take priority so the
+// game actually in play is one tap away, with every other official
+// character still reachable underneath.
+export function characterPickerPool(
+  scriptCharacters: Character[],
+  team?: Team,
+): Character[] {
+  const inTeam = (c: Character) => !team || c.team === team;
+  const byId = new Map<string, Character>();
+  for (const character of scriptCharacters) {
+    if (inTeam(character)) byId.set(character.id, character);
+  }
+  for (const character of allCharacters) {
+    if (inTeam(character) && !byId.has(character.id)) {
+      byId.set(character.id, character);
+    }
+  }
+  return [...byId.values()];
+}
+
 export function wikiUrl(character: Character): string {
   // encodeURIComponent leaves apostrophes unescaped (they're in its
   // unreserved set), so "Devil's Advocate" needs an explicit replace too.

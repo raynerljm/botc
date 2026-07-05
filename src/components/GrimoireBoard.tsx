@@ -8,10 +8,20 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { isOfficialCharacter, wikiUrl, type Character } from "@/lib/characters";
+import {
+  characterPickerPool,
+  getCharacter,
+  groupByTeam,
+  isOfficialCharacter,
+  SEAT_HOLDING_TEAMS,
+  teamNames,
+  wikiUrl,
+  type Character,
+} from "@/lib/characters";
 import {
   circlePosition,
   clampPct,
+  DRUNK_ID,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -20,6 +30,8 @@ import {
 import { isHttpUrl } from "@/lib/scriptParser";
 
 import { CharacterToken } from "./CharacterToken";
+import { InfoTokenLibrary } from "./InfoTokenLibrary";
+import { InfoTokenShowMode } from "./InfoTokenShowMode";
 import { ReminderChip } from "./ReminderChip";
 import { ReminderPicker } from "./ReminderPicker";
 import styles from "./GrimoireBoard.module.css";
@@ -27,8 +39,14 @@ import styles from "./GrimoireBoard.module.css";
 export interface GrimoireBoardProps {
   players: Player[];
   characterById: Map<string, Character>;
+  // The script's full character list, offered as claim options — a claim
+  // isn't limited to in-play characters (CONTEXT.md: Claim).
+  claimOptions: Character[];
   almanacUrl?: string | null;
   reminders?: ReminderToken[];
+  activeFabled: string[];
+  nominatorTodayIds?: ReadonlySet<string>;
+  nomineeTodayIds?: ReadonlySet<string>;
   onRename: (playerId: string, name: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
@@ -43,6 +61,12 @@ export interface GrimoireBoardProps {
   onMoveReminder: (reminderId: string, position: PlayerPosition) => void;
   onRemoveReminder: (reminderId: string) => void;
   onRestoreReminder: (reminder: ReminderToken) => void;
+  onSwapCharacter: (playerId: string, characterId: string) => void;
+  onRemovePlayer: (playerId: string) => void;
+  onRevealDrunk: (playerId: string) => void;
+  onAddFabled: (characterId: string) => void;
+  onRemoveFabled: (characterId: string) => void;
+  onSetClaim: (playerId: string, characterId: string | null) => void;
   // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
   // when there's nothing for it to show, so no button renders.
   onOpenSetupWalkthrough?: () => void;
@@ -89,8 +113,12 @@ function reminderDropPosition(base: PlayerPosition | null): PlayerPosition {
 export function GrimoireBoard({
   players,
   characterById,
+  claimOptions,
   almanacUrl,
   reminders = [],
+  activeFabled,
+  nominatorTodayIds,
+  nomineeTodayIds,
   onRename,
   onMove,
   onReCircle,
@@ -101,12 +129,52 @@ export function GrimoireBoard({
   onMoveReminder,
   onRemoveReminder,
   onRestoreReminder,
+  onSwapCharacter,
+  onRemovePlayer,
+  onRevealDrunk,
+  onAddFabled,
+  onRemoveFabled,
+  onSetClaim,
   onOpenSetupWalkthrough,
 }: GrimoireBoardProps) {
+  const claimById = useMemo(
+    () => new Map(claimOptions.map((c) => [c.id, c] as const)),
+    [claimOptions],
+  );
+  // Every player's menu offers the identical grouped list — computed once
+  // per board render rather than once per token.
+  const claimGroups = useMemo(() => groupByTeam(claimOptions), [claimOptions]);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
+
+  // "Script's characters first, then everything in the dataset" (issue #15
+  // AC) — the script pool is whatever's already resolvable on this board.
+  const scriptPool = useMemo(
+    () => [...characterById.values()],
+    [characterById],
+  );
+  // Restricted the same way as the mid-game "Add character" flow: Fabled/
+  // Loric are never held by a player (they get their own Fabled slot below),
+  // and a Traveller's alignment is a separate explicit field a plain swap
+  // can't set — swapping one in here would leave isTraveller/
+  // travellerAlignment stale and the export unable to derive an alignment.
+  // Correcting a traveller's character goes through remove-and-re-add
+  // instead, which sets both properly.
+  const swapOptions = useMemo(
+    () =>
+      groupByTeam(
+        characterPickerPool(scriptPool).filter((c) =>
+          SEAT_HOLDING_TEAMS.includes(c.team),
+        ),
+      ),
+    [scriptPool],
+  );
+  const fabledOptions = useMemo(
+    () => characterPickerPool(scriptPool, "fabled"),
+    [scriptPool],
+  );
   // The dragged token's position while a gesture is in progress — updated
   // every pointermove for smooth visual feedback, but never persisted until
   // the drag ends (see handlePointerUp). Persisting per pointermove would
@@ -117,15 +185,27 @@ export function GrimoireBoard({
     id: string;
     position: PlayerPosition;
   } | null>(null);
-  // null = closed; { base: null } = opened from the pad (generic default
-  // position); { base: <player position> } = opened from a token's menu.
-  const [picker, setPicker] = useState<{ base: PlayerPosition | null } | null>(
-    null,
-  );
+  // Only one pad-level picker can be open at a time — a single tagged state
+  // makes that exclusion automatic everywhere instead of needing every call
+  // site to separately clear every other picker's own boolean.
+  // "reminder": { base: null } opened from the pad (generic default
+  // position); { base: <player position> } opened from a token's menu.
+  const [activeOverlay, setActiveOverlay] = useState<
+    | { type: "reminder"; base: PlayerPosition | null }
+    | { type: "infoTokens" }
+    | null
+  >(null);
+  const reminderPicker =
+    activeOverlay?.type === "reminder" ? activeOverlay : null;
+  const infoTokenLibraryOpen = activeOverlay?.type === "infoTokens";
   const [removedReminder, setRemovedReminder] = useState<ReminderToken | null>(
     null,
   );
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [infoTokenShowing, setInfoTokenShowing] = useState<{
+    text: string;
+    characterIds: string[];
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -230,8 +310,11 @@ export function GrimoireBoard({
   }
 
   function handleAddReminder(input: { characterId: string | null; label: string }) {
-    onAddReminder({ ...input, position: reminderDropPosition(picker?.base ?? null) });
-    setPicker(null);
+    onAddReminder({
+      ...input,
+      position: reminderDropPosition(reminderPicker?.base ?? null),
+    });
+    setActiveOverlay(null);
   }
 
   function handleRemoveReminder(reminder: ReminderToken) {
@@ -257,6 +340,22 @@ export function GrimoireBoard({
     setLiveDrag(null);
   }
 
+  // Full-screen show mode replaces the board outright rather than layering
+  // on top of it — a fixed overlay alone would still leave player names and
+  // controls mounted (and tab-reachable) underneath, which is exactly the
+  // leak issue #19 rules out.
+  if (infoTokenShowing) {
+    return (
+      <InfoTokenShowMode
+        text={infoTokenShowing.text}
+        characters={infoTokenShowing.characterIds
+          .map((id) => characterById.get(id))
+          .filter((character): character is Character => character !== undefined)}
+        onClose={() => setInfoTokenShowing(null)}
+      />
+    );
+  }
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls} data-controls>
@@ -264,10 +363,10 @@ export function GrimoireBoard({
           type="button"
           onClick={() => {
             cancelActiveDrag();
-            // A picker already open holds a player's position captured at
+            // An overlay already open holds a player's position captured at
             // open time — re-circling can move that player, so the stale
             // parked position has to be discarded along with the drag.
-            setPicker(null);
+            setActiveOverlay(null);
             onReCircle();
           }}
         >
@@ -278,31 +377,60 @@ export function GrimoireBoard({
             type="button"
             onClick={() => {
               cancelActiveDrag();
-              setPicker(null);
+              setActiveOverlay(null);
               setHidden(true);
             }}
           >
             Hide grimoire
           </button>
         )}
-        {!hidden && !picker && (
-          <button type="button" onClick={() => setPicker({ base: null })}>
+        {!hidden && !activeOverlay && (
+          <button
+            type="button"
+            onClick={() => setActiveOverlay({ type: "reminder", base: null })}
+          >
             Add reminder
           </button>
         )}
-        {!hidden && !picker && onOpenSetupWalkthrough && (
+        {!hidden && !activeOverlay && (
+          <button
+            type="button"
+            onClick={() => setActiveOverlay({ type: "infoTokens" })}
+          >
+            Info tokens
+          </button>
+        )}
+        {!hidden && !activeOverlay && onOpenSetupWalkthrough && (
           <button type="button" onClick={onOpenSetupWalkthrough}>
             Setup walkthrough
           </button>
         )}
       </div>
 
-      {!hidden && picker && (
+      {!hidden && reminderPicker && (
         <ReminderPicker
           characterById={characterById}
           inPlayCharacterIds={inPlayCharacterIds}
           onAdd={handleAddReminder}
-          onCancel={() => setPicker(null)}
+          onCancel={() => setActiveOverlay(null)}
+        />
+      )}
+
+      {!hidden && infoTokenLibraryOpen && (
+        <InfoTokenLibrary
+          characterById={characterById}
+          onShow={(input) => {
+            // Show mode replaces the whole board (see the early return
+            // above), so a drag left active here would keep its pointerId
+            // captured against a token that's about to unmount — no
+            // pointerup could ever reach it, permanently blocking every
+            // future drag. Same cleanup Re-circle/Hide grimoire do before
+            // their own layout-discarding actions.
+            cancelActiveDrag();
+            setInfoTokenShowing(input);
+            setActiveOverlay(null);
+          }}
+          onCancel={() => setActiveOverlay(null)}
         />
       )}
 
@@ -332,6 +460,10 @@ export function GrimoireBoard({
                 ? liveDrag.position
                 : (player.position ?? circlePosition(index, total));
             const official = character ? isOfficialCharacter(character) : false;
+            // True only while the player is still wearing the stand-in's
+            // identity — once swapped to any other character (including a
+            // reveal to "drunk" itself), there's nothing left to disguise.
+            const isHiddenDrunk = player.isDrunk && character?.id !== DRUNK_ID;
 
             return (
               <div
@@ -372,11 +504,22 @@ export function GrimoireBoard({
                         <span className={styles.srOnly}> (dead)</span>
                       )}
                     </span>
-                    {player.isDrunk && (
+                    {isHiddenDrunk && (
                       <span className={styles.note}>(actually the Drunk)</span>
                     )}
                     {player.isTraveller && (
                       <span className={styles.note}>{player.travellerAlignment}</span>
+                    )}
+                    {player.claim && (
+                      <span className={styles.claimBadge}>
+                        Claims {claimById.get(player.claim)?.name ?? player.claim}
+                      </span>
+                    )}
+                    {nominatorTodayIds?.has(player.id) && (
+                      <span className={styles.note}>Nominated</span>
+                    )}
+                    {nomineeTodayIds?.has(player.id) && (
+                      <span className={styles.note}>Nominee</span>
                     )}
                   </summary>
 
@@ -396,14 +539,75 @@ export function GrimoireBoard({
                       {player.dead ? "Mark alive" : "Mark dead"}
                     </button>
 
-                    {!picker && (
+                    <label
+                      className={styles.field}
+                      htmlFor={`swap-character-${player.id}`}
+                    >
+                      Swap character
+                      <select
+                        id={`swap-character-${player.id}`}
+                        value={player.characterId ?? ""}
+                        onChange={(event) =>
+                          onSwapCharacter(player.id, event.target.value)
+                        }
+                      >
+                        {swapOptions.map((group) => (
+                          <optgroup key={group.team} label={teamNames[group.team]}>
+                            {group.characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+
+                    {isHiddenDrunk && (
                       <button
                         type="button"
-                        onClick={() => setPicker({ base: position })}
+                        onClick={() => onRevealDrunk(player.id)}
+                      >
+                        Reveal Drunk
+                      </button>
+                    )}
+
+                    <button type="button" onClick={() => onRemovePlayer(player.id)}>
+                      Remove player
+                    </button>
+
+                    {!activeOverlay && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveOverlay({ type: "reminder", base: position })
+                        }
                       >
                         Add reminder
                       </button>
                     )}
+
+                    <label className={styles.field} htmlFor={`token-claim-${player.id}`}>
+                      Claim
+                      <select
+                        id={`token-claim-${player.id}`}
+                        value={player.claim ?? ""}
+                        onChange={(event) =>
+                          onSetClaim(player.id, event.target.value || null)
+                        }
+                      >
+                        <option value="">No claim</option>
+                        {claimGroups.map((group) => (
+                          <optgroup key={group.team} label={teamNames[group.team]}>
+                            {group.characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
 
                     <div className={styles.seatControls}>
                       <button
@@ -515,6 +719,48 @@ export function GrimoireBoard({
           </div>
         )}
       </div>
+
+      {/* Fabled are storyteller aids, not held by any player, so they render
+          outside the circle rather than as a token on it (issue #15). */}
+      {!hidden && (
+        <div className={styles.fabledRow} role="region" aria-label="Fabled">
+          {activeFabled.map((id) => {
+            // A script rarely lists its own Fabled, so fall back to the
+            // vendored dataset when the id isn't already in characterById.
+            const character = characterById.get(id) ?? getCharacter(id);
+            if (!character) return null;
+            return (
+              <div key={id} className={styles.fabledToken}>
+                <CharacterToken character={character} />
+                <span>{character.name}</span>
+                <button type="button" onClick={() => onRemoveFabled(id)}>
+                  Remove {character.name}
+                </button>
+              </div>
+            );
+          })}
+
+          <label className={styles.field} htmlFor="add-fabled">
+            Add Fabled
+            <select
+              id="add-fabled"
+              value=""
+              onChange={(event) => {
+                if (event.target.value) onAddFabled(event.target.value);
+              }}
+            >
+              <option value="">Choose a Fabled…</option>
+              {fabledOptions
+                .filter((c) => !activeFabled.includes(c.id))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      )}
     </div>
   );
 }

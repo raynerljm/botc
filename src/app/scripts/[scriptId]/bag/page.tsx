@@ -43,6 +43,8 @@ export default async function BagBuilderPage({ params }: Props) {
         scriptId={scriptId}
         scriptName={script.name}
         almanacUrl={script.meta.almanac}
+        firstNightOrder={script.meta.firstNight}
+        otherNightOrder={script.meta.otherNight}
       />
     </main>
   );
