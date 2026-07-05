@@ -163,8 +163,10 @@ describe("playerPick step", () => {
       steps: [fortuneTellerStep],
     });
 
+    // Cara (Chef) rather than Bob (Imp) — the candidate must be good, and
+    // Bob is evil (see the alignment-filtering tests below).
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
-    await user.selectOptions(within(step).getByLabelText(/player/i), "Bob");
+    await user.selectOptions(within(step).getByLabelText(/player/i), "Cara");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
@@ -178,6 +180,48 @@ describe("playerPick step", () => {
     const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
     const optionNames = Array.from(select.options).map((o) => o.text);
     expect(optionNames).not.toContain("Alice");
+  });
+
+  it("only offers good players as candidates (code review: red herring/twin/grandchild must be good)", () => {
+    // Default players: p1 Alice (Fortune Teller, good), p2 Bob (Imp, evil),
+    // p3 Cara (Chef, good).
+    renderWalkthrough({ steps: [fortuneTellerStep] });
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
+    const optionNames = Array.from(select.options).map((o) => o.text);
+    expect(optionNames).not.toContain("Bob");
+    expect(optionNames).toContain("Cara");
+  });
+
+  it("treats a Traveller candidate's alignment as their travellerAlignment, not their character's team", () => {
+    renderWalkthrough({
+      steps: [fortuneTellerStep],
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
+        makePlayer({
+          id: "p2",
+          seat: 2,
+          name: "Bob",
+          characterId: "scapegoat",
+          isTraveller: true,
+          travellerAlignment: "evil",
+        }),
+        makePlayer({
+          id: "p3",
+          seat: 3,
+          name: "Cara",
+          characterId: "scapegoat",
+          isTraveller: true,
+          travellerAlignment: "good",
+        }),
+      ],
+    });
+
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
+    const optionNames = Array.from(select.options).map((o) => o.text);
+    expect(optionNames).not.toContain("Bob");
+    expect(optionNames).toContain("Cara");
   });
 });
 

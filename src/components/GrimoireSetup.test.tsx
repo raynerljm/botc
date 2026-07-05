@@ -633,13 +633,17 @@ describe("reminder tokens (issue #14)", () => {
 });
 
 describe("post-draw setup walkthrough (issue #26)", () => {
+  // Imp (seat 2) is evil, so it's never a valid Fortune Teller red-herring
+  // candidate — Chef (seat 3) and Empath (seat 4) are the two good players
+  // tests can pick between (e.g. to prove Redo actually changed the target).
   async function completedFortuneTellerBoard(user: ReturnType<typeof userEvent.setup>) {
     const game = makeGame({
-      playerCount: 3,
+      playerCount: 4,
       selectedCharacters: [
         getCharacter("fortuneteller")!,
         getCharacter("imp")!,
         getCharacter("chef")!,
+        getCharacter("empath")!,
       ],
     });
     render(<GrimoireSetup game={game} />);
@@ -654,6 +658,10 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     await user.selectOptions(
       screen.getByLabelText("Assign seat 3 manually"),
       "Chef",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 4 manually"),
+      "Empath",
     );
   }
 
@@ -830,7 +838,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     )!.position;
 
     await user.click(within(step).getByRole("button", { name: /redo/i }));
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 2");
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 4");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -839,6 +847,59 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     // Re-answering for a different player actually moved the token, proving
     // the second Confirm didn't just add another copy at the same spot.
     expect(redHerrings[0].position).not.toEqual(firstPosition);
+  });
+
+  it("Redo stays duplicate-free even across a remount (e.g. a page reload) — deterministic ids, not session state (code review finding)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 4,
+      selectedCharacters: [
+        getCharacter("fortuneteller")!,
+        getCharacter("imp")!,
+        getCharacter("chef")!,
+        getCharacter("empath")!,
+      ],
+    });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Fortune Teller",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 3 manually"),
+      "Chef",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 4 manually"),
+      "Empath",
+    );
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", { name: /fortune teller/i });
+    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    // Simulate a page reload: tear down this component instance entirely
+    // (discarding any in-memory refs) and remount fresh from the persisted
+    // document, the same way GamePage does on a real navigation.
+    unmount();
+    render(<GrimoireSetup game={loadGame() as GameDocument} />);
+
+    await user.click(screen.getByRole("button", { name: /setup walkthrough/i }));
+    const dialog2 = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step2 = within(dialog2).getByRole("group", { name: /fortune teller/i });
+    await user.click(within(step2).getByRole("button", { name: /redo/i }));
+    await user.selectOptions(within(step2).getByLabelText("Player"), "Player 4");
+    await user.click(within(step2).getByRole("button", { name: /confirm/i }));
+
+    const final = loadGame() as GameDocument;
+    expect(
+      final.reminders.filter((r) => r.label === "Red herring"),
+    ).toHaveLength(1);
   });
 
   it("keeps the privacy 'Hide grimoire' toggle across opening and closing the walkthrough (code review finding)", async () => {

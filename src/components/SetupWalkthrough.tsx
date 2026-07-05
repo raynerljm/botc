@@ -58,6 +58,18 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
   return parkBeside(base);
 }
 
+// Fortune Teller's red herring, Grandmother's grandchild, and the Evil
+// Twin's counterpart must all be a *good* player (each ability's text says
+// so explicitly) — a player's real alignment, not what they believe
+// themselves to be, so a Marionette (evil, thinks they're good) is
+// correctly excluded and a Drunk (good, playing a Townsfolk stand-in) is
+// correctly included.
+function isGoodPlayer(player: Player, characterById: Map<string, Character>): boolean {
+  if (player.isTraveller) return player.travellerAlignment === "good";
+  const character = player.characterId ? characterById.get(player.characterId) : undefined;
+  return character?.team === "townsfolk" || character?.team === "outsider";
+}
+
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
   const [showAll, setShowAll] = useState(false);
   const scripted = characterPool.filter((c) => c.team === team);
@@ -90,6 +102,12 @@ function StepPanel({
   const [forceEditing, setForceEditing] = useState(false);
   const editing = forceEditing || status === undefined;
   const otherPlayers = players.filter((p) => p.id !== step.playerId);
+  const characterById = new Map(characterPool.map((c) => [c.id, c] as const));
+  // Every curated playerPick (Fortune Teller's red herring, Grandmother's
+  // grandchild, the Evil Twin's counterpart) requires a good player by rule
+  // — filtering here, not in the table, since it's a property of the *kind*
+  // rather than any one character.
+  const goodOtherPlayers = otherPlayers.filter((p) => isGoodPlayer(p, characterById));
 
   // Bundling every reminder a step produces with its status into one call
   // (rather than separate add-reminder-then-resolve calls) is what makes
@@ -122,7 +140,7 @@ function StepPanel({
         <>
           {step.kind === "playerPick" && (
             <PlayerPickControls
-              otherPlayers={otherPlayers}
+              otherPlayers={goodOtherPlayers}
               onConfirm={(playerId) =>
                 resolve("answered", [
                   {

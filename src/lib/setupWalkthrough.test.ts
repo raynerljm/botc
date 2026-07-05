@@ -201,7 +201,7 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     expect(steps.filter((s) => s.playerId === drunkPlayer?.id)).toHaveLength(1);
   });
 
-  it("gives an uncovered official or homebrew character with reminders a generic step", () => {
+  it("gives a homebrew character with reminders a generic step", () => {
     const homebrew: Character = {
       id: "custom-oracle",
       name: "Custom Oracle",

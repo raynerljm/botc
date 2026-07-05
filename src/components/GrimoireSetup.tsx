@@ -55,14 +55,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const [travellerAlignment, setTravellerAlignment] =
     useState<Alignment>("good");
   const [showWalkthrough, setShowWalkthrough] = useState(false);
-  // Tracks which reminder ids each walkthrough step last placed, so
-  // resolveWalkthroughStep can remove exactly those before adding a fresh
-  // set — otherwise re-answering a step (Redo) would leave the previous
-  // answer's tokens on the board alongside the new ones. Session-local only
-  // (not part of GameDocument): it's bookkeeping for this component, not a
-  // new persisted state kind — the reminders themselves are the only
-  // decision data that survives a reload.
-  const stepReminderIdsRef = useRef<Record<string, string[]>>({});
 
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
@@ -220,6 +212,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({ ...gameRef.current, setupWalkthroughOffered: true });
   }
 
+  // Deterministic ids (rather than crypto.randomUUID()) are what make Redo
+  // durable across a reload, not just within one session: resolving the same
+  // step always reuses `setupwalkthrough:<stepId>:<index>`, so the filter
+  // below finds and drops exactly the reminders a *previous* visit placed —
+  // no separate bookkeeping of "which ids did this step add" needs to
+  // survive anywhere (code review finding: a session-only ref reset on
+  // reload, silently reintroducing stale duplicates across sessions).
+  function setupWalkthroughReminderId(stepId: string, index: number): string {
+    return `setupwalkthrough:${stepId}:${index}`;
+  }
+
   // Atomically swaps out whatever reminders this step last placed for the
   // ones it just produced, then records its status — one update() call, so
   // a Redo can never leave a stale token from the previous answer behind,
@@ -229,20 +232,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     status: SetupWalkthroughStepStatus,
     reminders: SetupWalkthroughReminderInput[],
   ) {
-    const previousIds = stepReminderIdsRef.current[stepId] ?? [];
-    const newReminders: ReminderToken[] = reminders.map((input) => ({
-      id: crypto.randomUUID(),
+    const newReminders: ReminderToken[] = reminders.map((input, index) => ({
+      id: setupWalkthroughReminderId(stepId, index),
       ...input,
     }));
-    stepReminderIdsRef.current = {
-      ...stepReminderIdsRef.current,
-      [stepId]: newReminders.map((r) => r.id),
-    };
+    const isThisStepsOldReminder = (r: ReminderToken) =>
+      r.id.startsWith(`setupwalkthrough:${stepId}:`);
 
     update({
       ...gameRef.current,
       reminders: [
-        ...gameRef.current.reminders.filter((r) => !previousIds.includes(r.id)),
+        ...gameRef.current.reminders.filter((r) => !isThisStepsOldReminder(r)),
         ...newReminders,
       ],
       setupWalkthroughSteps: {
