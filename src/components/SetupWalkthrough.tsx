@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
@@ -668,10 +668,54 @@ export function SetupWalkthrough({
   onClose,
 }: SetupWalkthroughProps) {
   const resolvedCount = steps.filter((s) => stepStatuses[s.id]).length;
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // The opaque backdrop reads as a true modal, but nothing outside this
+  // component makes the rest of the page inert — GrimoireSetup keeps
+  // ShareScriptButton/EndGamePanel mounted and focusable underneath it
+  // (deliberately, so they stay reachable while the device is obscured
+  // mid-draw; see its "always reachable" comment) — so without this, Tab
+  // could silently reach "Good wins"/"Evil wins" behind the backdrop (code
+  // review finding). Focusable elements are re-queried on every Tab rather
+  // than captured once, since a step's own controls change as it's
+  // answered/skipped/redone while the dialog stays open.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    function focusableElements(): HTMLElement[] {
+      return Array.from(
+        dialog!.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+    }
+
+    focusableElements()[0]?.focus();
+
+    function trapTab(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const items = focusableElements();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", trapTab);
+    return () => document.removeEventListener("keydown", trapTab);
+  }, []);
 
   return (
     <div className={styles.overlay}>
       <div
+        ref={dialogRef}
         className={styles.walkthrough}
         role="dialog"
         aria-label="Setup walkthrough"

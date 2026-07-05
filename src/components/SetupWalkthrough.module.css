@@ -6,6 +6,7 @@
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+  overflow-y: auto;
   background: rgb(0 0 0 / 60%);
 }
 

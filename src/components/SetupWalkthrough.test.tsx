@@ -124,6 +124,24 @@ describe("SetupWalkthrough shell", () => {
     ).toHaveAttribute("aria-modal", "true");
   });
 
+  it("moves focus into the dialog when opened, so a keyboard user doesn't start behind it", () => {
+    renderWalkthrough({ steps: [fortuneTellerStep] });
+    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
+  });
+
+  it("traps Tab within the dialog's own controls (code review: the page behind the backdrop stays focusable otherwise)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({ steps: [fortuneTellerStep] });
+
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    within(step).getByRole("button", { name: /skip/i }).focus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(within(step).getByRole("button", { name: /skip/i })).toHaveFocus();
+  });
+
   it("skips a step with one tap, without producing any reminder", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({
