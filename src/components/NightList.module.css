@@ -51,6 +51,24 @@
   min-height: 2.75rem;
 }
 
+/* Below tablet width, .panel stacks full-width beneath the (potentially
+   tall) grimoire circle — normal flow would bury this button behind a long
+   scroll past every seat token. Pinning it to the viewport instead of the
+   panel's flow position (issue #58) makes it reachable at any scroll
+   depth; at 768px+ the panel itself already goes sticky above, so this is
+   mobile-only. */
+@media (max-width: 767.98px) {
+  .startNight,
+  .endNight {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 40;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  }
+}
+
 .showAll {
   display: flex;
   align-items: center;
@@ -93,6 +111,12 @@
   align-items: center;
   gap: 0.6rem;
   flex: 1;
+  /* Flex items default to min-width: auto, which lets a long acting-as
+     string (playerName — characterName as label) refuse to shrink below
+     its own content width and push past .entry's edge — the actual
+     overflow (issue #58), not just a missing wrap rule on the text
+     itself. */
+  min-width: 0;
   cursor: pointer;
 }
 
@@ -118,6 +142,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  min-width: 0;
+}
+
+.entryTitle,
+.entryReminder {
+  overflow-wrap: anywhere;
 }
 
 .entryTitle {
