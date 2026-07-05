@@ -392,16 +392,16 @@ export function BagBuilder({
   const availableStandIns = pool.filter(
     (c) => c.team === "townsfolk" && !selectedIds.has(c.id),
   );
-  // The stand-in's token, and each extra copy of a character like Village
-  // Idiot, are physical Townsfolk-styled tokens beyond the one already
-  // counted for that character's own selection (mirrors the issue's own
-  // reference scenario: 7 real Townsfolk + 1 Drunk stand-in = 8 tokens).
-  const extraTownsfolkTokens =
-    (selectedIds.has(DRUNK_ID) && standInId ? 1 : 0) +
-    Object.entries(extraCopies).reduce(
-      (sum, [id, count]) => (selectedIds.has(id) ? sum + count : sum),
-      0,
-    );
+  // Each extra copy of a character like Village Idiot is a physical
+  // Townsfolk-styled token beyond the one already counted for that
+  // character's own selection. The Drunk's stand-in is *not* one of
+  // these: it's the same physical token as the Drunk's own Outsider slot,
+  // just dressed as a Townsfolk, so counting it here too would tally that
+  // one seat twice (issue #76).
+  const extraTownsfolkTokens = Object.entries(extraCopies).reduce(
+    (sum, [id, count]) => (selectedIds.has(id) ? sum + count : sum),
+    0,
+  );
 
   // The single source of truth for each official team's selected/target
   // counts — the per-team counter rows below and the Continue mismatch
@@ -600,12 +600,15 @@ export function BagBuilder({
                 const copiesRange =
                   isSelected && parsed?.extraCopies ? parsed.extraCopies : null;
 
+                const isStandIn = character.id === standInId;
+
                 return (
                   <li key={character.id}>
                     <button
                       type="button"
                       className={styles.character}
                       aria-pressed={isSelected}
+                      data-standin={isStandIn || undefined}
                       onClick={() => toggleCharacter(character)}
                     >
                       <CharacterToken character={character} />
@@ -626,6 +629,11 @@ export function BagBuilder({
                         {isSelected && parsed && (
                           <span className={styles.modifierText}>
                             [{parsed.bracketText}]
+                          </span>
+                        )}
+                        {isStandIn && (
+                          <span className={styles.standInBadge}>
+                            Drunk&apos;s stand-in
                           </span>
                         )}
                       </span>

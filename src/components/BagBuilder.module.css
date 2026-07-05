@@ -124,6 +124,16 @@
   background: var(--surface-raised);
 }
 
+.character[data-standin="true"] {
+  border-color: var(--team-outsider);
+  border-style: dashed;
+}
+
+.standInBadge {
+  font-size: 0.8rem;
+  color: var(--team-outsider);
+}
+
 .characterName {
   flex: 1;
   display: flex;
