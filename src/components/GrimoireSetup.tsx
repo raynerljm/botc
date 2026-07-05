@@ -368,6 +368,19 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // Revises the Drunk's stand-in from the setup walkthrough (issue #52) —
+  // unlike swapCharacter, isDrunk and startingCharacterId are left
+  // untouched, since this only changes which Townsfolk the disguise is,
+  // not whether there's a disguise at all.
+  function reassignStandIn(playerId: string, characterId: string) {
+    const character = getCharacter(characterId);
+    update({
+      ...game,
+      players: updatePlayer(playerId, { characterId }),
+      characterPool: withCharacterInPool(game.characterPool, character),
+    });
+  }
+
   function removePlayer(playerId: string) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
@@ -895,6 +908,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               players={game.players}
               characterPool={game.characterPool}
               onResolveStep={resolveWalkthroughStep}
+              onReassignStandIn={reassignStandIn}
               onClose={() => setShowWalkthrough(false)}
             />
           )}
