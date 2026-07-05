@@ -10,11 +10,15 @@ const startTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
-  hour12: false,
+  // Explicit h23 (not hour12: false) avoids ICU renderings that print
+  // midnight as "24:00" instead of "00:00".
+  hourCycle: "h23",
 });
 
 export function formatStartTimeSGT(createdAt: string): string {
-  return `${startTimeFormatter.format(new Date(createdAt))} SGT`;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "Unknown start time";
+  return `${startTimeFormatter.format(date)} SGT`;
 }
 
 function formatDurationMs(ms: number): string {
@@ -27,12 +31,9 @@ function formatDurationMs(ms: number): string {
   return `${minutes}m`;
 }
 
-// `now` defaults to the real clock; tests pin it via the parameter instead of
-// faking global time.
-export function formatElapsed(createdAt: string, now: Date = new Date()): string {
-  return formatDurationMs(now.getTime() - new Date(createdAt).getTime());
-}
-
-export function formatGameDuration(createdAt: string, endedAt: string): string {
-  return formatDurationMs(new Date(endedAt).getTime() - new Date(createdAt).getTime());
+// `until` defaults to the real clock, giving an ongoing game's elapsed time;
+// pass the game's `endedAt` to get its total duration instead — both are the
+// same span calculation, just anchored at a different end point.
+export function formatDuration(createdAt: string, until: Date = new Date()): string {
+  return formatDurationMs(until.getTime() - new Date(createdAt).getTime());
 }
