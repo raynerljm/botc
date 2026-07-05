@@ -670,34 +670,37 @@ export function SetupWalkthrough({
   const resolvedCount = steps.filter((s) => stepStatuses[s.id]).length;
 
   return (
-    <div
-      className={styles.walkthrough}
-      role="dialog"
-      aria-label="Setup walkthrough"
-    >
-      <header className={styles.header}>
-        <h2>Setup walkthrough</h2>
-        <p>
-          {resolvedCount}/{steps.length} handled
-        </p>
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
-      </header>
-      <ol className={styles.steps}>
-        {steps.map((step) => (
-          <li key={step.id}>
-            <StepPanel
-              step={step}
-              status={stepStatuses[step.id]}
-              players={players}
-              characterPool={characterPool}
-              onResolveStep={onResolveStep}
-              onReassignStandIn={onReassignStandIn}
-            />
-          </li>
-        ))}
-      </ol>
+    <div className={styles.overlay}>
+      <div
+        className={styles.walkthrough}
+        role="dialog"
+        aria-label="Setup walkthrough"
+        aria-modal="true"
+      >
+        <header className={styles.header}>
+          <h2>Setup walkthrough</h2>
+          <p>
+            {resolvedCount}/{steps.length} handled
+          </p>
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </header>
+        <ol className={styles.steps}>
+          {steps.map((step) => (
+            <li key={step.id}>
+              <StepPanel
+                step={step}
+                status={stepStatuses[step.id]}
+                players={players}
+                characterPool={characterPool}
+                onResolveStep={onResolveStep}
+                onReassignStandIn={onReassignStandIn}
+              />
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }

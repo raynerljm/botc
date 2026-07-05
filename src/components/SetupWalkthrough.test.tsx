@@ -117,6 +117,13 @@ describe("SetupWalkthrough shell", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("renders as a modal dialog, prominent regardless of where it mounts in the page (issue #57)", () => {
+    renderWalkthrough({ steps: [fortuneTellerStep] });
+    expect(
+      screen.getByRole("dialog", { name: "Setup walkthrough" }),
+    ).toHaveAttribute("aria-modal", "true");
+  });
+
   it("skips a step with one tap, without producing any reminder", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({
