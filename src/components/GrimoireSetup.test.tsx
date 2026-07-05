@@ -1364,7 +1364,6 @@ describe("reminder tokens (issue #14)", () => {
 
   it("detaches a restored reminder whose anchor seat was removed during the undo window (code review finding)", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const circle = await completedBoard(user);
 
     const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
@@ -1384,7 +1383,7 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders).toHaveLength(0);
 
     await user.click(within(wrap).getByText("Player 1"));
-    await user.click(within(wrap).getByRole("button", { name: /remove player/i }));
+    await removePlayerAndConfirm(user, wrap);
     expect((loadGame() as GameDocument).players).toHaveLength(1);
 
     await user.click(within(circle).getByRole("button", { name: /undo/i }));
@@ -1392,7 +1391,6 @@ describe("reminder tokens (issue #14)", () => {
     const reloaded = loadGame() as GameDocument;
     expect(reloaded.reminders).toHaveLength(1);
     expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
-    confirmSpy.mockRestore();
   });
 
   it("persists a reminder added from a seat's own menu as anchored to that seat (issue #71)", async () => {
@@ -1462,7 +1460,6 @@ describe("reminder tokens (issue #14)", () => {
 
   it("detaches a reminder whose anchor seat is removed, instead of leaving it pointing at a player id that no longer exists (code review finding)", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const circle = await completedBoard(user);
 
     const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
@@ -1474,7 +1471,7 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).toBe(anchorPlayerId);
 
     await user.click(within(wrap).getByText("Player 1"));
-    await user.click(within(wrap).getByRole("button", { name: /remove player/i }));
+    await removePlayerAndConfirm(user, wrap);
 
     const reloaded = loadGame() as GameDocument;
     expect(reloaded.players.some((p) => p.id === anchorPlayerId)).toBe(false);
@@ -1483,7 +1480,6 @@ describe("reminder tokens (issue #14)", () => {
     // than silently keeping whatever stale position the reminder happened
     // to store while anchored (which never updated as the seat moved).
     expect(reloaded.reminders[0].position).toBeDefined();
-    confirmSpy.mockRestore();
   });
 });
 
