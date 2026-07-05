@@ -5,12 +5,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // again for issue #15 (Player gained startingCharacterId, GameDocument
 // gained activeFabled), again for issue #16 (GameDocument gained the
 // night-list fields: night, nightOpen, nightChecked, nightUnskipped,
-// firstNightOrder, otherNightOrder), and again for issue #18 (Player gained
-// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`) — a
-// document saved under an older shape must be rejected by gameStorage's
-// version check rather than loaded with any of these fields silently
-// undefined.
-export const GAME_SCHEMA_VERSION = 6;
+// firstNightOrder, otherNightOrder), again for issue #18 (Player gained
+// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), and
+// again for issue #20 (GameDocument gained `nominations`) — a document
+// saved under an older shape must be rejected by gameStorage's version
+// check rather than loaded with any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 7;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -52,6 +52,16 @@ export interface ReminderToken {
   characterId: string | null;
   label: string;
   position: PlayerPosition;
+}
+
+// A nomination recorded today (CONTEXT.md: Nomination) — tracked for the
+// current day only, with no history kept once dawn resets it (ADR 0002).
+export interface Nomination {
+  id: string;
+  nominatorId: string;
+  nomineeId: string;
+  // Every player id who voted for this nomination, in the order recorded.
+  votes: string[];
 }
 
 export interface Player {
@@ -145,6 +155,10 @@ export interface GameDocument {
   // cleared).
   nightChecked: string[];
   nightUnskipped: string[];
+  // Today's nominations only (CONTEXT.md: "tracked for the current day
+  // only") — cleared whenever a night ends and the next day begins (issue
+  // #20 AC: "nomination eligibility resets at dawn").
+  nominations: Nomination[];
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -357,6 +371,7 @@ export function createGame({
     nightOpen: false,
     nightChecked: [],
     nightUnskipped: [],
+    nominations: [],
   };
 }
 

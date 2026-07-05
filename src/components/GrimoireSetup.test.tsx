@@ -574,6 +574,49 @@ describe("mid-game token management (issue #15)", () => {
     confirmSpy.mockRestore();
   });
 
+  it("scrubs a removed player's votes from every nomination, so they stop counting toward the tally (issue #20)", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("washerwoman")!, getCharacter("imp")!],
+    });
+    const withNomination = {
+      ...game,
+      nominations: [
+        {
+          id: "n1",
+          nominatorId: game.players[1].id,
+          nomineeId: game.players[1].id,
+          votes: [game.players[0].id, game.players[1].id],
+        },
+      ],
+    };
+    render(<GrimoireSetup game={withNomination} />);
+
+    for (let seat = 1; seat <= 2; seat++) {
+      const remainingOption = within(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+      )
+        .getAllByRole("option")
+        .find((option) => option.textContent !== "Choose a character…")!;
+      await user.selectOptions(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+        remainingOption.textContent!,
+      );
+    }
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.click(
+      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
+    );
+
+    expect(loadGame()!.nominations[0].votes).toEqual([game.players[1].id]);
+    confirmSpy.mockRestore();
+  });
+
   it("reveals the Drunk, showing the real character openly from then on", async () => {
     const washerwoman = getCharacter("washerwoman")!;
     const game = createGame({

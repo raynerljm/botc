@@ -41,6 +41,10 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       night: game.night + 1,
       nightChecked: [],
       nightUnskipped: [],
+      // Ending a night starts the next day, and nomination eligibility
+      // resets at dawn (issue #20 AC) — today's nominations don't carry
+      // over (CONTEXT.md: "tracked for the current day only").
+      nominations: [],
     });
   }
 

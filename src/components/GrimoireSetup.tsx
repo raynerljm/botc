@@ -24,6 +24,7 @@ import { saveGame } from "@/lib/gameStorage";
 
 import { CharacterToken } from "./CharacterToken";
 import { ClaimsList } from "./ClaimsList";
+import { DayPhase } from "./DayPhase";
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
@@ -93,6 +94,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const scriptCharacterById = useMemo(
     () => new Map(game.scriptCharacters.map((c) => [c.id, c] as const)),
     [game.scriptCharacters],
+  );
+
+  // "used/available state visible ... as token badges" (issue #20 AC) —
+  // computed once per render rather than per-token, since every token needs
+  // the same two sets.
+  const nominatorTodayIds = useMemo(
+    () => new Set(game.nominations.map((n) => n.nominatorId)),
+    [game.nominations],
+  );
+  const nomineeTodayIds = useMemo(
+    () => new Set(game.nominations.map((n) => n.nomineeId)),
+    [game.nominations],
   );
 
   // Sharing from the grimoire shares what's actually in this game — the
@@ -270,6 +283,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({
       ...game,
       players: game.players.filter((p) => p.id !== playerId),
+      // A removed player's recorded vote must not go on counting toward a
+      // nomination's tally forever (issue #20).
+      nominations: game.nominations.map((n) => ({
+        ...n,
+        votes: n.votes.filter((id) => id !== playerId),
+      })),
     });
   }
 
@@ -673,6 +692,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 almanacUrl={game.almanacUrl}
                 reminders={game.reminders}
                 activeFabled={game.activeFabled}
+                nominatorTodayIds={nominatorTodayIds}
+                nomineeTodayIds={nomineeTodayIds}
                 onRename={renamePlayer}
                 onMove={movePlayer}
                 onReCircle={reCircle}
@@ -691,7 +712,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onSetClaim={setClaim}
               />
             </div>
-            <NightList game={game} characterById={characterById} onChange={update} />
+            <div className={styles.sidePanels}>
+              <NightList game={game} characterById={characterById} onChange={update} />
+              <DayPhase game={game} onChange={update} />
+            </div>
           </div>
           <DemonBluffsPanel game={game} onChange={update} />
           <ClaimsList players={game.players} characterById={scriptCharacterById} />

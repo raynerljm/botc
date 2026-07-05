@@ -306,6 +306,19 @@ describe("createGame", () => {
     expect(game.nightUnskipped).toEqual([]);
   });
 
+  it("starts with no nominations recorded", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.nominations).toEqual([]);
+  });
+
   it("stamps the schema version, script, and creation time", () => {
     const game = createGame({
       scriptId: "tb",

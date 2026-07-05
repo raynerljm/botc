@@ -91,6 +91,25 @@ describe("Night list: starting and ending a night", () => {
       screen.getByRole("button", { name: "Start Night 2" }),
     ).toBeInTheDocument();
   });
+
+  it("clears today's nominations when a night ends, since eligibility resets at dawn", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      nominations: [
+        { id: "n1", nominatorId: "p1", nomineeId: "p2", votes: [] },
+      ],
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+
+    expect(latest.nominations).toEqual([]);
+  });
 });
 
 describe("Night list: entries", () => {
