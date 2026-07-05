@@ -16,6 +16,7 @@
     position: sticky;
     top: 1rem;
     align-self: flex-start;
+    min-width: 16rem;
     max-width: 24rem;
   }
 }

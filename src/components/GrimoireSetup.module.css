@@ -191,14 +191,26 @@
 }
 
 /* Tablet+: the night list sits beside the board as its own panel instead of
-   stacking full-width below it. */
+   stacking full-width below it — but only when both genuinely fit. The
+   circle has a fixed intrinsic width (GrimoireBoard's `.board` is
+   `min(90vw, 40rem)`, matched below as this item's flex-basis) and never
+   shrinks below it, so `flex-wrap` is what keeps the side panel from being
+   squeezed to an unreadably narrow (or clipped) sliver: once the circle
+   plus the panel's usable minimum no longer fit the row, the panel wraps
+   to its own full-width line below instead. */
 @media (min-width: 768px) {
   .circleLayout {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-start;
   }
 
   .circleLayout > :first-child {
-    flex: 1;
+    flex: 1 1 min(90vw, 40rem);
+  }
+
+  .sidePanels {
+    flex: 1 1 20rem;
+    min-width: 16rem;
   }
 }
