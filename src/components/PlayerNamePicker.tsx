@@ -5,6 +5,7 @@ import { useState } from "react";
 import { REGULAR_PLAYERS } from "@/lib/players";
 
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
+import { PickerGroup } from "./PickerGroup";
 import styles from "./PlayerNamePicker.module.css";
 
 export interface PlayerNamePickerProps {
@@ -18,9 +19,15 @@ export interface PlayerNamePickerProps {
 export function PlayerNamePicker({ onSelect }: PlayerNamePickerProps) {
   const [query, setQuery] = useState("");
 
+  const normalizedQuery = query.trim().toLowerCase();
   const matches = REGULAR_PLAYERS.filter((name) =>
-    name.toLowerCase().includes(query.trim().toLowerCase()),
+    name.toLowerCase().includes(normalizedQuery),
   );
+
+  function select(name: string) {
+    setQuery("");
+    onSelect(name);
+  }
 
   return (
     <div className={styles.picker}>
@@ -32,19 +39,14 @@ export function PlayerNamePicker({ onSelect }: PlayerNamePickerProps) {
           onChange={(event) => setQuery(event.target.value)}
         />
       </label>
-      <ul className={styles.results}>
-        {matches.map((name) => (
-          <li key={name}>
-            <button type="button" onClick={() => onSelect(name)}>
-              {name}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <PickerGroup
+        legend="Regular players"
+        items={matches.map((name) => ({ label: name, onClick: () => select(name) }))}
+      />
       <PickerCustomTextForm
         label="Custom player name"
         submitLabel="Use this name"
-        onSubmit={onSelect}
+        onSubmit={select}
       />
     </div>
   );

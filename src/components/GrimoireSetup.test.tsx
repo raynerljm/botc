@@ -343,6 +343,24 @@ describe("naming the drawn seat's player (issue #54)", () => {
 
     expect(screen.queryByRole("button", { name: /use this name/i })).not.toBeInTheDocument();
   });
+
+  it("hides the drawn seat's plain name field while its reveal is on-screen, so only the picker edits it (code review finding)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+    await user.click(screen.getByRole("button", { name: "Keep this token" }));
+
+    expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Once the reveal is dismissed, the plain field is back for later edits.
+    expect(screen.getByLabelText("Seat 1 name")).toHaveValue("Player 1");
+  });
 });
 
 describe("manual assignment mode (mixable with draw)", () => {

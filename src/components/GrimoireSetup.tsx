@@ -912,17 +912,26 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 : undefined;
               return (
                 <li key={player.id} className={styles.seat}>
-                  <label htmlFor={`seat-name-${player.id}`}>
-                    Seat {player.seat} name
-                  </label>
-                  <input
-                    id={`seat-name-${player.id}`}
-                    type="text"
-                    value={player.name}
-                    onChange={(event) =>
-                      renamePlayer(player.id, event.target.value)
-                    }
-                  />
+                  {draw?.seatId === player.id && draw.stage === "revealed" ? (
+                    // The reveal panel's PlayerNamePicker is this seat's only
+                    // name editor while it's on-screen — a second live field
+                    // here would let the two silently overwrite each other.
+                    <p className={styles.assignedPlaceholder}>Naming above</p>
+                  ) : (
+                    <>
+                      <label htmlFor={`seat-name-${player.id}`}>
+                        Seat {player.seat} name
+                      </label>
+                      <input
+                        id={`seat-name-${player.id}`}
+                        type="text"
+                        value={player.name}
+                        onChange={(event) =>
+                          renamePlayer(player.id, event.target.value)
+                        }
+                      />
+                    </>
+                  )}
                   {character && draw && (
                     // A draw session is on-screen for a *different* seat
                     // right now, which means the device is mid pass-around

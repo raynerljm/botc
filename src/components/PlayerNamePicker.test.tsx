@@ -34,6 +34,18 @@ describe("searching and selecting from the regular players list (issue #54)", ()
 
     expect(onSelect).toHaveBeenCalledWith("Bailey");
   });
+
+  it("clears the search text after a selection, so the full list is available again", async () => {
+    const user = userEvent.setup();
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    const search = screen.getByRole("textbox", { name: /search players/i });
+    await user.type(search, "jor");
+    await user.click(screen.getByRole("button", { name: "Jordan" }));
+
+    expect(search).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Alex" })).toBeInTheDocument();
+  });
 });
 
 describe("custom name entry when a player isn't in the regular list (issue #54)", () => {
