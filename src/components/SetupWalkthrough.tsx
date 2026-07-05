@@ -5,6 +5,7 @@ import { useState } from "react";
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
   circlePosition,
+  DRUNK_ID,
   heldCharacterIds,
   parkBeside,
   type Player,
@@ -63,6 +64,13 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
   return parkBeside(base);
 }
 
+function characterOf(
+  player: Player,
+  characterById: Map<string, Character>,
+): Character | undefined {
+  return player.characterId ? characterById.get(player.characterId) : undefined;
+}
+
 // Fortune Teller's red herring, Grandmother's grandchild, and the Evil
 // Twin's counterpart must all be a *good* player (each ability's text says
 // so explicitly) — a player's real alignment, not what they believe
@@ -71,8 +79,26 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
 // correctly included.
 function isGoodPlayer(player: Player, characterById: Map<string, Character>): boolean {
   if (player.isTraveller) return player.travellerAlignment === "good";
-  const character = player.characterId ? characterById.get(player.characterId) : undefined;
+  const character = characterOf(player, characterById);
   return character?.team === "townsfolk" || character?.team === "outsider";
+}
+
+// The storyteller already knows every player's assigned character, so
+// showing it alongside their name (issue #56) makes a player-pick faster
+// and less error-prone than matching bare names to seats by memory. A
+// disguised Drunk gets the same "(actually the Drunk)" flag GrimoireBoard
+// already shows on their token, so picking them here doesn't read as
+// picking their apparent character for real (code review finding).
+function playerOptionLabel(
+  player: Player,
+  characterById: Map<string, Character>,
+): string {
+  const character = characterOf(player, characterById);
+  if (!character) return player.name;
+  const label = `${player.name} — ${character.name}`;
+  return player.isDrunk && character.id !== DRUNK_ID
+    ? `${label} (actually the Drunk)`
+    : label;
 }
 
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
@@ -164,6 +190,7 @@ function StepPanel({
           {step.kind === "playerPick" && (
             <PlayerPickControls
               otherPlayers={goodOtherPlayers}
+              characterById={characterById}
               onConfirm={(playerId) =>
                 resolve("answered", [
                   {
@@ -181,6 +208,7 @@ function StepPanel({
               step={step}
               otherPlayers={otherPlayers}
               characterPool={characterPool}
+              characterById={characterById}
               onConfirm={(character, truePlayerId, falsePlayerId) =>
                 resolve("answered", [
                   {
@@ -302,9 +330,11 @@ function StepPanel({
 
 function PlayerPickControls({
   otherPlayers,
+  characterById,
   onConfirm,
 }: {
   otherPlayers: Player[];
+  characterById: Map<string, Character>;
   onConfirm: (playerId: string) => void;
 }) {
   const [playerId, setPlayerId] = useState("");
@@ -316,7 +346,7 @@ function PlayerPickControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -355,11 +385,13 @@ function CharacterAndTwoPlayersControls({
   step,
   otherPlayers,
   characterPool,
+  characterById,
   onConfirm,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "characterAndTwoPlayers" }>;
   otherPlayers: Player[];
   characterPool: Character[];
+  characterById: Map<string, Character>;
   onConfirm: (
     character: Character,
     truePlayerId: string,
@@ -416,7 +448,7 @@ function CharacterAndTwoPlayersControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -430,7 +462,7 @@ function CharacterAndTwoPlayersControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>

@@ -17,6 +17,19 @@ beforeEach(() => {
   routerBack.mockClear();
 });
 
+// Setup-walkthrough player options now carry "Name — Role" (issue #56); select
+// by the name prefix so tests don't hardcode the exact role suffix. The \b
+// boundary (rather than plain startsWith) is what keeps "Player 1" from
+// also matching "Player 10" — escaping first is what keeps a name with
+// regex-special characters from building a broken pattern (code review
+// finding).
+function selectPlayerNamed(select: HTMLElement, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return within(select).getByRole("option", {
+    name: new RegExp(`^${escaped}\\b`),
+  });
+}
+
 function makeGame(overrides: Partial<Parameters<typeof createGame>[0]> = {}) {
   return createGame({
     scriptId: "tb",
@@ -1338,7 +1351,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const step = within(dialog).getByRole("group", {
       name: /fortune teller/i,
     });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -1358,7 +1372,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(within(dialog).getByRole("button", { name: /close/i }));
 
@@ -1405,14 +1420,10 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /washerwoman/i });
     await user.selectOptions(within(step).getByLabelText("Character"), "Chef");
-    await user.selectOptions(
-      within(step).getByLabelText(/shown as townsfolk/i),
-      "Player 2",
-    );
-    await user.selectOptions(
-      within(step).getByLabelText(/shown as wrong/i),
-      "Player 3",
-    );
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    await user.selectOptions(trueSelect, selectPlayerNamed(trueSelect, "Player 2"));
+    const falseSelect = within(step).getByLabelText(/shown as wrong/i);
+    await user.selectOptions(falseSelect, selectPlayerNamed(falseSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -1436,14 +1447,16 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     const firstPosition = (loadGame() as GameDocument).reminders.find(
       (r) => r.label === "Red herring",
     )!.position;
 
     await user.click(within(step).getByRole("button", { name: /redo/i }));
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 4");
+    const playerSelectAgain = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelectAgain, selectPlayerNamed(playerSelectAgain, "Player 4"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -1485,7 +1498,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     // Simulate a page reload: tear down this component instance entirely
@@ -1498,7 +1512,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog2 = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step2 = within(dialog2).getByRole("group", { name: /fortune teller/i });
     await user.click(within(step2).getByRole("button", { name: /redo/i }));
-    await user.selectOptions(within(step2).getByLabelText("Player"), "Player 4");
+    const playerSelect2 = within(step2).getByLabelText("Player");
+    await user.selectOptions(playerSelect2, selectPlayerNamed(playerSelect2, "Player 4"));
     await user.click(within(step2).getByRole("button", { name: /confirm/i }));
 
     const final = loadGame() as GameDocument;
@@ -1531,7 +1546,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
-    await user.selectOptions(within(step).getByLabelText("Player"), "Player 3");
+    const playerSelect = within(step).getByLabelText("Player");
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(screen.getByRole("button", { name: /close/i }));
 
