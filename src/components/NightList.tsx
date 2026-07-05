@@ -4,7 +4,12 @@ import { useState } from "react";
 
 import type { Character } from "@/lib/characters";
 import type { GameDocument } from "@/lib/gameDocument";
-import { computeNightList, phaseForNight, type NightPhase } from "@/lib/nightList";
+import {
+  computeNightList,
+  currentNightNumber,
+  phaseForNight,
+  type NightPhase,
+} from "@/lib/nightList";
 
 import { CharacterToken } from "./CharacterToken";
 import styles from "./NightList.module.css";
@@ -26,8 +31,7 @@ function toggleInArray(list: string[], id: string): string[] {
 export function NightList({ game, characterById, onChange }: NightListProps) {
   const [showAll, setShowAll] = useState(false);
 
-  // The night currently open, or the one "Start night" would open next.
-  const nightNumber = game.night + 1;
+  const nightNumber = currentNightNumber(game);
   const phase = phaseForNight(nightNumber);
 
   function startNight() {

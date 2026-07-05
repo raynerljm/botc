@@ -794,6 +794,50 @@ describe("mid-game token management (issue #15)", () => {
   });
 });
 
+describe("acts-as (issue #17)", () => {
+  it("resolves an acts-as target that isn't currently in play, adding it to the character pool so the night list can find it", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const empath = getCharacter("empath")!;
+    // Empath is on the script but nobody drew it — the "Acts as" picker
+    // offers the script's full pool (any not-in-play character is a
+    // legitimate target, e.g. a Philosopher choosing an unheld ability),
+    // which is a different, wider universe than characterPool.
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [washerwoman, imp],
+      scriptCharacters: [washerwoman, imp, empath],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [washerwoman.id, imp.id][i],
+        startingCharacterId: [washerwoman.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.selectOptions(within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+
+    const reloaded = loadGame()!;
+    expect(reloaded.players[0].actsAs).toBe("empath");
+    expect(reloaded.characterPool.map((c) => c.id)).toContain("empath");
+
+    // The real regression: before adding the target to characterPool, the
+    // night list's characterById (built from characterPool) couldn't
+    // resolve it, so the acts-as entry silently never appeared.
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    expect(
+      screen.getByText(`Player 1 — ${washerwoman.name} as ${empath.name}`),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("the first visible grimoire (issue #12)", () => {
   it("keeps showing the setup view while any seat is unassigned", () => {
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
