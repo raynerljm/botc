@@ -153,6 +153,46 @@
   font-size: 0.9rem;
 }
 
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgb(0 0 0 / 60%);
+}
+
+.dialog {
+  max-width: 28rem;
+  width: 100%;
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.dialogActions button {
+  padding: 0.6rem 1.1rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dialogActions button:last-child {
+  background: var(--accent);
+  color: var(--background);
+}
+
 .jinxes {
   padding: 0.85rem 1rem;
   margin-top: 1rem;

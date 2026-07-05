@@ -148,6 +148,7 @@ export function BagBuilder({
   >({});
   const [extraCopies, setExtraCopies] = useState<Record<string, number>>({});
   const [standInId, setStandInId] = useState<string | null>(null);
+  const [showCountWarning, setShowCountWarning] = useState(false);
 
   // The selectable pool is the script's characters plus anything a special
   // flow auto-adds (e.g. Huntsman pulling in the Damsel) that the script
@@ -297,6 +298,18 @@ export function BagBuilder({
 
   function handleContinue() {
     if (!scriptId || !scriptName) return;
+    // Advisory, never blocking (ADR 0003): a mismatch just interrupts once
+    // with a dialog the storyteller can override.
+    if (countMismatches.length > 0) {
+      setShowCountWarning(true);
+      return;
+    }
+    proceedToGame();
+  }
+
+  function proceedToGame() {
+    if (!scriptId || !scriptName) return;
+    setShowCountWarning(false);
     // Starting a new game is non-destructive now that many games coexist, but
     // an in-progress game is easy to lose track of — confirm before adding
     // another (advisory, ADR 0003: the storyteller can always proceed).
@@ -356,6 +369,20 @@ export function BagBuilder({
       (sum, [id, count]) => (selectedIds.has(id) ? sum + count : sum),
       0,
     );
+
+  // Same official-team/target rules the per-team counters below use (and
+  // suppressed the same way by a relaxed-validation script) — surfaced here
+  // too so Continue can warn on any mismatch before handing off to a game.
+  const countMismatches: { team: Team; selected: number; target: number }[] =
+    relaxValidation
+      ? []
+      : CORE_TEAMS.filter(isOfficialTeam).flatMap((team) => {
+          const selected =
+            pool.filter((c) => c.team === team && selectedIds.has(c.id))
+              .length + (team === "townsfolk" ? extraTownsfolkTokens : 0);
+          const target = targetFor(team);
+          return selected === target ? [] : [{ team, selected, target }];
+        });
 
   return (
     <div className={styles.main}>
@@ -418,6 +445,41 @@ export function BagBuilder({
           </button>
         )}
       </div>
+
+      {showCountWarning && (
+        <div className={styles.overlay}>
+          <div
+            className={styles.dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bag counts don't match the script"
+          >
+            <h2>Bag counts don&apos;t match the script</h2>
+            <ul>
+              {countMismatches.map(({ team, selected, target }) => (
+                <li key={team}>
+                  {teamNames[team]}: {selected}/{target} (
+                  {selected > target
+                    ? `${selected - target} over`
+                    : `${target - selected} under`}
+                  )
+                </li>
+              ))}
+            </ul>
+            <div className={styles.dialogActions}>
+              <button
+                type="button"
+                onClick={() => setShowCountWarning(false)}
+              >
+                Go back
+              </button>
+              <button type="button" onClick={proceedToGame}>
+                Continue anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {relaxedCharacters.length > 0 && (
         <div className={styles.banner} role="status">
