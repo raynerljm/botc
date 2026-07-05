@@ -51,24 +51,6 @@
   min-height: 2.75rem;
 }
 
-/* Below tablet width, .panel stacks full-width beneath the (potentially
-   tall) grimoire circle — normal flow would bury this button behind a long
-   scroll past every seat token. Pinning it to the viewport instead of the
-   panel's flow position (issue #58) makes it reachable at any scroll
-   depth; at 768px+ the panel itself already goes sticky above, so this is
-   mobile-only. */
-@media (max-width: 767.98px) {
-  .startNight,
-  .endNight {
-    position: fixed;
-    left: 1rem;
-    right: 1rem;
-    bottom: 1rem;
-    z-index: 40;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-  }
-}
-
 .showAll {
   display: flex;
   align-items: center;
@@ -143,11 +125,11 @@
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
-}
-
-.entryTitle,
-.entryReminder {
-  overflow-wrap: anywhere;
+  /* break-word (not anywhere) only breaks mid-word as a last resort, when
+     a single word genuinely can't fit the line — normal-length titles and
+     reminders still wrap at their existing spaces exactly as before.
+     Inherited by .entryTitle/.entryReminder rather than repeated on both. */
+  overflow-wrap: break-word;
 }
 
 .entryTitle {
