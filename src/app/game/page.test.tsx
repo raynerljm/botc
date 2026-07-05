@@ -52,11 +52,6 @@ describe("game page", () => {
   });
 
   it("does not bounce to the script picker when hydrating a hard reload with an active game", async () => {
-    // A static-export prerender has no localStorage, so the server-rendered
-    // markup always reflects "no game" — reproduce that, then hydrate on a
-    // client where the active game was already saved before the reload.
-    const serverHtml = renderToString(<GamePage />);
-
     saveGame(
       createGame({
         scriptId: "tb",
@@ -68,12 +63,19 @@ describe("game page", () => {
       }),
     );
 
+    // A static-export prerender has no localStorage, so the server-rendered
+    // markup always reflects "no game" regardless of what's since been
+    // saved — reproduce that, then hydrate on a client that already has
+    // the active game.
+    const serverHtml = renderToString(<GamePage />);
+
     const container = document.createElement("div");
     container.innerHTML = serverHtml;
     document.body.appendChild(container);
 
+    let root!: ReturnType<typeof hydrateRoot>;
     await act(async () => {
-      hydrateRoot(container, <GamePage />);
+      root = hydrateRoot(container, <GamePage />);
     });
 
     expect(
@@ -81,6 +83,9 @@ describe("game page", () => {
     ).toBeInTheDocument();
     expect(replace).not.toHaveBeenCalled();
 
+    act(() => {
+      root.unmount();
+    });
     document.body.removeChild(container);
   });
 });
