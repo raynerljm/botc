@@ -33,6 +33,7 @@ import { DemonBluffsPanel } from "./DemonBluffsPanel";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import { NightList } from "./NightList";
+import { PlayerNamePicker } from "./PlayerNamePicker";
 import styles from "./GrimoireSetup.module.css";
 import { SetupWalkthrough, type SetupWalkthroughReminderInput } from "./SetupWalkthrough";
 import { ShareScriptButton } from "./ShareScriptButton";
@@ -686,6 +687,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               <CharacterToken character={revealedCharacter} />
               <h2>{revealedCharacter.name}</h2>
               <p>{revealedCharacter.ability}</p>
+              <PlayerNamePicker
+                onSelect={(name) => renamePlayer(draw.seatId, name)}
+              />
               <button type="button" onClick={hideAndPass}>
                 Hide &amp; pass
               </button>
