@@ -9,6 +9,21 @@
   margin-bottom: 1rem;
 }
 
+.back {
+  display: inline-block;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.5rem 0.5rem 0;
+  cursor: pointer;
+}
+
+.back:hover {
+  color: var(--foreground);
+}
+
 .seats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
