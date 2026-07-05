@@ -1434,6 +1434,35 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     expect((loadGame() as GameDocument).setupWalkthroughOffered).toBe(true);
   });
 
+  it("drops the \"before the first night\" framing once the first night has ended, but stays actionable (issue #68)", () => {
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    const imp = getCharacter("imp")!;
+    const chef = getCharacter("chef")!;
+    const empath = getCharacter("empath")!;
+    const game = makeGame({
+      playerCount: 4,
+      selectedCharacters: [fortuneTeller, imp, chef, empath],
+    });
+    const seated: GameDocument = {
+      ...game,
+      night: 1,
+      players: game.players.map((player, index) => {
+        const characterId = [fortuneTeller.id, imp.id, chef.id, empath.id][index];
+        return { ...player, characterId, startingCharacterId: characterId };
+      }),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const offer = screen.getByRole("region", { name: "Setup walkthrough offer" });
+    expect(within(offer).getByText(/pending/i)).toBeInTheDocument();
+    expect(within(offer).queryByText(/before the first night/i)).not.toBeInTheDocument();
+
+    // Reachable from the board toolbar regardless of the banner's own state.
+    expect(
+      screen.getByRole("button", { name: "Setup walkthrough" }),
+    ).toBeInTheDocument();
+  });
+
   it("starting the walkthrough replaces the grimoire view with it", async () => {
     const user = userEvent.setup();
     await completedFortuneTellerBoard(user);
