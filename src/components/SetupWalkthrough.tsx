@@ -5,6 +5,7 @@ import { useState } from "react";
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
   circlePosition,
+  DRUNK_ID,
   heldCharacterIds,
   parkBeside,
   type Player,
@@ -63,6 +64,13 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
   return parkBeside(base);
 }
 
+function characterOf(
+  player: Player,
+  characterById: Map<string, Character>,
+): Character | undefined {
+  return player.characterId ? characterById.get(player.characterId) : undefined;
+}
+
 // Fortune Teller's red herring, Grandmother's grandchild, and the Evil
 // Twin's counterpart must all be a *good* player (each ability's text says
 // so explicitly) — a player's real alignment, not what they believe
@@ -71,21 +79,26 @@ function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
 // correctly included.
 function isGoodPlayer(player: Player, characterById: Map<string, Character>): boolean {
   if (player.isTraveller) return player.travellerAlignment === "good";
-  const character = player.characterId ? characterById.get(player.characterId) : undefined;
+  const character = characterOf(player, characterById);
   return character?.team === "townsfolk" || character?.team === "outsider";
 }
 
 // The storyteller already knows every player's assigned character, so
 // showing it alongside their name (issue #56) makes a player-pick faster
-// and less error-prone than matching bare names to seats by memory.
+// and less error-prone than matching bare names to seats by memory. A
+// disguised Drunk gets the same "(actually the Drunk)" flag GrimoireBoard
+// already shows on their token, so picking them here doesn't read as
+// picking their apparent character for real (code review finding).
 function playerOptionLabel(
   player: Player,
   characterById: Map<string, Character>,
 ): string {
-  const character = player.characterId
-    ? characterById.get(player.characterId)
-    : undefined;
-  return character ? `${player.name} — ${character.name}` : player.name;
+  const character = characterOf(player, characterById);
+  if (!character) return player.name;
+  const label = `${player.name} — ${character.name}`;
+  return player.isDrunk && character.id !== DRUNK_ID
+    ? `${label} (actually the Drunk)`
+    : label;
 }
 
 function useCandidateCharacters(team: Team, characterPool: Character[]) {

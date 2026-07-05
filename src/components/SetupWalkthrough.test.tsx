@@ -80,9 +80,14 @@ function renderWalkthrough(
 
 // Player options now carry "Name — Role" (issue #56); select by the name
 // prefix so tests don't hardcode the exact role suffix at every call site.
+// The \b boundary (rather than plain startsWith) is what keeps "Player 1"
+// from also matching "Player 10" — escaping first is what keeps a name
+// with regex-special characters from building a broken pattern (code
+// review finding).
 function selectPlayerNamed(select: HTMLElement, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return within(select).getByRole("option", {
-    name: new RegExp(`^${name}\\b`),
+    name: new RegExp(`^${escaped}\\b`),
   });
 }
 
@@ -216,6 +221,27 @@ describe("playerPick step", () => {
     const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
     const optionNames = Array.from(select.options).map((o) => o.text);
     expect(optionNames).toContain("Cara — Chef");
+  });
+
+  it("flags a disguised Drunk candidate, matching GrimoireBoard's own '(actually the Drunk)' note (code review finding)", () => {
+    renderWalkthrough({
+      steps: [fortuneTellerStep],
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
+        makePlayer({
+          id: "p2",
+          seat: 2,
+          name: "Bob",
+          characterId: "chef",
+          isDrunk: true,
+        }),
+      ],
+    });
+
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
+    const optionNames = Array.from(select.options).map((o) => o.text);
+    expect(optionNames).toContain("Bob — Chef (actually the Drunk)");
   });
 
   it("treats a Traveller candidate's alignment as their travellerAlignment, not their character's team", () => {

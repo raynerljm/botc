@@ -18,10 +18,15 @@ beforeEach(() => {
 });
 
 // Setup-walkthrough player options now carry "Name — Role" (issue #56); select
-// by the name prefix so tests don't hardcode the exact role suffix.
+// by the name prefix so tests don't hardcode the exact role suffix. The \b
+// boundary (rather than plain startsWith) is what keeps "Player 1" from
+// also matching "Player 10" — escaping first is what keeps a name with
+// regex-special characters from building a broken pattern (code review
+// finding).
 function selectPlayerNamed(select: HTMLElement, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return within(select).getByRole("option", {
-    name: new RegExp(`^${name}\\b`),
+    name: new RegExp(`^${escaped}\\b`),
   });
 }
 
