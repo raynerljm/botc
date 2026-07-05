@@ -110,13 +110,28 @@
   cursor: pointer;
 }
 
-.confirm,
-.reveal,
 .privacyGuard {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.75rem;
+}
+
+/* Full-screen private reveal (issue #53): fixed over the whole viewport so
+   no other setup-page element (seat list, other tokens, buttons) can show
+   above or behind it while a character is on screen. */
+.reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: var(--background);
+  text-align: center;
 }
 
 .addTraveller {
