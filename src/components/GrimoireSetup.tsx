@@ -102,9 +102,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const [tokenFormOpen, setTokenFormOpen] = useState(false);
   const [tokenCharacterId, setTokenCharacterId] = useState("");
   const [tokenSeat, setTokenSeat] = useState(1);
-  const [pendingRemovePlayerId, setPendingRemovePlayerId] = useState<
-    string | null
-  >(null);
+  const [pendingRemovePlayer, setPendingRemovePlayer] =
+    useState<Player | null>(null);
 
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
@@ -432,15 +431,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   function removePlayer(playerId: string) {
-    setPendingRemovePlayerId(playerId);
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return;
+    setPendingRemovePlayer(player);
   }
 
   function confirmRemovePlayer() {
-    const playerId = pendingRemovePlayerId;
-    setPendingRemovePlayerId(null);
-    if (!playerId) return;
-    const player = game.players.find((p) => p.id === playerId);
+    const player = pendingRemovePlayer;
+    setPendingRemovePlayer(null);
     if (!player) return;
+    const playerId = player.id;
     const remainingPlayers = game.players.filter((p) => p.id !== playerId);
     // Emptying the roster flips setupComplete back to false, which hides
     // the "Add character" form — close it here too, or it would silently
@@ -1098,23 +1098,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <EndGamePanel game={game} onChange={update} />
         </>
       )}
-      {pendingRemovePlayerId &&
-        (() => {
-          const pendingRemovePlayer = game.players.find(
-            (p) => p.id === pendingRemovePlayerId,
-          );
-          if (!pendingRemovePlayer) return null;
-          return (
-            <ConfirmDialog
-              title="Remove player"
-              message={`Remove ${pendingRemovePlayer.name} from the grimoire?`}
-              confirmLabel="Remove"
-              destructive
-              onConfirm={confirmRemovePlayer}
-              onCancel={() => setPendingRemovePlayerId(null)}
-            />
-          );
-        })()}
+      {pendingRemovePlayer && (
+        <ConfirmDialog
+          title="Remove player"
+          message={`Remove ${pendingRemovePlayer.name} from the grimoire?`}
+          confirmLabel="Remove"
+          destructive
+          onConfirm={confirmRemovePlayer}
+          onCancel={() => setPendingRemovePlayer(null)}
+        />
+      )}
     </div>
   );
 }

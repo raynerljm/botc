@@ -569,7 +569,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
 
-    const dialog = screen.getByRole("dialog", { name: /count/i });
+    const dialog = screen.getByRole("alertdialog", { name: /count/i });
     expect(dialog).toHaveTextContent(/Townsfolk.*3 under/i);
     expect(dialog).toHaveTextContent(/Minions.*1 under/i);
     // No navigation has happened yet — the mismatch is only a warning so far.
@@ -588,7 +588,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     );
     await user.click(screen.getByRole("button", { name: /Go back/i }));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
@@ -609,7 +609,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
   });
@@ -631,7 +631,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
   });
@@ -648,7 +648,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     });
     await user.click(continueButton);
 
-    const dialog = screen.getByRole("dialog", { name: /count/i });
+    const dialog = screen.getByRole("alertdialog", { name: /count/i });
     const goBack = within(dialog).getByRole("button", { name: /Go back/i });
     const continueAnyway = within(dialog).getByRole("button", {
       name: /Continue anyway/i,
@@ -667,7 +667,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
 
     await user.click(goBack);
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(document.activeElement).toBe(continueButton);
   });
 });

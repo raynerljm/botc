@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import styles from "./ConfirmDialog.module.css";
 
 export interface ConfirmDialogProps {
   title: string;
-  message: string;
+  // A plain-text body. For a richer body (e.g. a list), pass `children`
+  // instead — the two can be combined, with `children` rendered after.
+  message?: string;
+  children?: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   // Visually marks the confirming action as destructive (e.g. red). Omit
@@ -22,6 +25,7 @@ export interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   message,
+  children,
   confirmLabel,
   cancelLabel = "Cancel",
   destructive = false,
@@ -59,7 +63,14 @@ export function ConfirmDialog({
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      previouslyFocused?.focus();
+      // The trigger can be gone by the time this runs — e.g. confirming
+      // "Delete game" or "Remove player" removes the very row/token that
+      // hosted it in the same commit that unmounts this dialog. Focusing a
+      // detached node is a silent no-op, so only do it when there's
+      // somewhere real to return to.
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
     };
     // Runs once per mount — this component is only ever mounted while the
     // confirmation it represents is open, so there's nothing to re-sync.
@@ -81,7 +92,8 @@ export function ConfirmDialog({
         aria-label={title}
       >
         <h2 className={styles.title}>{title}</h2>
-        <p className={styles.message}>{message}</p>
+        {message && <p className={styles.message}>{message}</p>}
+        {children}
         <div className={styles.actions}>
           <button
             type="button"
