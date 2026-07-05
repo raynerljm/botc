@@ -862,7 +862,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             className={styles.circleLayout}
             hidden={showWalkthrough || screenObscured}
           >
-            <div role="region" aria-label="Grimoire circle">
+            <div
+              role="region"
+              aria-label="Grimoire circle"
+              className={styles.circleArea}
+            >
               <GrimoireBoard
                 players={game.players}
                 characterById={characterById}
@@ -893,8 +897,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 }
               />
             </div>
-            <div className={styles.sidePanels}>
+            <div className={styles.nightListArea}>
               <NightList game={game} characterById={characterById} onChange={update} />
+            </div>
+            <div className={styles.dayPhaseArea}>
               <DayPhase game={game} onChange={update} />
             </div>
           </div>

@@ -1356,6 +1356,22 @@ describe("reminder tokens (issue #14)", () => {
   });
 });
 
+describe("board layout order (issue #58)", () => {
+  it("keeps the grimoire circle before the night list in DOM/tab order, even though CSS visually reorders them on mobile", async () => {
+    const { circle } = await completeSetup();
+
+    const nightListHeading = screen.getByRole("heading", { name: /night list|first night/i });
+    // Node.DOCUMENT_POSITION_FOLLOWING means `circle` comes *before*
+    // nightListHeading in the document — CSS grid areas move the visual
+    // position per breakpoint, but the actual DOM/tab order this asserts
+    // never changes.
+    expect(
+      circle.compareDocumentPosition(nightListHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
+
 describe("post-draw setup walkthrough (issue #26)", () => {
   // Imp (seat 2) is evil, so it's never a valid Fortune Teller red-herring
   // candidate — Chef (seat 3) and Empath (seat 4) are the two good players
