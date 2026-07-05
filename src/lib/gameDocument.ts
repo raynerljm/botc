@@ -6,11 +6,13 @@ import { normalizeCharacterId } from "./scriptParser";
 // gained activeFabled), again for issue #16 (GameDocument gained the
 // night-list fields: night, nightOpen, nightChecked, nightUnskipped,
 // firstNightOrder, otherNightOrder), again for issue #18 (Player gained
-// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), and
-// again for issue #20 (GameDocument gained `nominations`) — a document
-// saved under an older shape must be rejected by gameStorage's version
-// check rather than loaded with any of these fields silently undefined.
-export const GAME_SCHEMA_VERSION = 7;
+// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), again
+// for issue #20 (GameDocument gained `nominations`), and again for issue #26
+// (GameDocument gained the required `setupWalkthroughOffered`/
+// `setupWalkthroughSteps` fields) — a document saved under an older shape
+// must be rejected by gameStorage's version check rather than loaded with
+// any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 8;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -53,6 +55,14 @@ export interface ReminderToken {
   label: string;
   position: PlayerPosition;
 }
+
+// Progress bookkeeping for the post-draw setup walkthrough (issue #26). The
+// decisions themselves (red herring, grandchild, twin, ...) live only as
+// ordinary ReminderTokens — this is just which steps the storyteller has
+// already resolved, keyed by the holding player's id (stable across
+// re-renders since each step is derived fresh from players/characterPool
+// every time). Absence of a key means "not yet visited."
+export type SetupWalkthroughStepStatus = "answered" | "skipped";
 
 // A nomination recorded today (CONTEXT.md: Nomination) — tracked for the
 // current day only, with no history kept once dawn resets it (ADR 0002).
@@ -104,6 +114,13 @@ export interface GameDocument {
   // this app digitizes; reminder tokens are the physical ones storytellers
   // park next to players, but nothing here ties a reminder to a player id).
   reminders: ReminderToken[];
+  // Whether the auto-offer to start the setup walkthrough has already been
+  // shown & resolved once (Start or Decline) — prevents it from popping up
+  // again on every visit to an already-set-up game (issue #26 AC: "declining
+  // it is one tap"). Re-entering the walkthrough later is always available
+  // regardless of this flag.
+  setupWalkthroughOffered: boolean;
+  setupWalkthroughSteps: Record<string, SetupWalkthroughStepStatus>;
   // Undrawn/unassigned tokens, kept separate so a Traveller added later
   // never competes with the official-team draw pool (CONTEXT.md: Bag).
   bag: BagToken[];
@@ -170,6 +187,22 @@ export function circlePosition(index: number, total: number): PlayerPosition {
     x: 50 + radius * Math.cos(angle),
     y: 50 + radius * Math.sin(angle),
   };
+}
+
+// Keeps a token's centre within the pad instead of off the edge. Shared by
+// every place that computes a drop position (GrimoireBoard's drag handling
+// and reminder placement, the setup walkthrough's reminder placement) so the
+// pad's usable bounds are defined once.
+export function clampPct(value: number): number {
+  return Math.min(96, Math.max(4, value));
+}
+
+// A reminder parked beside a player (rather than dragged to an exact spot)
+// lands a little to the right of them — the convention for "the storyteller
+// parks it next to players" (issue #14 AC), reused wherever a reminder is
+// placed programmatically rather than dropped by hand.
+export function parkBeside(position: PlayerPosition): PlayerPosition {
+  return { x: clampPct(position.x + 5), y: clampPct(position.y) };
 }
 
 // The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so
@@ -354,6 +387,8 @@ export function createGame({
     scriptName,
     players,
     reminders: [],
+    setupWalkthroughOffered: false,
+    setupWalkthroughSteps: {},
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,

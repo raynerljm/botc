@@ -136,6 +136,17 @@
   color: var(--accent);
 }
 
+.walkthroughOffer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
 .circleLayout {
   display: flex;
   flex-direction: column;

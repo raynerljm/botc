@@ -410,6 +410,20 @@ describe("createGame", () => {
     expect(game.reminders).toEqual([]);
   });
 
+  it("starts the setup walkthrough un-offered and with no steps resolved (issue #26)", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.setupWalkthroughOffered).toBe(false);
+    expect(game.setupWalkthroughSteps).toEqual({});
+  });
+
   it("puts the built bag tokens on the game document", () => {
     const game = createGame({
       scriptId: "tb",

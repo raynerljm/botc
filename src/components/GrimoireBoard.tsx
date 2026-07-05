@@ -20,7 +20,9 @@ import {
 } from "@/lib/characters";
 import {
   circlePosition,
+  clampPct,
   DRUNK_ID,
+  parkBeside,
   type Player,
   type PlayerPosition,
   type ReminderToken,
@@ -65,6 +67,9 @@ export interface GrimoireBoardProps {
   onAddFabled: (characterId: string) => void;
   onRemoveFabled: (characterId: string) => void;
   onSetClaim: (playerId: string, characterId: string | null) => void;
+  // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
+  // when there's nothing for it to show, so no button renders.
+  onOpenSetupWalkthrough?: () => void;
 }
 
 const MIN_TOKEN_REM = 1.9;
@@ -78,11 +83,6 @@ function tokenSizeRem(total: number): number {
   const clamped = Math.min(MAX_TOKEN_COUNT, Math.max(MIN_TOKEN_COUNT, total));
   const t = (clamped - MIN_TOKEN_COUNT) / (MAX_TOKEN_COUNT - MIN_TOKEN_COUNT);
   return MAX_TOKEN_REM - t * (MAX_TOKEN_REM - MIN_TOKEN_REM);
-}
-
-// Keeps a dragged token's centre within the pad instead of off the edge.
-function clampPct(value: number): number {
-  return Math.min(96, Math.max(4, value));
 }
 
 // A real finger drag always moves a few pixels before settling — without a
@@ -107,7 +107,7 @@ interface DragState {
 // storyteller parks it next to players" means for a freshly-added token.
 function reminderDropPosition(base: PlayerPosition | null): PlayerPosition {
   if (!base) return { x: 50, y: 50 };
-  return { x: clampPct(base.x + 5), y: clampPct(base.y) };
+  return parkBeside(base);
 }
 
 export function GrimoireBoard({
@@ -135,6 +135,7 @@ export function GrimoireBoard({
   onAddFabled,
   onRemoveFabled,
   onSetClaim,
+  onOpenSetupWalkthrough,
 }: GrimoireBoardProps) {
   const claimById = useMemo(
     () => new Map(claimOptions.map((c) => [c.id, c] as const)),
@@ -397,6 +398,11 @@ export function GrimoireBoard({
             onClick={() => setActiveOverlay({ type: "infoTokens" })}
           >
             Info tokens
+          </button>
+        )}
+        {!hidden && !activeOverlay && onOpenSetupWalkthrough && (
+          <button type="button" onClick={onOpenSetupWalkthrough}>
+            Setup walkthrough
           </button>
         )}
       </div>

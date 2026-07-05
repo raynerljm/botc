@@ -118,6 +118,7 @@ function renderBoard(
       claimOptions?: typeof claimOptions;
       nominatorTodayIds?: ReadonlySet<string>;
       nomineeTodayIds?: ReadonlySet<string>;
+      onOpenSetupWalkthrough?: () => void;
     }
   > = {},
 ) {
@@ -808,6 +809,47 @@ describe("reminders (issue #14)", () => {
 
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+  });
+});
+
+describe("setup walkthrough reopen button (issue #26)", () => {
+  it("renders the button when a handler is provided", () => {
+    renderBoard([makePlayer()], { onOpenSetupWalkthrough: vi.fn() });
+
+    expect(
+      screen.getByRole("button", { name: "Setup walkthrough" }),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the button entirely when there's nothing for it to reopen", () => {
+    renderBoard([makePlayer()]);
+
+    expect(
+      screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls the handler on click", async () => {
+    const user = userEvent.setup();
+    const onOpenSetupWalkthrough = vi.fn();
+    renderBoard([makePlayer()], { onOpenSetupWalkthrough });
+
+    await user.click(screen.getByRole("button", { name: "Setup walkthrough" }));
+    expect(onOpenSetupWalkthrough).toHaveBeenCalled();
+  });
+
+  it("hides while the reminder picker is open (code review: matches 'Add reminder's own guard)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()], {
+      onOpenSetupWalkthrough: vi.fn(),
+    });
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
   });
 });
 
