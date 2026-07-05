@@ -932,3 +932,48 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders).toHaveLength(1);
   });
 });
+
+describe("removing a player scrubs today's nominations (issue #20)", () => {
+  it("drops a nomination referencing the removed player as nominator or nominee, and removes them as a voter elsewhere", async () => {
+    const user = userEvent.setup();
+    const built = makeGame({
+      playerCount: 3,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        getCharacter("empath")!,
+      ],
+    });
+    const characterIds = ["washerwoman", "imp", "empath"];
+    const assignedPlayers = built.players.map((p, i) => ({
+      ...p,
+      characterId: characterIds[i],
+    }));
+    const [p1, p2, p3] = assignedPlayers;
+    const game: GameDocument = {
+      ...built,
+      players: assignedPlayers,
+      night: 1,
+      nominations: [
+        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, voterIds: [p3.id] },
+        { id: "n2", nominatorId: p3.id, nomineeId: p1.id, voterIds: [p2.id] },
+      ],
+    };
+    render(<GrimoireSetup game={game} />);
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
+    await user.click(within(seat2Wrap).getByText(p2.name));
+    await user.click(within(seat2Wrap).getByRole("button", { name: /remove player/i }));
+    confirmSpy.mockRestore();
+
+    const reloaded = loadGame() as GameDocument;
+    // n1 nominated the removed player (p2) — dropped entirely.
+    expect(reloaded.nominations.find((n) => n.id === "n1")).toBeUndefined();
+    // n2 didn't involve p2 as nominator/nominee, but p2 voted on it — the
+    // nomination survives with that stale voter scrubbed out.
+    const n2 = reloaded.nominations.find((n) => n.id === "n2");
+    expect(n2?.voterIds).toEqual([]);
+  });
+});

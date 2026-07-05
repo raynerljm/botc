@@ -71,6 +71,23 @@ describe("Night list: starting and ending a night", () => {
     expect(latest.nightUnskipped).toEqual([]);
   });
 
+  it("clears the day just ending's nominations when the next night starts, so token badges don't linger overnight", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nightOpen: false,
+      nominations: [{ id: "n1", nominatorId: "p1", nomineeId: "p2", voterIds: [] }],
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start Night 2" }));
+
+    expect(latest.nominations).toEqual([]);
+  });
+
   it("increments the night counter and closes the night when ended", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });

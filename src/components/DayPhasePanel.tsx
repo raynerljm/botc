@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import {
   computeBlock,
   hasBeenNominatedToday,
   hasNominatedToday,
+  isDayOpen,
   nominationTally,
   nominationThreshold,
 } from "@/lib/dayPhase";
@@ -27,11 +28,16 @@ export function DayPhasePanel({ game, onRecordNomination, onToggleVote }: DayPha
   const [nominatorId, setNominatorId] = useState("");
   const [nomineeId, setNomineeId] = useState("");
 
-  const isDayOpen = !game.nightOpen && game.night > 0;
-  if (!isDayOpen) return null;
+  const sorted = useMemo(
+    () => [...game.players].sort((a, b) => a.seat - b.seat),
+    [game.players],
+  );
+  const block = useMemo(
+    () => computeBlock(game.nominations, game.players),
+    [game.nominations, game.players],
+  );
 
-  const sorted = [...game.players].sort((a, b) => a.seat - b.seat);
-  const block = computeBlock(game.nominations, game.players);
+  if (!isDayOpen(game)) return null;
 
   function submitNomination(event: FormEvent) {
     event.preventDefault();

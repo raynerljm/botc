@@ -1,4 +1,11 @@
-import type { Nomination, Player } from "./gameDocument";
+import type { GameDocument, Nomination, Player } from "./gameDocument";
+
+// The day following night N (CONTEXT.md: Nomination). There's no separate
+// "start day" step — a night ending *is* dawn, so the day is simply
+// whatever night just finished, open until the next night starts.
+export function isDayOpen(game: GameDocument): boolean {
+  return !game.nightOpen && game.night > 0;
+}
 
 // The living (non-dead) player count — the denominator for an execution
 // nomination's threshold (CONTEXT.md: Nomination).
@@ -68,11 +75,41 @@ export function applyVoteToggle(
   const nominee = players.find((p) => p.id === nomination.nomineeId);
   const spendsGhostVote = Boolean(voter?.dead) && !nominee?.isTraveller;
 
+  // A mistaken uncheck on *this* nomination must not erase a ghost vote the
+  // player has genuinely spent by still actively voting (on an execution) in
+  // another nomination recorded today — un-spend only once no such vote
+  // remains.
+  const stillVotingElsewhere = nextNominations.some((n) => {
+    if (n.id === nominationId || !n.voterIds.includes(playerId)) return false;
+    const otherNominee = players.find((p) => p.id === n.nomineeId);
+    return !otherNominee?.isTraveller;
+  });
+  const nextGhostVoteSpent = voting || stillVotingElsewhere;
+
   const nextPlayers = spendsGhostVote
-    ? players.map((p) => (p.id === playerId ? { ...p, ghostVoteSpent: voting } : p))
+    ? players.map((p) =>
+        p.id === playerId ? { ...p, ghostVoteSpent: nextGhostVoteSpent } : p,
+      )
     : players;
 
   return { nominations: nextNominations, players: nextPlayers };
+}
+
+// A removed player can't stay nominator, nominee, or voter — dropping the
+// nomination outright when they were nominator/nominee avoids a dangling
+// reference that would corrupt threshold/tally/block math for the rest of
+// the day (issue #20: removePlayer must scrub game.nominations).
+export function withoutPlayerFromNominations(
+  nominations: Nomination[],
+  playerId: string,
+): Nomination[] {
+  return nominations
+    .filter((n) => n.nominatorId !== playerId && n.nomineeId !== playerId)
+    .map((n) =>
+      n.voterIds.includes(playerId)
+        ? { ...n, voterIds: n.voterIds.filter((id) => id !== playerId) }
+        : n,
+    );
 }
 
 export interface BlockState {

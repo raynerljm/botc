@@ -8,7 +8,7 @@ import {
   SEAT_HOLDING_TEAMS,
   type Character,
 } from "@/lib/characters";
-import { applyVoteToggle } from "@/lib/dayPhase";
+import { applyVoteToggle, withoutPlayerFromNominations } from "@/lib/dayPhase";
 import {
   DRUNK_ID,
   insertAtSeat,
@@ -272,6 +272,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({
       ...game,
       players: game.players.filter((p) => p.id !== playerId),
+      nominations: withoutPlayerFromNominations(game.nominations, playerId),
     });
   }
 

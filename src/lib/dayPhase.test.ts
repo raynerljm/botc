@@ -12,8 +12,10 @@ import {
   computeBlock,
   hasBeenNominatedToday,
   hasNominatedToday,
+  isDayOpen,
   nominationTally,
   nominationThreshold,
+  withoutPlayerFromNominations,
 } from "./dayPhase";
 
 function nomination(overrides: Partial<Nomination> = {}): Nomination {
@@ -264,11 +266,73 @@ describe("applyVoteToggle", () => {
     expect(voted.players.find((p) => p.id === carol.id)?.ghostVoteSpent).toBe(false);
   });
 
+  it("doesn't un-spend a dead player's ghost vote if they're still voting on another nomination today", () => {
+    const players = game.players.map((p) => (p.id === carol.id ? { ...p, dead: true } : p));
+    const nominations = [
+      nomination({ id: "n1", nomineeId: bob.id, voterIds: [] }),
+      nomination({ id: "n2", nomineeId: alice.id, voterIds: [] }),
+    ];
+
+    // Carol votes on both nominations today — only the first vote actually
+    // spends her one ghost vote.
+    const votedN1 = applyVoteToggle(nominations, players, "n1", carol.id);
+    const votedBoth = applyVoteToggle(votedN1.nominations, votedN1.players, "n2", carol.id);
+    expect(votedBoth.players.find((p) => p.id === carol.id)?.ghostVoteSpent).toBe(true);
+
+    // Un-checking her mistaken vote on n1 must not erase that she's still
+    // actively voting (and has spent her ghost vote) on n2.
+    const undoneN1 = applyVoteToggle(votedBoth.nominations, votedBoth.players, "n1", carol.id);
+    expect(undoneN1.nominations.find((n) => n.id === "n1")?.voterIds).toEqual([]);
+    expect(undoneN1.players.find((p) => p.id === carol.id)?.ghostVoteSpent).toBe(true);
+
+    // Only un-checking her from every nomination today un-spends it.
+    const undoneBoth = applyVoteToggle(undoneN1.nominations, undoneN1.players, "n2", carol.id);
+    expect(undoneBoth.players.find((p) => p.id === carol.id)?.ghostVoteSpent).toBe(false);
+  });
+
   it("is a no-op for an unknown nomination id", () => {
     const nominations = [nomination({ id: "n1", nomineeId: bob.id, voterIds: [] })];
     const result = applyVoteToggle(nominations, game.players, "unknown", alice.id);
     expect(result.nominations).toBe(nominations);
     expect(result.players).toBe(game.players);
+  });
+});
+
+describe("isDayOpen", () => {
+  it("is false before any night has ever ended", () => {
+    expect(isDayOpen(gameWith(["washerwoman", "imp"], { night: 0, nightOpen: false }))).toBe(
+      false,
+    );
+  });
+
+  it("is false while a night is open", () => {
+    expect(isDayOpen(gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true }))).toBe(
+      false,
+    );
+  });
+
+  it("is true once a night has ended and no new night has started", () => {
+    expect(isDayOpen(gameWith(["washerwoman", "imp"], { night: 1, nightOpen: false }))).toBe(
+      true,
+    );
+  });
+});
+
+describe("withoutPlayerFromNominations", () => {
+  it("drops any nomination where the removed player was nominator or nominee", () => {
+    const nominations = [
+      nomination({ id: "n1", nominatorId: "p1", nomineeId: "p2" }),
+      nomination({ id: "n2", nominatorId: "p3", nomineeId: "p1" }),
+      nomination({ id: "n3", nominatorId: "p3", nomineeId: "p4" }),
+    ];
+    expect(withoutPlayerFromNominations(nominations, "p1").map((n) => n.id)).toEqual(["n3"]);
+  });
+
+  it("removes the player from remaining nominations' voter lists", () => {
+    const nominations = [
+      nomination({ id: "n1", nominatorId: "p3", nomineeId: "p4", voterIds: ["p1", "p5"] }),
+    ];
+    expect(withoutPlayerFromNominations(nominations, "p1")[0].voterIds).toEqual(["p5"]);
   });
 });
 

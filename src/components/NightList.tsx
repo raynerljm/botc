@@ -31,7 +31,17 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   const phase = phaseForNight(nightNumber);
 
   function startNight() {
-    onChange({ ...game, nightOpen: true, nightChecked: [], nightUnskipped: [] });
+    onChange({
+      ...game,
+      nightOpen: true,
+      nightChecked: [],
+      nightUnskipped: [],
+      // The day that's ending is over — its nominations shouldn't linger as
+      // stale token badges through the night that's about to start (issue
+      // #20). The dawn reset in endNight covers the *next* day's fresh
+      // start; this covers the day that just ended.
+      nominations: [],
+    });
   }
 
   function endNight() {
