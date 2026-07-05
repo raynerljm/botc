@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,6 +46,10 @@ beforeEach(() => {
 
 afterEach(() => {
   clearGames();
+  // A failed assertion between useFakeTimers()/useRealTimers() would otherwise
+  // leave fake timers active for every later test, hanging userEvent (which
+  // relies on real timers) until the test runner's timeout.
+  vi.useRealTimers();
 });
 
 describe("GamesList", () => {
@@ -70,6 +74,72 @@ describe("GamesList", () => {
     expect(within(ended).getByText(/good won/i)).toBeInTheDocument();
     const inProgress = screen.getByText("Trouble Brewing").closest("li")!;
     expect(within(inProgress).getByText(/in progress/i)).toBeInTheDocument();
+  });
+
+  it("shows each game's SGT start time and elapsed time since start", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T02:15:00.000Z"));
+    saveGame(makeGame("Trouble Brewing"));
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Trouble Brewing").closest("li")!;
+    expect(
+      within(row).getByText(/started 4 jul, 08:00 sgt/i),
+    ).toBeInTheDocument();
+    expect(within(row).getByText(/elapsed 2h 15m/i)).toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it("shows an ended game's total duration instead of elapsed time", () => {
+    saveGame(
+      makeGame("Sects & Violets", {
+        winner: "good",
+        endedAt: "2026-07-04T02:00:00.000Z",
+      }),
+    );
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Sects & Violets").closest("li")!;
+    expect(
+      within(row).getByText(/started 4 jul, 08:00 sgt/i),
+    ).toBeInTheDocument();
+    expect(within(row).getByText(/lasted 2h 0m/i)).toBeInTheDocument();
+  });
+
+  it("doesn't run a refresh timer when every game has ended", () => {
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    saveGame(
+      makeGame("Sects & Violets", {
+        winner: "good",
+        endedAt: "2026-07-04T02:00:00.000Z",
+      }),
+    );
+
+    render(<GamesList />);
+
+    // 30_000 is GamesList's own elapsed-refresh interval (kept in sync with
+    // its ELAPSED_REFRESH_MS constant) — other calls are React/jsdom internals.
+    expect(setIntervalSpy).not.toHaveBeenCalledWith(expect.any(Function), 30_000);
+  });
+
+  it("keeps the elapsed time fresh while the list stays open", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T00:00:00.000Z"));
+    saveGame(makeGame("Trouble Brewing"));
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Trouble Brewing").closest("li")!;
+    expect(within(row).getByText(/elapsed 0m/i)).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(31 * 60 * 1000);
+    });
+
+    expect(within(row).getByText(/elapsed 31m/i)).toBeInTheDocument();
   });
 
   it("resumes a game: makes it active and navigates to the grimoire", async () => {
