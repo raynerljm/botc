@@ -75,6 +75,19 @@ function isGoodPlayer(player: Player, characterById: Map<string, Character>): bo
   return character?.team === "townsfolk" || character?.team === "outsider";
 }
 
+// The storyteller already knows every player's assigned character, so
+// showing it alongside their name (issue #56) makes a player-pick faster
+// and less error-prone than matching bare names to seats by memory.
+function playerOptionLabel(
+  player: Player,
+  characterById: Map<string, Character>,
+): string {
+  const character = player.characterId
+    ? characterById.get(player.characterId)
+    : undefined;
+  return character ? `${player.name} — ${character.name}` : player.name;
+}
+
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
   const [showAll, setShowAll] = useState(false);
   const scripted = characterPool.filter((c) => c.team === team);
@@ -164,6 +177,7 @@ function StepPanel({
           {step.kind === "playerPick" && (
             <PlayerPickControls
               otherPlayers={goodOtherPlayers}
+              characterById={characterById}
               onConfirm={(playerId) =>
                 resolve("answered", [
                   {
@@ -181,6 +195,7 @@ function StepPanel({
               step={step}
               otherPlayers={otherPlayers}
               characterPool={characterPool}
+              characterById={characterById}
               onConfirm={(character, truePlayerId, falsePlayerId) =>
                 resolve("answered", [
                   {
@@ -302,9 +317,11 @@ function StepPanel({
 
 function PlayerPickControls({
   otherPlayers,
+  characterById,
   onConfirm,
 }: {
   otherPlayers: Player[];
+  characterById: Map<string, Character>;
   onConfirm: (playerId: string) => void;
 }) {
   const [playerId, setPlayerId] = useState("");
@@ -316,7 +333,7 @@ function PlayerPickControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -355,11 +372,13 @@ function CharacterAndTwoPlayersControls({
   step,
   otherPlayers,
   characterPool,
+  characterById,
   onConfirm,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "characterAndTwoPlayers" }>;
   otherPlayers: Player[];
   characterPool: Character[];
+  characterById: Map<string, Character>;
   onConfirm: (
     character: Character,
     truePlayerId: string,
@@ -416,7 +435,7 @@ function CharacterAndTwoPlayersControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
@@ -430,7 +449,7 @@ function CharacterAndTwoPlayersControls({
           <option value="">Choose a player…</option>
           {otherPlayers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {playerOptionLabel(p, characterById)}
             </option>
           ))}
         </select>
