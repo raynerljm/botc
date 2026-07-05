@@ -220,6 +220,27 @@ export function clampPct(value: number): number {
   return Math.min(96, Math.max(4, value));
 }
 
+// A player's current live position — their explicit dragged position if
+// set, otherwise their computed circle slot. Shared by every place outside
+// the main board render loop that needs one seat's position (attaching or
+// detaching a reminder, the setup walkthrough's reminder placement) so the
+// "circle index needs seats sorted by seat number" rule lives in one place
+// instead of being re-derived at each call site (code review finding).
+export function livePlayerPosition(
+  playerId: string,
+  players: Player[],
+): PlayerPosition {
+  const player = players.find((p) => p.id === playerId);
+  const sorted = [...players].sort((a, b) => a.seat - b.seat);
+  return (
+    player?.position ??
+    circlePosition(
+      sorted.findIndex((p) => p.id === playerId),
+      sorted.length,
+    )
+  );
+}
+
 // A reminder parked beside a player (rather than dragged to an exact spot)
 // lands a little to the right of them — the convention for "the storyteller
 // parks it next to players" (issue #14 AC), reused wherever a reminder is
@@ -233,34 +254,60 @@ export function parkBeside(position: PlayerPosition): PlayerPosition {
 // top of each other) — a golden-angle spiral out from the pad's centre, so
 // the first reminder still lands dead centre (matching every prior
 // behaviour/test) but each one after it lands at a distinct, increasingly
-// spread-out point instead of piling on the same spot.
+// spread-out point instead of piling on the same spot. Takes the *actual*
+// positions still on the pad (not a count) and walks the spiral until it
+// finds a point clear of all of them — indexing by a plain count of
+// currently-unanchored reminders would replay an earlier spiral point once
+// attaching, detaching, or removing one shrinks that count back down,
+// landing a new reminder squarely on an existing one (code review finding).
 const PAD_SPIRAL_RADIUS_STEP = 8;
 const PAD_SPIRAL_GOLDEN_ANGLE_DEG = 137.5;
+const PAD_SPIRAL_MIN_SEPARATION_PCT = 6;
 
-export function nextPadReminderPosition(existingCount: number): PlayerPosition {
-  if (existingCount <= 0) return { x: 50, y: 50 };
-  const angle = (existingCount * PAD_SPIRAL_GOLDEN_ANGLE_DEG * Math.PI) / 180;
-  const radius = PAD_SPIRAL_RADIUS_STEP * Math.sqrt(existingCount);
+function padSpiralPoint(index: number): PlayerPosition {
+  if (index <= 0) return { x: 50, y: 50 };
+  const angle = (index * PAD_SPIRAL_GOLDEN_ANGLE_DEG * Math.PI) / 180;
+  const radius = PAD_SPIRAL_RADIUS_STEP * Math.sqrt(index);
   return {
     x: clampPct(50 + radius * Math.cos(angle)),
     y: clampPct(50 + radius * Math.sin(angle)),
   };
 }
 
+export function nextPadReminderPosition(
+  existingPositions: PlayerPosition[],
+): PlayerPosition {
+  for (let index = 0; index < 1000; index++) {
+    const candidate = padSpiralPoint(index);
+    const collides = existingPositions.some(
+      (p) =>
+        Math.hypot(p.x - candidate.x, p.y - candidate.y) <
+        PAD_SPIRAL_MIN_SEPARATION_PCT,
+    );
+    if (!collides) return candidate;
+  }
+  return padSpiralPoint(existingPositions.length);
+}
+
 // Where a reminder anchored to a seat renders (issue #71): stacked straight
 // below that seat's own token+name block rather than beside it, so it never
 // covers the name label or intercepts a tap meant for the seat (AC), and a
 // second/third reminder on the same seat stacks further down instead of
-// overlapping the first.
+// overlapping the first. A small per-sibling horizontal fan rides along with
+// the vertical stacking so seats near the bottom of the circle — where the
+// vertical offset clamps to the pad's edge for every sibling alike — still
+// separate them instead of collapsing onto the same clamped point (code
+// review finding).
 const ANCHOR_OFFSET_Y = 12;
 const ANCHOR_STACK_STEP_Y = 6;
+const ANCHOR_STACK_STEP_X = 3;
 
 export function anchoredReminderPosition(
   anchorPosition: PlayerPosition,
   siblingIndex: number,
 ): PlayerPosition {
   return {
-    x: clampPct(anchorPosition.x),
+    x: clampPct(anchorPosition.x + siblingIndex * ANCHOR_STACK_STEP_X),
     y: clampPct(anchorPosition.y + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y),
   };
 }

@@ -4,9 +4,9 @@ import { useState } from "react";
 
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
-  circlePosition,
   DRUNK_ID,
   heldCharacterIds,
+  livePlayerPosition,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -54,15 +54,7 @@ export interface SetupWalkthroughProps {
 // "parked beside them" convention GrimoireBoard uses when a reminder is
 // added from a player's own token menu.
 function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
-  const player = players.find((p) => p.id === playerId);
-  const sorted = [...players].sort((a, b) => a.seat - b.seat);
-  const base =
-    player?.position ??
-    circlePosition(
-      sorted.findIndex((p) => p.id === playerId),
-      sorted.length,
-    );
-  return parkBeside(base);
+  return parkBeside(livePlayerPosition(playerId, players));
 }
 
 function characterOf(

@@ -229,28 +229,37 @@ export function GrimoireBoard({
   // anchored reminder needs the exact same live position (including any
   // in-progress drag preview) its seat is rendering at, not a second,
   // possibly-stale computation of its own.
+  // Narrowed to only the player-drag preview (not the raw `liveDrag`, which
+  // gets a new object identity every pointermove of *any* drag, reminders
+  // included) so dragging a reminder doesn't force a full seat-position
+  // Map rebuild every frame for positions that haven't actually changed.
+  const livePlayerDrag = liveDrag?.kind === "player" ? liveDrag : null;
   const positionByPlayerId = useMemo(() => {
     const map = new Map<string, PlayerPosition>();
     sorted.forEach((player, index) => {
       map.set(
         player.id,
-        liveDrag?.kind === "player" && liveDrag.id === player.id
-          ? liveDrag.position
+        livePlayerDrag?.id === player.id
+          ? livePlayerDrag.position
           : (player.position ?? circlePosition(index, total)),
       );
     });
     return map;
-  }, [sorted, total, liveDrag]);
-  // Stable per-seat order of the reminders anchored to it, so several
+  }, [sorted, total, livePlayerDrag]);
+  // Stable per-seat stack order of the reminders anchored to it, so several
   // reminders on one seat stack in a consistent order instead of jittering
   // as other unrelated reminders are added/removed elsewhere on the board.
-  const anchoredReminderIdsByPlayerId = useMemo(() => {
-    const map = new Map<string, string[]>();
+  // Keyed by reminder id and storing the index directly (rather than a
+  // per-seat array the render loop would have to .indexOf() into) keeps the
+  // per-reminder lookup below O(1) instead of O(reminders on that seat).
+  const reminderStackIndexById = useMemo(() => {
+    const nextIndexByPlayerId = new Map<string, number>();
+    const map = new Map<string, number>();
     for (const reminder of reminders) {
       if (!reminder.anchorPlayerId) continue;
-      const ids = map.get(reminder.anchorPlayerId) ?? [];
-      ids.push(reminder.id);
-      map.set(reminder.anchorPlayerId, ids);
+      const index = nextIndexByPlayerId.get(reminder.anchorPlayerId) ?? 0;
+      map.set(reminder.id, index);
+      nextIndexByPlayerId.set(reminder.anchorPlayerId, index + 1);
     }
     return map;
   }, [reminders]);
@@ -309,6 +318,13 @@ export function GrimoireBoard({
       justDraggedRef.current = `${drag.kind}:${drag.id}`;
       if (drag.kind === "player") onMove(drag.id, drag.lastPosition);
       else onMoveReminder(drag.id, drag.lastPosition);
+      // Manually dragging the very reminder armed for tap-to-place is the
+      // storyteller changing their mind about how to position it — leaving
+      // placement armed would make the very next seat tap silently re-attach
+      // it somewhere else (code review finding).
+      if (drag.kind === "reminder" && placingReminderId === drag.id) {
+        setPlacingReminderId(null);
+      }
     }
     dragRef.current = null;
     setLiveDrag(null);
@@ -325,6 +341,10 @@ export function GrimoireBoard({
   // click still fires, so it has to be swallowed once or every drag would
   // also pop the menu open. While a reminder is being placed (tap-to-place),
   // a tap on a seat attaches it there instead of opening that seat's menu.
+  // These two are mutually exclusive: a click that's the tail end of a real
+  // drag must never also be read as a placement tap, or repositioning an
+  // unrelated seat while a reminder is armed for placement would silently
+  // attach it to whatever seat was just dragged (code review finding).
   function handleSummaryClick(
     event: React.MouseEvent<HTMLElement>,
     kind: TokenKind,
@@ -333,6 +353,7 @@ export function GrimoireBoard({
     if (justDraggedRef.current === `${kind}:${id}`) {
       event.preventDefault();
       justDraggedRef.current = null;
+      return;
     }
     if (placingReminderId && kind === "player") {
       event.preventDefault();
@@ -347,7 +368,7 @@ export function GrimoireBoard({
     const position = base
       ? parkBeside(base)
       : nextPadReminderPosition(
-          reminders.filter((r) => r.anchorPlayerId === null).length,
+          reminders.filter((r) => r.anchorPlayerId === null).map((r) => r.position),
         );
     onAddReminder({ ...input, position, anchorPlayerId });
     setActiveOverlay(null);
@@ -356,6 +377,11 @@ export function GrimoireBoard({
   function handleRemoveReminder(reminder: ReminderToken) {
     onRemoveReminder(reminder.id);
     setRemovedReminder(reminder);
+    // A reminder removed while it's the one armed for tap-to-place must also
+    // clear that placement state — otherwise the "Tap a seat to attach"
+    // banner keeps showing and the next seat tap silently no-ops against a
+    // reminder id that no longer exists (code review finding).
+    if (placingReminderId === reminder.id) setPlacingReminderId(null);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     undoTimeoutRef.current = setTimeout(() => setRemovedReminder(null), 6000);
   }
@@ -760,11 +786,7 @@ export function GrimoireBoard({
             const anchorSeatPosition = reminder.anchorPlayerId
               ? positionByPlayerId.get(reminder.anchorPlayerId)
               : undefined;
-            const siblingIndex = reminder.anchorPlayerId
-              ? (anchoredReminderIdsByPlayerId
-                  .get(reminder.anchorPlayerId)
-                  ?.indexOf(reminder.id) ?? 0)
-              : 0;
+            const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
             const restingPosition = anchorSeatPosition
               ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
               : reminder.position;
@@ -778,7 +800,6 @@ export function GrimoireBoard({
                 key={reminder.id}
                 className={styles.reminderWrap}
                 data-reminder-id={reminder.id}
-                data-anchor-player-id={reminder.anchorPlayerId ?? undefined}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details className={styles.menu}>

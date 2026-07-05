@@ -10,9 +10,10 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
-  circlePosition,
+  anchoredReminderPosition,
   DRUNK_ID,
   insertAtSeat,
+  livePlayerPosition,
   parkBeside,
   shuffleTokens,
   withRestoredReminder,
@@ -281,15 +282,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // without a drag gesture") — parks the reminder beside the chosen seat's
   // current position and remembers the seat so it keeps tracking it.
   function attachReminder(reminderId: string, playerId: string) {
-    const player = game.players.find((p) => p.id === playerId);
-    if (!player) return;
-    const sorted = [...game.players].sort((a, b) => a.seat - b.seat);
-    const base =
-      player.position ??
-      circlePosition(
-        sorted.findIndex((p) => p.id === playerId),
-        sorted.length,
-      );
+    if (!game.players.some((p) => p.id === playerId)) return;
+    const base = livePlayerPosition(playerId, game.players);
     update({
       ...game,
       reminders: game.reminders.map((r) =>
@@ -423,9 +417,29 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     // reappear pre-filled the moment a new player (e.g. a traveller)
     // brings setupComplete back to true, with no click to explain it.
     if (remainingPlayers.length === 0) setTokenFormOpen(false);
+
+    // A reminder anchored to the removed seat would otherwise keep pointing
+    // at a player id that no longer exists — forever excluded from the
+    // pad-spiral spread's "unanchored" count, and falling back to a stale
+    // attach-time position instead of where the seat was actually last seen
+    // (code review finding). Resolve it to that live position and detach it,
+    // the same way a manual drag detaches a reminder from its anchor.
+    const removedPosition = livePlayerPosition(playerId, game.players);
+    const anchoredHere = game.reminders.filter((r) => r.anchorPlayerId === playerId);
+    const reminders = game.reminders.map((r) => {
+      if (r.anchorPlayerId !== playerId) return r;
+      const siblingIndex = anchoredHere.findIndex((sibling) => sibling.id === r.id);
+      return {
+        ...r,
+        anchorPlayerId: null,
+        position: anchoredReminderPosition(removedPosition, siblingIndex),
+      };
+    });
+
     update({
       ...game,
       players: remainingPlayers,
+      reminders,
       // A removed player's recorded vote must not go on counting toward a
       // nomination's tally forever (issue #20).
       nominations: game.nominations.map((n) => ({

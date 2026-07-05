@@ -141,23 +141,41 @@ describe("circlePosition", () => {
 
 describe("nextPadReminderPosition (issue #71)", () => {
   it("puts the first reminder dead centre, matching prior default-position behavior", () => {
-    expect(nextPadReminderPosition(0)).toEqual({ x: 50, y: 50 });
+    expect(nextPadReminderPosition([])).toEqual({ x: 50, y: 50 });
   });
 
   it("spreads each later reminder to a distinct point, never stacking on centre or on each other", () => {
-    const positions = [0, 1, 2, 3, 4].map((count) => nextPadReminderPosition(count));
+    const positions: { x: number; y: number }[] = [];
+    for (let i = 0; i < 5; i++) {
+      positions.push(nextPadReminderPosition(positions));
+    }
     const dedup = new Set(positions.map((p) => `${p.x},${p.y}`));
     expect(dedup.size).toBe(positions.length);
   });
 
   it("keeps every position within the pad's clamped bounds", () => {
-    for (let count = 0; count < 30; count++) {
-      const { x, y } = nextPadReminderPosition(count);
-      expect(x).toBeGreaterThanOrEqual(4);
-      expect(x).toBeLessThanOrEqual(96);
-      expect(y).toBeGreaterThanOrEqual(4);
-      expect(y).toBeLessThanOrEqual(96);
+    const positions: { x: number; y: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const next = nextPadReminderPosition(positions);
+      expect(next.x).toBeGreaterThanOrEqual(4);
+      expect(next.x).toBeLessThanOrEqual(96);
+      expect(next.y).toBeGreaterThanOrEqual(4);
+      expect(next.y).toBeLessThanOrEqual(96);
+      positions.push(next);
     }
+  });
+
+  it("doesn't replay an earlier spiral point once the set of existing reminders shrinks (code review finding)", () => {
+    // Add three, then simulate the middle one being attached/removed (drops
+    // out of the "existing free reminders" set) — a count-based index would
+    // hand the next add the exact spot the still-present third one occupies.
+    const first = nextPadReminderPosition([]);
+    const second = nextPadReminderPosition([first]);
+    const third = nextPadReminderPosition([first, second]);
+    const afterSecondLeaves = nextPadReminderPosition([first, third]);
+
+    expect(afterSecondLeaves).not.toEqual(first);
+    expect(afterSecondLeaves).not.toEqual(third);
   });
 });
 
@@ -177,6 +195,14 @@ describe("anchoredReminderPosition (issue #71)", () => {
   it("clamps within the pad's bounds for a seat near the bottom edge", () => {
     const position = anchoredReminderPosition({ x: 50, y: 94 }, 0);
     expect(position.y).toBeLessThanOrEqual(96);
+  });
+
+  it("separates siblings by x when a near-bottom seat clamps every sibling's y to the same edge (code review finding)", () => {
+    const first = anchoredReminderPosition({ x: 50, y: 94 }, 0);
+    const second = anchoredReminderPosition({ x: 50, y: 94 }, 1);
+    expect(first.y).toBe(96);
+    expect(second.y).toBe(96);
+    expect(second.x).not.toBe(first.x);
   });
 });
 

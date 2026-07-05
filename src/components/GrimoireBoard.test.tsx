@@ -1011,6 +1011,82 @@ describe("reminder placement (issue #71)", () => {
       within(controls).queryByRole("button", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
   });
+
+  it("doesn't attach the armed reminder to an unrelated seat that was just dragged, not tapped (code review finding)", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { container, onAttachReminder } = renderBoard(
+      [makePlayer({ id: "p1", name: "Alice", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+
+    fireEvent.click(
+      (container.querySelector("[data-reminder-id='r1']") as HTMLElement).querySelector(
+        "summary",
+      )!,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Attach to seat" }));
+
+    const seatSummary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    fireEvent(seatSummary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(seatSummary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }));
+    fireEvent(seatSummary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 180 }));
+    fireEvent.click(seatSummary);
+
+    expect(onAttachReminder).not.toHaveBeenCalled();
+    expect(screen.getByText(/tap a seat/i)).toBeInTheDocument();
+  });
+
+  it("clears the armed placement state when removing the reminder currently being placed (code review finding)", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { onAttachReminder } = renderBoard(
+      [makePlayer({ id: "p1", name: "Alice" })],
+      { reminders: [reminder] },
+    );
+
+    await user.click(
+      screen.getByText("Townsfolk").closest("[data-reminder-id='r1']")!.querySelector(
+        "summary",
+      )!,
+    );
+    await user.click(screen.getByRole("button", { name: "Attach to seat" }));
+    await user.click(screen.getByRole("button", { name: "Remove reminder" }));
+
+    expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
+    const seatSummary = screen.getByText("Alice").closest("[data-player-id='p1']")!
+      .querySelector("summary")!;
+    fireEvent.click(seatSummary);
+    expect(onAttachReminder).not.toHaveBeenCalled();
+  });
+
+  it("clears the armed placement state when the reminder currently being placed is dragged instead (code review finding)", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null, position: { x: 60, y: 40 } });
+    const { container, onAttachReminder } = renderBoard(
+      [makePlayer({ id: "p1", name: "Alice" })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+
+    const reminderSummary = container.querySelector(
+      "[data-reminder-id='r1'] summary",
+    ) as HTMLElement;
+    fireEvent.click(reminderSummary);
+    fireEvent.click(screen.getByRole("button", { name: "Attach to seat" }));
+
+    fireEvent(reminderSummary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(reminderSummary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(reminderSummary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
+
+    expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
+    const seatSummary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    fireEvent.click(seatSummary);
+    expect(onAttachReminder).not.toHaveBeenCalled();
+  });
 });
 
 describe("setup walkthrough reopen button (issue #26)", () => {
