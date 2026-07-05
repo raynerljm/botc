@@ -1,4 +1,7 @@
 import { render, screen } from "@testing-library/react";
+import { act } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
@@ -46,5 +49,43 @@ describe("game page", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Seat 1 name")).toHaveValue("Player 1");
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("does not bounce to the script picker when hydrating a hard reload with an active game", async () => {
+    saveGame(
+      createGame({
+        scriptId: "tb",
+        scriptName: "Trouble Brewing",
+        playerCount: 5,
+        selectedCharacters: [getCharacter("washerwoman")!],
+        standIn: null,
+        extraCopies: {},
+      }),
+    );
+
+    // A static-export prerender has no localStorage, so the server-rendered
+    // markup always reflects "no game" regardless of what's since been
+    // saved — reproduce that, then hydrate on a client that already has
+    // the active game.
+    const serverHtml = renderToString(<GamePage />);
+
+    const container = document.createElement("div");
+    container.innerHTML = serverHtml;
+    document.body.appendChild(container);
+
+    let root!: ReturnType<typeof hydrateRoot>;
+    await act(async () => {
+      root = hydrateRoot(container, <GamePage />);
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Trouble Brewing" }),
+    ).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+
+    act(() => {
+      root.unmount();
+    });
+    document.body.removeChild(container);
   });
 });
