@@ -83,7 +83,6 @@ function makeHandlers() {
     onSwapCharacter: vi.fn(),
     onRemovePlayer: vi.fn(),
     onRevealDrunk: vi.fn(),
-    onAddFabled: vi.fn(),
     onRemoveFabled: vi.fn(),
     onSetClaim: vi.fn(),
     onSetActsAs: vi.fn(),
@@ -1178,26 +1177,22 @@ describe("Fabled", () => {
     );
   });
 
-  it("adds a Fabled from the picker", async () => {
-    const user = userEvent.setup();
+  it("does not show an Add Fabled control", () => {
     const byId = new Map([
       ["washerwoman", getCharacter("washerwoman")!],
       ["angel", getCharacter("angel")!],
     ]);
-    const handlers = { ...makeHandlers() };
     render(
       <GrimoireBoard
         players={[makePlayer()]}
         characterById={byId}
         claimOptions={claimOptions}
-        activeFabled={[]}
-        {...handlers}
+        activeFabled={["angel"]}
+        {...makeHandlers()}
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText(/add fabled/i), "angel");
-
-    expect(handlers.onAddFabled).toHaveBeenCalledWith("angel");
+    expect(screen.queryByLabelText(/add fabled/i)).not.toBeInTheDocument();
   });
 
   it("removes an active Fabled", async () => {

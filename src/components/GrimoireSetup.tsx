@@ -145,8 +145,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   );
 
   // Mid-game token add (issue #15): any official-team character, script-first
-  // then the rest of the dataset — travellers and Fabled have their own add
-  // flows, so they're excluded here.
+  // then the rest of the dataset — travellers have their own add flow, and
+  // Fabled have no add flow at all (issue #50), so both are excluded here.
   const addTokenOptions = useMemo(
     () =>
       characterPickerPool(game.characterPool).filter((c) =>
@@ -342,9 +342,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   // Any mutation that can introduce a character id the game hasn't seen
-  // before (a swap, a mid-game add, a Fabled) has to also add it here —
-  // characterPool is what every token/board lookup resolves display info
-  // from, official or homebrew (gameDocument.ts).
+  // before (a swap, a mid-game add) has to also add it here — characterPool
+  // is what every token/board lookup resolves display info from, official
+  // or homebrew (gameDocument.ts).
   function withCharacterInPool(
     pool: Character[],
     character: Character | undefined,
@@ -397,16 +397,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     swapCharacter(playerId, DRUNK_ID);
   }
 
-  function addFabled(characterId: string) {
-    if (game.activeFabled.includes(characterId)) return;
-    const character = getCharacter(characterId);
-    update({
-      ...game,
-      activeFabled: [...game.activeFabled, characterId],
-      characterPool: withCharacterInPool(game.characterPool, character),
-    });
-  }
-
   function removeFabled(characterId: string) {
     update({
       ...game,
@@ -426,9 +416,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // The target picker offers the script's full character list (any
   // not-in-play character is a legitimate target — a Philosopher choosing a
   // character nobody currently holds is the canonical case), so — exactly
-  // like swapCharacter/addFabled — the target must be added to
-  // characterPool or the night list's characterById (in-play only) can
-  // never resolve it and the acts-as entry silently never appears.
+  // like swapCharacter — the target must be added to characterPool or the
+  // night list's characterById (in-play only) can never resolve it and the
+  // acts-as entry silently never appears.
   function setActsAs(playerId: string, characterId: string | null) {
     const character = characterId ? scriptCharacterById.get(characterId) : undefined;
     update({
@@ -877,7 +867,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onSwapCharacter={swapCharacter}
                 onRemovePlayer={removePlayer}
                 onRevealDrunk={revealDrunk}
-                onAddFabled={addFabled}
                 onRemoveFabled={removeFabled}
                 onSetClaim={setClaim}
                 onSetActsAs={setActsAs}

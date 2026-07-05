@@ -64,7 +64,6 @@ export interface GrimoireBoardProps {
   onSwapCharacter: (playerId: string, characterId: string) => void;
   onRemovePlayer: (playerId: string) => void;
   onRevealDrunk: (playerId: string) => void;
-  onAddFabled: (characterId: string) => void;
   onRemoveFabled: (characterId: string) => void;
   onSetClaim: (playerId: string, characterId: string | null) => void;
   onSetActsAs: (playerId: string, characterId: string | null) => void;
@@ -133,7 +132,6 @@ export function GrimoireBoard({
   onSwapCharacter,
   onRemovePlayer,
   onRevealDrunk,
-  onAddFabled,
   onRemoveFabled,
   onSetClaim,
   onSetActsAs,
@@ -171,10 +169,6 @@ export function GrimoireBoard({
           SEAT_HOLDING_TEAMS.includes(c.team),
         ),
       ),
-    [scriptPool],
-  );
-  const fabledOptions = useMemo(
-    () => characterPickerPool(scriptPool, "fabled"),
     [scriptPool],
   );
   // The dragged token's position while a gesture is in progress — updated
@@ -771,26 +765,6 @@ export function GrimoireBoard({
               </div>
             );
           })}
-
-          <label className={styles.field} htmlFor="add-fabled">
-            Add Fabled
-            <select
-              id="add-fabled"
-              value=""
-              onChange={(event) => {
-                if (event.target.value) onAddFabled(event.target.value);
-              }}
-            >
-              <option value="">Choose a Fabled…</option>
-              {fabledOptions
-                .filter((c) => !activeFabled.includes(c.id))
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </label>
         </div>
       )}
     </div>
