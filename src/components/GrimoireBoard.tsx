@@ -159,10 +159,9 @@ export function GrimoireBoard({
   // Restricted the same way as the mid-game "Add character" flow: Fabled/
   // Loric are never held by a player (they get their own Fabled slot below),
   // and a Traveller's alignment is a separate explicit field a plain swap
-  // can't set — swapping one in here would leave isTraveller/
-  // travellerAlignment stale and the export unable to derive an alignment.
-  // Correcting a traveller's character goes through remove-and-re-add
-  // instead, which sets both properly.
+  // can't set — swapping a non-traveller seat to one would leave
+  // isTraveller/travellerAlignment stale and the export unable to derive an
+  // alignment.
   const swapOptions = useMemo(
     () =>
       groupByTeam(
@@ -170,6 +169,15 @@ export function GrimoireBoard({
           SEAT_HOLDING_TEAMS.includes(c.team),
         ),
       ),
+    [scriptPool],
+  );
+  // A Traveller's own seat swaps within the traveller team instead —
+  // isTraveller/travellerAlignment are already set and untouched by a plain
+  // swap, so offering another traveller-team character here is safe (unlike
+  // the non-traveller list above) and is what lets this select actually
+  // show the player's current character as its initial value (issue #70).
+  const travellerSwapOptions = useMemo(
+    () => groupByTeam(characterPickerPool(scriptPool, "traveller")),
     [scriptPool],
   );
   // The dragged token's position while a gesture is in progress — updated
@@ -215,6 +223,7 @@ export function GrimoireBoard({
       if (openMenuElRef.current && target && openMenuElRef.current.contains(target)) {
         return;
       }
+      openMenuElRef.current = null;
       setOpenMenu(null);
     }
     document.addEventListener("pointerdown", handlePointerDownOutside);
@@ -495,6 +504,9 @@ export function GrimoireBoard({
             const character = player.characterId
               ? characterById.get(player.characterId)
               : undefined;
+            const swapOptionsForPlayer = player.isTraveller
+              ? travellerSwapOptions
+              : swapOptions;
             const position =
               liveDrag?.kind === "player" && liveDrag.id === player.id
                 ? liveDrag.position
@@ -588,37 +600,29 @@ export function GrimoireBoard({
                       {player.dead ? "Mark alive" : "Mark dead"}
                     </button>
 
-                    {/* A Traveller's own character is traveller-team, which
-                        swapOptions deliberately never offers (see
-                        SEAT_HOLDING_TEAMS) — so the select could never
-                        reflect their actual character as its initial value.
-                        Correcting a Traveller's character goes through
-                        remove-and-re-add instead (issue #70). */}
-                    {!player.isTraveller && (
-                      <label
-                        className={styles.field}
-                        htmlFor={`swap-character-${player.id}`}
+                    <label
+                      className={styles.field}
+                      htmlFor={`swap-character-${player.id}`}
+                    >
+                      Swap character
+                      <select
+                        id={`swap-character-${player.id}`}
+                        value={player.characterId ?? ""}
+                        onChange={(event) =>
+                          onSwapCharacter(player.id, event.target.value)
+                        }
                       >
-                        Swap character
-                        <select
-                          id={`swap-character-${player.id}`}
-                          value={player.characterId ?? ""}
-                          onChange={(event) =>
-                            onSwapCharacter(player.id, event.target.value)
-                          }
-                        >
-                          {swapOptions.map((group) => (
-                            <optgroup key={group.team} label={teamNames[group.team]}>
-                              {group.characters.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.name}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </label>
-                    )}
+                        {swapOptionsForPlayer.map((group) => (
+                          <optgroup key={group.team} label={teamNames[group.team]}>
+                            {group.characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
 
                     {isHiddenDrunk && (
                       <button

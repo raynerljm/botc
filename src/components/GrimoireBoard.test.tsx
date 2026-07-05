@@ -1069,7 +1069,7 @@ describe("swap character", () => {
     expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
   });
 
-  it("hides Swap character for a Traveller seat — the select can never offer their own (traveller-team) character, so a value it can't represent shouldn't be shown at all (issue #70)", async () => {
+  it("scopes a Traveller's own swap select to traveller characters, showing their current character as its initial value (issue #70)", async () => {
     const user = userEvent.setup();
     renderBoard([
       makePlayer({
@@ -1080,8 +1080,24 @@ describe("swap character", () => {
     ]);
 
     await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText<HTMLSelectElement>(/swap character/i);
 
-    expect(screen.queryByLabelText(/swap character/i)).not.toBeInTheDocument();
+    expect(select.value).toBe("scapegoat");
+    const options = within(select).getAllByRole("option");
+    expect(options.some((o) => o.textContent === "Washerwoman")).toBe(false);
+    expect(options.some((o) => o.textContent === "Beggar")).toBe(true);
+  });
+
+  it("keeps a non-traveller seat's swap select scoped away from traveller characters (unchanged)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const options = within(
+      screen.getByLabelText(/swap character/i),
+    ).getAllByRole("option");
+
+    expect(options.some((o) => o.textContent === "Beggar")).toBe(false);
   });
 
   it("lists the script's own characters first within each team group", async () => {
