@@ -329,6 +329,12 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
+    // Huntsman + Damsel alone don't fill the default 5p target counts —
+    // override the mismatch warning, since this test is about the script
+    // pool capture, not count validation.
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
 
     // Damsel never appeared in the script's own `characters` prop — she only
     // entered play via auto-add — but a real player can still draw her, so
@@ -544,6 +550,128 @@ describe("randomize fills remaining slots to the adjusted targets (AC7)", () => 
   });
 });
 
+describe("warns on a bag/script count mismatch before continuing (issue #51)", () => {
+  beforeEach(() => {
+    clearGames();
+    push.mockClear();
+  });
+
+  it("shows a warning dialog naming the mismatched team and by how much, instead of continuing straight away", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    // Default 5p target is Townsfolk 3/Outsider 0/Minion 1/Demon 1; selecting
+    // only the Imp leaves Townsfolk and Minion under target.
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    const dialog = screen.getByRole("dialog", { name: /count/i });
+    expect(dialog).toHaveTextContent(/Townsfolk.*3 under/i);
+    expect(dialog).toHaveTextContent(/Minions.*1 under/i);
+    // No navigation has happened yet — the mismatch is only a warning so far.
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("lets the storyteller dismiss the warning and stay on the bag builder, with no game created", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /Go back/i }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(loadGame()).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("skips the warning and continues straight away once every team's count matches its target", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    // Default 5p target: Townsfolk 3/Outsider 0/Minion 1/Demon 1.
+    await user.click(screen.getByRole("button", { name: /^Washerwoman/ }));
+    await user.click(screen.getByRole("button", { name: /^Librarian/ }));
+    await user.click(screen.getByRole("button", { name: /^Investigator/ }));
+    await user.click(screen.getByRole("button", { name: /^Poisoner/ }));
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(loadGame()).not.toBeNull();
+    expect(push).toHaveBeenCalledWith("/game");
+  });
+
+  it("shows no warning when a relaxed-validation character is in the bag, even with mismatched raw counts", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("legion", "washerwoman")}
+        scriptId="custom"
+        scriptName="Custom"
+      />,
+    );
+
+    // Legion alone leaves Townsfolk/Outsider/Minion all under target, but
+    // count validation relaxes entirely while it's selected.
+    await user.click(screen.getByRole("button", { name: /^Legion/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(loadGame()).not.toBeNull();
+    expect(push).toHaveBeenCalledWith("/game");
+  });
+
+  it("moves focus into the dialog when it opens, traps Tab within it, and restores focus on dismiss", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    const continueButton = screen.getByRole("button", {
+      name: /Continue to seating/i,
+    });
+    await user.click(continueButton);
+
+    const dialog = screen.getByRole("dialog", { name: /count/i });
+    const goBack = within(dialog).getByRole("button", { name: /Go back/i });
+    const continueAnyway = within(dialog).getByRole("button", {
+      name: /Continue anyway/i,
+    });
+    // Opening moves focus inside the dialog rather than leaving it on the
+    // trigger, so a keyboard user starts able to act on the warning itself.
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    // Tab cycles only between the dialog's own controls — it never escapes
+    // to a covered background element (e.g. a character toggle) while the
+    // dialog is open.
+    await user.tab();
+    expect(document.activeElement).toBe(continueAnyway);
+    await user.tab();
+    expect(document.activeElement).toBe(goBack);
+
+    await user.click(goBack);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(continueButton);
+  });
+});
+
 describe("continue to seating hands off into a new game (issue #12)", () => {
   beforeEach(() => {
     clearGames();
@@ -568,6 +696,12 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
     await user.click(screen.getByRole("button", { name: /^Imp/ }));
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    // Washerwoman + Imp alone don't fill the default 5p target counts —
+    // override the mismatch warning, since this test is about the hand-off
+    // itself, not count validation.
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
     );
 
     const game = loadGame();
@@ -616,6 +750,11 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
+    // No characters are selected, so this also trips the count-mismatch
+    // warning first — override it to reach the in-progress-game confirm.
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
 
     // Cancelled: no new game, no navigation, the existing game is untouched.
     expect(confirm).toHaveBeenCalled();
@@ -625,6 +764,9 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
     confirm.mockReturnValue(true);
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
     );
 
     expect(loadGame()?.scriptName).toBe("Trouble Brewing");
