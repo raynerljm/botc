@@ -35,5 +35,7 @@ function formatDurationMs(ms: number): string {
 // pass the game's `endedAt` to get its total duration instead — both are the
 // same span calculation, just anchored at a different end point.
 export function formatDuration(createdAt: string, until: Date = new Date()): string {
-  return formatDurationMs(until.getTime() - new Date(createdAt).getTime());
+  const start = new Date(createdAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(until.getTime())) return "unknown";
+  return formatDurationMs(until.getTime() - start);
 }

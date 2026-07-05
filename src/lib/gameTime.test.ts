@@ -62,4 +62,16 @@ describe("formatDuration", () => {
       ),
     ).toBe("2h 0m");
   });
+
+  it("falls back instead of showing NaNm on an unparseable createdAt", () => {
+    expect(
+      formatDuration("not-a-date", new Date("2026-07-04T02:00:00.000Z")),
+    ).toBe("unknown");
+  });
+
+  it("falls back instead of showing NaNm on an unparseable until", () => {
+    expect(
+      formatDuration("2026-07-04T00:00:00.000Z", new Date("not-a-date")),
+    ).toBe("unknown");
+  });
 });
