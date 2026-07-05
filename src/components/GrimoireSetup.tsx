@@ -438,22 +438,32 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // Builds off gameRef.current, not the `game` this render closed over — two
+  // taps on different face-down tokens landing before React re-renders (a
+  // fast double-tap) would otherwise both commit from the same stale bag
+  // snapshot, and the second update() would silently overwrite the first's
+  // removal instead of compounding it (code review finding).
   function chooseToken(tokenId: string) {
     if (!draw) return;
-    const token = game.bag.find((t) => t.id === tokenId);
+    const currentGame = gameRef.current;
+    const token = currentGame.bag.find((t) => t.id === tokenId);
     // The tapped token can already be gone from the bag if it was manually
     // assigned to a different seat while still shown face-down here —
     // reshuffle the grid from what's actually left rather than leaving a
     // dead, stale button on screen.
     if (!token) {
-      setDraw({ ...draw, tokenOrder: shuffleTokens(game.bag) });
+      setDraw({ ...draw, tokenOrder: shuffleTokens(currentGame.bag) });
       return;
     }
 
     update({
-      ...game,
-      bag: game.bag.filter((t) => t.id !== token.id),
-      players: updatePlayer(draw.seatId, tokenAssignmentPatch(token)),
+      ...currentGame,
+      bag: currentGame.bag.filter((t) => t.id !== token.id),
+      players: currentGame.players.map((player) =>
+        player.id === draw.seatId
+          ? { ...player, ...tokenAssignmentPatch(token) }
+          : player,
+      ),
     });
     setDraw({ ...draw, stage: "revealed" });
   }
