@@ -782,6 +782,133 @@ describe("reminders (issue #14)", () => {
   });
 });
 
+describe("info tokens (issue #19)", () => {
+  it("opens the info token library from the pad", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+
+    expect(screen.getByRole("dialog", { name: "Info tokens" })).toBeInTheDocument();
+  });
+
+  it("walks picking a standard card, attaching a token, and showing it full-screen", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer({ characterId: "imp" })]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    // Scoped to the Info tokens dialog — the board's own "Swap character"
+    // <select> also has a Demons <optgroup> (an implicit role="group" too),
+    // which would otherwise collide with this picker's fieldset.
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    const group = within(dialog).getByRole("group", { name: "Demons" });
+    await user.click(within(group).getByRole("button", { name: "Imp" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+
+    expect(screen.queryByRole("dialog", { name: "Info tokens" })).not.toBeInTheDocument();
+    const showMode = screen.getByRole("dialog", { name: "This is the Demon" });
+    expect(within(showMode).getByText("Imp")).toBeInTheDocument();
+  });
+
+  it("never leaks the board behind it — no player name or control renders while showing", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Re-circle" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to the board when the storyteller is done showing the card", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "Did you nominate today?" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Did you nominate today?" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("discards an in-progress drag before showing, so dragging isn't permanently stuck once back on the board", async () => {
+    const user = userEvent.setup();
+    const { container, onMove } = renderBoard([makePlayer({ id: "p1" })]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    // A drag is left mid-gesture (pointerdown + move, no pointerup) — e.g. a
+    // second finger opens and completes the info token flow while the first
+    // is still holding a token.
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "Did you nominate today?" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(onMove).not.toHaveBeenCalled();
+    // The interrupted gesture's pointerId must have been released — a fresh
+    // drag with a new pointerId has to still work, not silently no-op
+    // against a dragRef stuck on the unmounted gesture. The board itself was
+    // unmounted and remounted by the show/hide round-trip, so its rect mock
+    // needs reapplying to the new DOM node.
+    mockBoardRect(container);
+    const summaryAfter = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    fireEvent(summaryAfter, pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }));
+    fireEvent(summaryAfter, pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }));
+    fireEvent(summaryAfter, pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }));
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 35, y: 45 });
+  });
+
+  it("hides the pad's info tokens trigger while the reminder picker is open, and vice versa", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+
+    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    expect(
+      within(controls).queryByRole("button", { name: "Info tokens" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    expect(
+      within(controls).queryByRole("button", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the info tokens trigger when the grimoire is hidden", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    expect(
+      within(controls).queryByRole("button", { name: "Info tokens" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("swap character", () => {
   it("lets the storyteller swap a player's character from their token menu", async () => {
     const user = userEvent.setup();

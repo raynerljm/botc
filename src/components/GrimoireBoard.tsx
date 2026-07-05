@@ -28,6 +28,8 @@ import {
 import { isHttpUrl } from "@/lib/scriptParser";
 
 import { CharacterToken } from "./CharacterToken";
+import { InfoTokenLibrary } from "./InfoTokenLibrary";
+import { InfoTokenShowMode } from "./InfoTokenShowMode";
 import { ReminderChip } from "./ReminderChip";
 import { ReminderPicker } from "./ReminderPicker";
 import styles from "./GrimoireBoard.module.css";
@@ -178,15 +180,27 @@ export function GrimoireBoard({
     id: string;
     position: PlayerPosition;
   } | null>(null);
-  // null = closed; { base: null } = opened from the pad (generic default
-  // position); { base: <player position> } = opened from a token's menu.
-  const [picker, setPicker] = useState<{ base: PlayerPosition | null } | null>(
-    null,
-  );
+  // Only one pad-level picker can be open at a time — a single tagged state
+  // makes that exclusion automatic everywhere instead of needing every call
+  // site to separately clear every other picker's own boolean.
+  // "reminder": { base: null } opened from the pad (generic default
+  // position); { base: <player position> } opened from a token's menu.
+  const [activeOverlay, setActiveOverlay] = useState<
+    | { type: "reminder"; base: PlayerPosition | null }
+    | { type: "infoTokens" }
+    | null
+  >(null);
+  const reminderPicker =
+    activeOverlay?.type === "reminder" ? activeOverlay : null;
+  const infoTokenLibraryOpen = activeOverlay?.type === "infoTokens";
   const [removedReminder, setRemovedReminder] = useState<ReminderToken | null>(
     null,
   );
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [infoTokenShowing, setInfoTokenShowing] = useState<{
+    text: string;
+    characterIds: string[];
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -291,8 +305,11 @@ export function GrimoireBoard({
   }
 
   function handleAddReminder(input: { characterId: string | null; label: string }) {
-    onAddReminder({ ...input, position: reminderDropPosition(picker?.base ?? null) });
-    setPicker(null);
+    onAddReminder({
+      ...input,
+      position: reminderDropPosition(reminderPicker?.base ?? null),
+    });
+    setActiveOverlay(null);
   }
 
   function handleRemoveReminder(reminder: ReminderToken) {
@@ -318,6 +335,22 @@ export function GrimoireBoard({
     setLiveDrag(null);
   }
 
+  // Full-screen show mode replaces the board outright rather than layering
+  // on top of it — a fixed overlay alone would still leave player names and
+  // controls mounted (and tab-reachable) underneath, which is exactly the
+  // leak issue #19 rules out.
+  if (infoTokenShowing) {
+    return (
+      <InfoTokenShowMode
+        text={infoTokenShowing.text}
+        characters={infoTokenShowing.characterIds
+          .map((id) => characterById.get(id))
+          .filter((character): character is Character => character !== undefined)}
+        onClose={() => setInfoTokenShowing(null)}
+      />
+    );
+  }
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls} data-controls>
@@ -325,10 +358,10 @@ export function GrimoireBoard({
           type="button"
           onClick={() => {
             cancelActiveDrag();
-            // A picker already open holds a player's position captured at
+            // An overlay already open holds a player's position captured at
             // open time — re-circling can move that player, so the stale
             // parked position has to be discarded along with the drag.
-            setPicker(null);
+            setActiveOverlay(null);
             onReCircle();
           }}
         >
@@ -339,26 +372,55 @@ export function GrimoireBoard({
             type="button"
             onClick={() => {
               cancelActiveDrag();
-              setPicker(null);
+              setActiveOverlay(null);
               setHidden(true);
             }}
           >
             Hide grimoire
           </button>
         )}
-        {!hidden && !picker && (
-          <button type="button" onClick={() => setPicker({ base: null })}>
+        {!hidden && !activeOverlay && (
+          <button
+            type="button"
+            onClick={() => setActiveOverlay({ type: "reminder", base: null })}
+          >
             Add reminder
+          </button>
+        )}
+        {!hidden && !activeOverlay && (
+          <button
+            type="button"
+            onClick={() => setActiveOverlay({ type: "infoTokens" })}
+          >
+            Info tokens
           </button>
         )}
       </div>
 
-      {!hidden && picker && (
+      {!hidden && reminderPicker && (
         <ReminderPicker
           characterById={characterById}
           inPlayCharacterIds={inPlayCharacterIds}
           onAdd={handleAddReminder}
-          onCancel={() => setPicker(null)}
+          onCancel={() => setActiveOverlay(null)}
+        />
+      )}
+
+      {!hidden && infoTokenLibraryOpen && (
+        <InfoTokenLibrary
+          characterById={characterById}
+          onShow={(input) => {
+            // Show mode replaces the whole board (see the early return
+            // above), so a drag left active here would keep its pointerId
+            // captured against a token that's about to unmount — no
+            // pointerup could ever reach it, permanently blocking every
+            // future drag. Same cleanup Re-circle/Hide grimoire do before
+            // their own layout-discarding actions.
+            cancelActiveDrag();
+            setInfoTokenShowing(input);
+            setActiveOverlay(null);
+          }}
+          onCancel={() => setActiveOverlay(null)}
         />
       )}
 
@@ -498,10 +560,12 @@ export function GrimoireBoard({
                       Remove player
                     </button>
 
-                    {!picker && (
+                    {!activeOverlay && (
                       <button
                         type="button"
-                        onClick={() => setPicker({ base: position })}
+                        onClick={() =>
+                          setActiveOverlay({ type: "reminder", base: position })
+                        }
                       >
                         Add reminder
                       </button>
