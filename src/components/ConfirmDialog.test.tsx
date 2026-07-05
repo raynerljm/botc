@@ -60,7 +60,7 @@ describe("ConfirmDialog", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onCancel when Cancel is clicked and on Escape, but not on a tap inside the dialog", async () => {
+  it("doesn't call onCancel from a tap inside the dialog", async () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();
     render(
@@ -74,14 +74,68 @@ describe("ConfirmDialog", () => {
     );
 
     await user.click(screen.getByRole("alertdialog"));
+
     expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("calls onCancel on Escape", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        title="Delete this?"
+        message="This can't be undone."
+        confirmLabel="Delete"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
 
     await user.keyboard("{Escape}");
-    expect(onCancel).toHaveBeenCalledTimes(1);
 
-    onCancel.mockClear();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onCancel when Cancel is clicked", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        title="Delete this?"
+        message="This can't be undone."
+        confirmLabel="Delete"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a second activation once the first response has fired (double-tap guard)", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmDialog
+        title="Start a new game"
+        confirmLabel="Start new game"
+        onConfirm={onConfirm}
+        onCancel={vi.fn()}
+      />,
+    );
+    const confirmButton = screen.getByRole("button", {
+      name: "Start new game",
+    });
+
+    // Two rapid activations of the same still-mounted dialog (e.g. a
+    // double-tap before the parent's state change unmounts it) must only
+    // ever invoke onConfirm once — each call can create a new game.
+    await user.click(confirmButton);
+    await user.click(confirmButton);
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it("calls onCancel on a backdrop tap outside the dialog", async () => {

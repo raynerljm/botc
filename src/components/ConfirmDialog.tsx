@@ -4,6 +4,12 @@ import { useEffect, useRef, type ReactNode } from "react";
 
 import styles from "./ConfirmDialog.module.css";
 
+// `children` can carry more than plain text (issue #73 follow-up: BagBuilder's
+// count-mismatch list), so the Tab trap must catch every tabbable element
+// inside, not just the dialog's own two buttons.
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export interface ConfirmDialogProps {
   title: string;
   // A plain-text body. For a richer body (e.g. a list), pass `children`
@@ -34,6 +40,17 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  // A quick double tap/click can fire two activation events before the
+  // parent's state change unmounts this dialog — since confirming isn't
+  // always idempotent (e.g. starting a new game creates a fresh id each
+  // call), only the first response after open is allowed through.
+  const respondedRef = useRef(false);
+
+  function respond(action: () => void) {
+    if (respondedRef.current) return;
+    respondedRef.current = true;
+    action();
+  }
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -42,12 +59,14 @@ export function ConfirmDialog({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCancel();
+        respond(onCancel);
         return;
       }
       if (event.key !== "Tab") return;
       const focusable =
-        dialogRef.current?.querySelectorAll<HTMLElement>("button") ?? [];
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          FOCUSABLE_SELECTOR,
+        ) ?? [];
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -81,7 +100,7 @@ export function ConfirmDialog({
     <div
       className={styles.overlay}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onCancel();
+        if (event.target === event.currentTarget) respond(onCancel);
       }}
     >
       <div
@@ -98,15 +117,14 @@ export function ConfirmDialog({
           <button
             type="button"
             ref={cancelButtonRef}
-            className={styles.cancel}
-            onClick={onCancel}
+            onClick={() => respond(onCancel)}
           >
             {cancelLabel}
           </button>
           <button
             type="button"
             className={destructive ? styles.destructive : styles.confirm}
-            onClick={onConfirm}
+            onClick={() => respond(onConfirm)}
           >
             {confirmLabel}
           </button>
