@@ -3,6 +3,7 @@
   border-radius: 0.5rem;
   border: 1px solid var(--border, #ccc);
   background: var(--surface, #fff);
+  color: var(--foreground, #111);
   cursor: pointer;
 }
 
@@ -32,13 +33,14 @@
   border-radius: 0.75rem;
   border: none;
   background: var(--surface, #fff);
-  color: var(--text, #111);
+  color: var(--foreground, #111);
 }
 
 .close {
   align-self: flex-end;
   border: none;
   background: none;
+  color: var(--foreground, #111);
   font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
@@ -46,7 +48,7 @@
 
 .warning {
   font-size: 0.875rem;
-  color: var(--warning-text, #92400e);
+  color: var(--team-minion, #92400e);
   text-align: center;
 }
 
@@ -62,5 +64,6 @@
   border-radius: 0.5rem;
   border: 1px solid var(--border, #ccc);
   background: var(--surface, #fff);
+  color: var(--foreground, #111);
   cursor: pointer;
 }
