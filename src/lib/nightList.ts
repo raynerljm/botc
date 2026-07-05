@@ -24,6 +24,13 @@ export interface NightListEntry {
   // and auto-skipped in the UI, but always present in the list (never
   // hidden), per issue #16's acceptance criteria.
   skipped: boolean;
+  // Set only for an acts-as entry (CONTEXT.md: Acts as) — the acting
+  // player's own actual character id (e.g. the Philosopher), distinct from
+  // `characterId`, which stays the *target* character whose ability and
+  // reminder text this entry represents. Lets the UI show the physical
+  // token to wake (the player's own character) while attributing the
+  // ability to the character it was borrowed from (issue #17 AC).
+  actingCharacterId: string | null;
 }
 
 const FIXED_DUSK = "fixed:dusk";
@@ -88,6 +95,7 @@ function fixedEntry(id: string, bucket: number): RawEntry {
     dead: false,
     isDrunk: false,
     skipped: false,
+    actingCharacterId: null,
     defaultBucket: bucket,
     nightValue: bucket,
   };
@@ -134,6 +142,12 @@ export function computeNightList({
   const includeMinionDemonInfo =
     phase === "first" && minionDemonInfoEligible(game);
 
+  // The night currently being computed — matches the number NightList.tsx
+  // shows in its heading (game.night + 1) — needed to resolve a
+  // first-night-only acts-as target chosen on a later night to the one
+  // specific night it was set (issue #17 AC), not every night thereafter.
+  const nightNumber = game.night + 1;
+
   const raw: RawEntry[] = [fixedEntry(FIXED_DUSK, 0)];
   if (includeMinionDemonInfo) {
     raw.push(fixedEntry(FIXED_MINION_INFO, 1));
@@ -142,6 +156,11 @@ export function computeNightList({
 
   for (const player of game.players) {
     if (!player.characterId) continue;
+    // Once a player has an acts-as target, their own character's generic
+    // entry is suppressed — the ability they'd otherwise be walked through
+    // (e.g. the Philosopher's own "choose an ability" prompt) is replaced by
+    // the acts-as entry generated below (issue #17 AC).
+    if (player.actsAs) continue;
     const character = characterById.get(player.characterId);
     if (!character) continue;
 
@@ -169,6 +188,49 @@ export function computeNightList({
       dead: player.dead,
       isDrunk: player.isDrunk,
       skipped: player.dead && !unskippedIds.has(`char:${player.id}`),
+      actingCharacterId: null,
+      defaultBucket: acts ? 3 : 4,
+      nightValue: acts ? nightValue : Number.MAX_SAFE_INTEGER,
+      overrideRank,
+    });
+  }
+
+  for (const player of game.players) {
+    if (!player.actsAs) continue;
+    const target = characterById.get(player.actsAs);
+    if (!target) continue;
+
+    const primaryValue = phase === "first" ? target.firstNight : target.otherNight;
+    // A target that only acts on the first night, chosen on a later night,
+    // resolves for that one night only — mapped into tonight's order at the
+    // target's first-night position — then never again (issue #17 AC).
+    const oneShotTonight =
+      primaryValue === 0 &&
+      phase === "other" &&
+      target.firstNight > 0 &&
+      player.actsAsSetOnNight === nightNumber;
+    const nightValue = primaryValue > 0 ? primaryValue : oneShotTonight ? target.firstNight : 0;
+    const overrideRank = metaRank(order, target.id, true);
+    const acts = nightValue > 0 || overrideRank !== undefined;
+    if (!acts && !showAll) continue;
+
+    raw.push({
+      id: `actsas:${player.id}`,
+      kind: "character",
+      label: target.name,
+      reminderText:
+        primaryValue > 0
+          ? phase === "first"
+            ? target.firstNightReminder
+            : target.otherNightReminder
+          : target.firstNightReminder,
+      characterId: target.id,
+      actingCharacterId: player.characterId,
+      playerId: player.id,
+      playerName: player.name,
+      dead: player.dead,
+      isDrunk: player.isDrunk,
+      skipped: player.dead && !unskippedIds.has(`actsas:${player.id}`),
       defaultBucket: acts ? 3 : 4,
       nightValue: acts ? nightValue : Number.MAX_SAFE_INTEGER,
       overrideRank,
@@ -220,5 +282,6 @@ export function computeNightList({
     dead: entry.dead,
     isDrunk: entry.isDrunk,
     skipped: entry.skipped,
+    actingCharacterId: entry.actingCharacterId,
   }));
 }

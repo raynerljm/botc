@@ -409,6 +409,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({ ...game, players: updatePlayer(playerId, { claim: characterId }) });
   }
 
+  // The night this acts-as takes effect is whichever night is currently
+  // open (or about to open) — game.night + 1, the same number the night
+  // list itself uses (CONTEXT.md: Night list) — so a first-night-only
+  // target chosen mid-game resolves to that specific night, not night 1.
+  function setActsAs(playerId: string, characterId: string | null) {
+    update({
+      ...game,
+      players: updatePlayer(playerId, {
+        actsAs: characterId,
+        actsAsSetOnNight: characterId ? game.night + 1 : null,
+      }),
+    });
+  }
+
   function startDraw() {
     if (!nextUnassignedSeat) return;
     setDraw({
@@ -526,6 +540,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ghostVoteSpent: false,
       position: null,
       claim: null,
+      actsAs: null,
+      actsAsSetOnNight: null,
     };
 
     update({
@@ -564,6 +580,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ghostVoteSpent: false,
       position: null,
       claim: null,
+      actsAs: null,
+      actsAsSetOnNight: null,
     };
 
     update({
@@ -827,6 +845,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onAddFabled={addFabled}
                 onRemoveFabled={removeFabled}
                 onSetClaim={setClaim}
+                onSetActsAs={setActsAs}
                 onOpenSetupWalkthrough={
                   walkthroughSteps.length > 0 ? openWalkthrough : undefined
                 }

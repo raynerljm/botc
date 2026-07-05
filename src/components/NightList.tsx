@@ -98,12 +98,21 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
 
       <ol className={styles.entries}>
         {entries.map((entry) => {
-          const character = entry.characterId
-            ? characterById.get(entry.characterId)
+          // An acts-as entry's physical token is the acting player's own
+          // character (e.g. the Philosopher) — the target (`characterId`)
+          // only supplies the borrowed ability's name and reminder text
+          // (CONTEXT.md: Acts as; issue #17 AC).
+          const actingCharacter = entry.actingCharacterId
+            ? characterById.get(entry.actingCharacterId)
             : undefined;
-          const accessibleName = entry.playerName
-            ? `${entry.label} — ${entry.playerName}`
-            : entry.label;
+          const character =
+            actingCharacter ??
+            (entry.characterId ? characterById.get(entry.characterId) : undefined);
+          const accessibleName = actingCharacter
+            ? `${entry.playerName} — ${actingCharacter.name} as ${entry.label}`
+            : entry.playerName
+              ? `${entry.label} — ${entry.playerName}`
+              : entry.label;
 
           return (
             <li
@@ -129,12 +138,20 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
                 </span>
                 <span className={styles.entryBody}>
                   <span className={styles.entryTitle}>
-                    {entry.label}
-                    {entry.playerName && (
-                      <span className={styles.entryPlayer}>
-                        {" "}
-                        — {entry.playerName}
-                      </span>
+                    {actingCharacter && entry.playerName ? (
+                      <>
+                        {entry.playerName} — {actingCharacter.name} as {entry.label}
+                      </>
+                    ) : (
+                      <>
+                        {entry.label}
+                        {entry.playerName && (
+                          <span className={styles.entryPlayer}>
+                            {" "}
+                            — {entry.playerName}
+                          </span>
+                        )}
+                      </>
                     )}
                     {entry.isDrunk && (
                       <span className={styles.note}> (actually the Drunk)</span>

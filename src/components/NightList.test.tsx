@@ -210,6 +210,65 @@ describe("Night list: dead players", () => {
   });
 });
 
+describe("Night list: acts-as (issue #17)", () => {
+  it("attributes the entry to the acting player and their own character, using the target's reminder text", () => {
+    const game = gameWith(["philosopher", "imp", "recluse"], {
+      night: 0,
+      nightOpen: true,
+    });
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      // Empath isn't held by any seated player here, so its reminder text
+      // only ever comes from the acts-as entry — a player also holding it
+      // would render the same reminder text twice for their own entry.
+      characterPool: [...game.characterPool, getCharacter("empath")!],
+      players: game.players.map((p) =>
+        p.id === philosopher.id ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 } : p,
+      ),
+    };
+    renderNightList(withActsAs);
+
+    const empath = getCharacter("empath")!;
+    expect(
+      screen.getByText(`${philosopher.name} — Philosopher as ${empath.name}`),
+    ).toBeInTheDocument();
+    expect(screen.getByText(empath.firstNightReminder)).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", {
+        name: `${philosopher.name} — Philosopher as ${empath.name}`,
+      }),
+    ).toBeInTheDocument();
+    // The Philosopher's own generic entry is suppressed once acting as
+    // another character.
+    expect(
+      screen.queryByRole("checkbox", { name: `Philosopher — ${philosopher.name}` }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a first-night-only target chosen on a later night only on that night", () => {
+    const game = gameWith(["philosopher", "imp", "washerwoman"], {
+      night: 2,
+      nightOpen: true,
+    });
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      players: game.players.map((p) =>
+        p.id === philosopher.id
+          ? { ...p, actsAs: "washerwoman", actsAsSetOnNight: 3 }
+          : p,
+      ),
+    };
+    renderNightList(withActsAs);
+
+    const washerwoman = getCharacter("washerwoman")!;
+    expect(
+      screen.getByText(`${philosopher.name} — Philosopher as ${washerwoman.name}`),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Night list: show-all toggle", () => {
   it("hides non-acting characters by default and reveals them via show-all", async () => {
     const user = userEvent.setup();
