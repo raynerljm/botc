@@ -50,7 +50,14 @@ export default function Home() {
                   href={`/scripts/${script.id}`}
                   className={styles.scriptCard}
                 >
-                  <span className={styles.scriptName}>{script.name}</span>
+                  <span className={styles.scriptName}>
+                    {script.name}
+                    {script.isTeensyville && (
+                      <span className={styles.teensyvilleBadge}>
+                        Teensyville
+                      </span>
+                    )}
+                  </span>
                   <span className={styles.scriptMeta}>
                     {script.author && `By ${script.author} — `}
                     {script.characterCount} characters +{" "}

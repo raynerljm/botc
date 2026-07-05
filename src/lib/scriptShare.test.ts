@@ -116,6 +116,18 @@ describe("encodeScriptForShare / decodeScriptForShare", () => {
     expect(result.script.meta.otherNight).toEqual(["imp"]);
   });
 
+  it("round-trips the teensyville flag", () => {
+    const encoded = encodeScriptForShare(
+      { name: "Small Script", teensyville: true },
+      [resolveCharacterId("imp")!],
+    );
+
+    const result = decodeScriptForShare(encoded);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta.teensyville).toBe(true);
+  });
+
   it("omits the _meta entry entirely when meta is empty", () => {
     const encoded = encodeScriptForShare({}, [resolveCharacterId("imp")!]);
 

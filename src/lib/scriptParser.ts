@@ -20,6 +20,7 @@ export interface ScriptMeta {
   bootlegger?: string;
   firstNight?: string[];
   otherNight?: string[];
+  teensyville?: boolean;
 }
 
 // meta.almanac comes from user-provided script JSON (upload/paste), so any
@@ -109,6 +110,7 @@ function parseMeta(raw: Record<string, unknown>): ScriptMeta {
   if (firstNight) meta.firstNight = firstNight;
   const otherNight = toStringArray(raw.otherNight);
   if (otherNight) meta.otherNight = otherNight;
+  if (raw.teensyville === true) meta.teensyville = true;
   return meta;
 }
 

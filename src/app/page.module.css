@@ -60,6 +60,20 @@
 .scriptName {
   font-size: 1.35rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.teensyvilleBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 1rem;
+  padding: 0.1rem 0.5rem;
 }
 
 .scriptMeta {

@@ -23,10 +23,52 @@ describe("listScriptSummaries", () => {
 
     const librarySummaries = summaries.filter((s) => s.source === "library");
     expect(librarySummaries.length).toBeGreaterThan(0);
-    expect(librarySummaries[0]).toMatchObject({
+    expect(byId["sample-homebrew"]).toMatchObject({
       name: "Sample Homebrew Script",
       author: "BotC Grimoire",
+      isTeensyville: false,
     });
+  });
+
+  it("excludes Fabled characters from characterCount, same as travellers", () => {
+    const summaries = listScriptSummaries();
+    const script = summaries.find((s) => s.id === "a-lleech-of-distrust");
+    // 6 townsfolk + 2 outsiders + 2 minions + 1 demon; Sentinel (fabled) is a
+    // storyteller aid, not a seat, so it counts toward neither figure.
+    expect(script).toMatchObject({ characterCount: 11, travellerCount: 0 });
+  });
+});
+
+describe("bundled custom scripts (issue #47)", () => {
+  it("parses each of the six community scripts cleanly, with the correct category and character count", () => {
+    const expected = [
+      { id: "catfishing", isTeensyville: false, characterCount: 25, travellerCount: 5 },
+      { id: "everyone-can-play", isTeensyville: false, characterCount: 24, travellerCount: 0 },
+      { id: "pies-baking", isTeensyville: false, characterCount: 23, travellerCount: 0 },
+      { id: "a-lleech-of-distrust", isTeensyville: true, characterCount: 11, travellerCount: 0 },
+      { id: "ride-the-cyclone", isTeensyville: false, characterCount: 22, travellerCount: 5 },
+      { id: "no-greater-joy", isTeensyville: true, characterCount: 11, travellerCount: 0 },
+    ];
+
+    const summaries = listScriptSummaries();
+    const byId = Object.fromEntries(summaries.map((s) => [s.id, s]));
+
+    for (const { id, isTeensyville, characterCount, travellerCount } of expected) {
+      expect(byId[id], `missing summary for ${id}`).toBeDefined();
+      expect(byId[id]).toMatchObject({
+        source: "library",
+        isTeensyville,
+        characterCount,
+        travellerCount,
+      });
+    }
+  });
+
+  it("leaves the sample demo scripts untagged and unaffected", () => {
+    const summaries = listScriptSummaries();
+    const byId = Object.fromEntries(summaries.map((s) => [s.id, s]));
+    expect(byId["sample-homebrew"]?.isTeensyville).toBe(false);
+    expect(byId["setup-modifiers-demo"]?.isTeensyville).toBe(false);
   });
 });
 
