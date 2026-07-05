@@ -5,12 +5,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // again for issue #15 (Player gained startingCharacterId, GameDocument
 // gained activeFabled), again for issue #16 (GameDocument gained the
 // night-list fields: night, nightOpen, nightChecked, nightUnskipped,
-// firstNightOrder, otherNightOrder), and again for issue #18 (Player gained
-// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`) — a
-// document saved under an older shape must be rejected by gameStorage's
-// version check rather than loaded with any of these fields silently
-// undefined.
-export const GAME_SCHEMA_VERSION = 6;
+// firstNightOrder, otherNightOrder), again for issue #18 (Player gained
+// `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), and
+// again for issue #20 (GameDocument gained `nominations`) — a document saved
+// under an older shape must be rejected by gameStorage's version check
+// rather than loaded with any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 7;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -52,6 +52,17 @@ export interface ReminderToken {
   characterId: string | null;
   label: string;
   position: PlayerPosition;
+}
+
+// A nomination made today (CONTEXT.md: Nomination — tracked for the current
+// day only, no history). `voterIds` are the players currently recorded as
+// having voted for this nomination; toggling one in or out is how the
+// storyteller records/undoes a vote as it's counted.
+export interface Nomination {
+  id: string;
+  nominatorId: string;
+  nomineeId: string;
+  voterIds: string[];
 }
 
 export interface Player {
@@ -145,6 +156,11 @@ export interface GameDocument {
   // cleared).
   nightChecked: string[];
   nightUnskipped: string[];
+  // Nominations made today (CONTEXT.md: Nomination — current day only, no
+  // history). Reset to empty every time a night ends, so a fresh day always
+  // starts with a clean slate (issue #20 AC: "nomination eligibility resets
+  // at dawn").
+  nominations: Nomination[];
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -357,6 +373,7 @@ export function createGame({
     nightOpen: false,
     nightChecked: [],
     nightUnskipped: [],
+    nominations: [],
   };
 }
 

@@ -8,6 +8,7 @@ import {
   SEAT_HOLDING_TEAMS,
   type Character,
 } from "@/lib/characters";
+import { applyVoteToggle } from "@/lib/dayPhase";
 import {
   DRUNK_ID,
   insertAtSeat,
@@ -24,6 +25,7 @@ import { saveGame } from "@/lib/gameStorage";
 
 import { CharacterToken } from "./CharacterToken";
 import { ClaimsList } from "./ClaimsList";
+import { DayPhasePanel } from "./DayPhasePanel";
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
 import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
@@ -299,6 +301,26 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   function setClaim(playerId: string, characterId: string | null) {
     update({ ...game, players: updatePlayer(playerId, { claim: characterId }) });
+  }
+
+  function recordNomination(nominatorId: string, nomineeId: string) {
+    update({
+      ...game,
+      nominations: [
+        ...game.nominations,
+        { id: crypto.randomUUID(), nominatorId, nomineeId, voterIds: [] },
+      ],
+    });
+  }
+
+  function toggleNominationVote(nominationId: string, playerId: string) {
+    const { nominations, players } = applyVoteToggle(
+      game.nominations,
+      game.players,
+      nominationId,
+      playerId,
+    );
+    update({ ...game, nominations, players });
   }
 
   function startDraw() {
@@ -673,6 +695,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 almanacUrl={game.almanacUrl}
                 reminders={game.reminders}
                 activeFabled={game.activeFabled}
+                nominations={game.nominations}
                 onRename={renamePlayer}
                 onMove={movePlayer}
                 onReCircle={reCircle}
@@ -693,6 +716,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             </div>
             <NightList game={game} characterById={characterById} onChange={update} />
           </div>
+          <DayPhasePanel
+            game={game}
+            onRecordNomination={recordNomination}
+            onToggleVote={toggleNominationVote}
+          />
           <DemonBluffsPanel game={game} onChange={update} />
           <ClaimsList players={game.players} characterById={scriptCharacterById} />
         </>

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
-import type { Player, ReminderToken } from "@/lib/gameDocument";
+import type { Nomination, Player, ReminderToken } from "@/lib/gameDocument";
 
 import { GrimoireBoard } from "./GrimoireBoard";
 
@@ -116,6 +116,7 @@ function renderBoard(
       reminders?: ReminderToken[];
       activeFabled?: string[];
       claimOptions?: typeof claimOptions;
+      nominations?: Nomination[];
     }
   > = {},
 ) {
@@ -124,6 +125,7 @@ function renderBoard(
     activeFabled,
     claimOptions: claimOptionsOverride,
     almanacUrl,
+    nominations,
     ...handlerOverrides
   } = overrides;
   const handlers = { ...makeHandlers(), ...handlerOverrides };
@@ -135,6 +137,7 @@ function renderBoard(
       almanacUrl={almanacUrl}
       reminders={reminders}
       activeFabled={activeFabled ?? []}
+      nominations={nominations ?? []}
       {...handlers}
     />,
   );
@@ -375,6 +378,50 @@ describe("claims", () => {
     renderBoard([makePlayer({ claim: null })]);
 
     expect(screen.queryByText(/claims/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("day-phase token badges (issue #20)", () => {
+  it("badges a player who has already made a nomination today", () => {
+    renderBoard([makePlayer({ id: "p1" }), makePlayer({ id: "p2", name: "Bob" })], {
+      nominations: [{ id: "n1", nominatorId: "p1", nomineeId: "p2", voterIds: [] }],
+    });
+
+    expect(screen.getByText("Nominated today")).toBeInTheDocument();
+  });
+
+  it("badges a player who has already been nominated today", () => {
+    renderBoard([makePlayer({ id: "p1" }), makePlayer({ id: "p2", name: "Bob" })], {
+      nominations: [{ id: "n1", nominatorId: "p1", nomineeId: "p2", voterIds: [] }],
+    });
+
+    expect(screen.getByText("Up for nomination")).toBeInTheDocument();
+  });
+
+  it("badges the current block-holder's token", () => {
+    renderBoard(
+      [
+        makePlayer({ id: "p1" }),
+        makePlayer({ id: "p2", name: "Bob" }),
+        makePlayer({ id: "p3", name: "Carol" }),
+      ],
+      {
+        // 3 players, threshold ceil(3/2) = 2 — 2 voters meets it.
+        nominations: [
+          { id: "n1", nominatorId: "p1", nomineeId: "p2", voterIds: ["p1", "p3"] },
+        ],
+      },
+    );
+
+    expect(screen.getByText("On the block")).toBeInTheDocument();
+  });
+
+  it("shows no day-phase badges when nothing has happened today", () => {
+    renderBoard([makePlayer({ id: "p1" })], { nominations: [] });
+
+    expect(screen.queryByText("Nominated today")).not.toBeInTheDocument();
+    expect(screen.queryByText("Up for nomination")).not.toBeInTheDocument();
+    expect(screen.queryByText("On the block")).not.toBeInTheDocument();
   });
 });
 

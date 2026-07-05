@@ -19,8 +19,14 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
+  computeBlock,
+  hasBeenNominatedToday,
+  hasNominatedToday,
+} from "@/lib/dayPhase";
+import {
   circlePosition,
   DRUNK_ID,
+  type Nomination,
   type Player,
   type PlayerPosition,
   type ReminderToken,
@@ -41,6 +47,7 @@ export interface GrimoireBoardProps {
   almanacUrl?: string | null;
   reminders?: ReminderToken[];
   activeFabled: string[];
+  nominations?: Nomination[];
   onRename: (playerId: string, name: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
@@ -113,6 +120,7 @@ export function GrimoireBoard({
   almanacUrl,
   reminders = [],
   activeFabled,
+  nominations = [],
   onRename,
   onMove,
   onReCircle,
@@ -200,6 +208,10 @@ export function GrimoireBoard({
   );
   const total = sorted.length;
   const tokenSize = tokenSizeRem(total);
+  const block = useMemo(
+    () => computeBlock(nominations, players),
+    [nominations, players],
+  );
   const inPlayCharacterIds = useMemo(
     () =>
       new Set(
@@ -442,6 +454,15 @@ export function GrimoireBoard({
                       <span className={styles.claimBadge}>
                         Claims {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
+                    )}
+                    {block.playerId === player.id && (
+                      <span className={styles.note}>On the block</span>
+                    )}
+                    {hasNominatedToday(nominations, player.id) && (
+                      <span className={styles.note}>Nominated today</span>
+                    )}
+                    {hasBeenNominatedToday(nominations, player.id) && (
+                      <span className={styles.note}>Up for nomination</span>
                     )}
                   </summary>
 
