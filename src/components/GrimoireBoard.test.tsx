@@ -13,6 +13,7 @@ function makeReminder(overrides: Partial<ReminderToken> = {}): ReminderToken {
     characterId: "washerwoman",
     label: "Townsfolk",
     position: { x: 60, y: 40 },
+    anchorPlayerId: null,
     ...overrides,
   };
 }
@@ -78,6 +79,7 @@ function makeHandlers() {
     onToggleGhostVote: vi.fn(),
     onAddReminder: vi.fn(),
     onMoveReminder: vi.fn(),
+    onAttachReminder: vi.fn(),
     onRemoveReminder: vi.fn(),
     onRestoreReminder: vi.fn(),
     onSwapCharacter: vi.fn(),
@@ -737,6 +739,7 @@ describe("reminders (issue #14)", () => {
       characterId: "washerwoman",
       label: "Townsfolk",
       position: { x: 50, y: 50 },
+      anchorPlayerId: null,
     });
   });
 
@@ -758,6 +761,7 @@ describe("reminders (issue #14)", () => {
       characterId: "washerwoman",
       label: "Townsfolk",
       position: { x: 35, y: 40 },
+      anchorPlayerId: "p1",
     });
   });
 
@@ -851,6 +855,161 @@ describe("reminders (issue #14)", () => {
 
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+  });
+});
+
+describe("reminder placement (issue #71)", () => {
+  it("spreads a second pad-added reminder away from an already-placed one instead of stacking at the same default point", async () => {
+    const user = userEvent.setup();
+    const existing = makeReminder({
+      id: "r1",
+      position: { x: 50, y: 50 },
+      anchorPlayerId: null,
+    });
+    const { container, onAddReminder } = renderBoard([makePlayer()], {
+      reminders: [existing],
+    });
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    const dialog = screen.getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    expect(onAddReminder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchorPlayerId: null,
+        position: expect.not.objectContaining({ x: 50, y: 50 }),
+      }),
+    );
+  });
+
+  it("renders a reminder anchored to a seat below that seat's token, clear of its name label", () => {
+    const reminder = makeReminder({
+      id: "r1",
+      anchorPlayerId: "p1",
+      position: { x: 1, y: 1 },
+    });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    expect(wrap.style.left).toBe("30%");
+    expect(parseFloat(wrap.style.top)).toBeGreaterThan(40);
+  });
+
+  it("stacks a second reminder anchored to the same seat further down, not on top of the first", () => {
+    const first = makeReminder({ id: "r1", anchorPlayerId: "p1", label: "First" });
+    const second = makeReminder({ id: "r2", anchorPlayerId: "p1", label: "Second" });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [first, second] },
+    );
+
+    const firstTop = parseFloat(
+      (container.querySelector("[data-reminder-id='r1']") as HTMLElement).style.top,
+    );
+    const secondTop = parseFloat(
+      (container.querySelector("[data-reminder-id='r2']") as HTMLElement).style.top,
+    );
+    expect(secondTop).toBeGreaterThan(firstTop);
+  });
+
+  it("keeps an anchored reminder tracking its seat when that seat is dragged to a new position", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "p1" });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }));
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(45);
+  });
+
+  it("attaches an existing reminder to a seat by tapping it, without a drag gesture", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { container, onAttachReminder } = renderBoard(
+      [makePlayer({ id: "p1", name: "Alice" })],
+      { reminders: [reminder] },
+    );
+
+    await user.click(
+      within(container.querySelector("[data-reminder-id='r1']") as HTMLElement).getByText(
+        "Townsfolk",
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Attach to seat" }));
+    expect(screen.getByText(/tap a seat/i)).toBeInTheDocument();
+
+    const seatDetails = container.querySelector(
+      "[data-player-id='p1'] details",
+    ) as HTMLDetailsElement;
+    const seatSummary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    fireEvent.click(seatSummary);
+
+    expect(onAttachReminder).toHaveBeenCalledWith("r1", "p1");
+    expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
+    // Tapping the seat while placing attaches the reminder instead of
+    // opening that seat's own menu (jsdom doesn't hide a closed <details>'s
+    // content from queries the way a real browser does, so `.open` is the
+    // only reliable signal here — see "doesn't open the token menu after an
+    // actual drag" above for the same check).
+    expect(seatDetails.open).toBe(false);
+  });
+
+  it("cancels an in-progress attach without calling onAttachReminder", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { onAttachReminder } = renderBoard([makePlayer({ id: "p1", name: "Alice" })], {
+      reminders: [reminder],
+    });
+
+    await user.click(
+      screen.getByText("Townsfolk").closest("[data-reminder-id='r1']")!.querySelector(
+        "summary",
+      )!,
+    );
+    await user.click(screen.getByRole("button", { name: "Attach to seat" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
+    await user.click(screen.getByText("Alice"));
+    expect(onAttachReminder).not.toHaveBeenCalled();
+  });
+
+  it("hides the pad-level 'Add reminder'/'Info tokens' buttons while placing a reminder", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { container } = renderBoard([makePlayer({ id: "p1", name: "Alice" })], {
+      reminders: [reminder],
+    });
+
+    await user.click(
+      screen.getByText("Townsfolk").closest("[data-reminder-id='r1']")!.querySelector(
+        "summary",
+      )!,
+    );
+    await user.click(screen.getByRole("button", { name: "Attach to seat" }));
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    expect(
+      within(controls).queryByRole("button", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(controls).queryByRole("button", { name: "Info tokens" }),
+    ).not.toBeInTheDocument();
   });
 });
 

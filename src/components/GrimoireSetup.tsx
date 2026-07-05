@@ -10,8 +10,10 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
+  circlePosition,
   DRUNK_ID,
   insertAtSeat,
+  parkBeside,
   shuffleTokens,
   withRestoredReminder,
   type Alignment,
@@ -252,6 +254,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     characterId: string | null;
     label: string;
     position: PlayerPosition;
+    anchorPlayerId: string | null;
   }) {
     const reminder: ReminderToken = { id: crypto.randomUUID(), ...input };
     update({
@@ -260,11 +263,39 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // A manual drag always detaches a reminder from whatever seat it was
+  // anchored to — the same way dragging a player token overrides its
+  // computed circle position — since the storyteller just moved it
+  // somewhere of their own choosing, not "beside" any particular seat
+  // anymore (issue #71).
   function moveReminder(reminderId: string, position: PlayerPosition) {
     update({
       ...game,
       reminders: game.reminders.map((r) =>
-        r.id === reminderId ? { ...r, position } : r,
+        r.id === reminderId ? { ...r, position, anchorPlayerId: null } : r,
+      ),
+    });
+  }
+
+  // Tap-to-place (issue #71 AC: "a reminder can be attached to a seat
+  // without a drag gesture") — parks the reminder beside the chosen seat's
+  // current position and remembers the seat so it keeps tracking it.
+  function attachReminder(reminderId: string, playerId: string) {
+    const player = game.players.find((p) => p.id === playerId);
+    if (!player) return;
+    const sorted = [...game.players].sort((a, b) => a.seat - b.seat);
+    const base =
+      player.position ??
+      circlePosition(
+        sorted.findIndex((p) => p.id === playerId),
+        sorted.length,
+      );
+    update({
+      ...game,
+      reminders: game.reminders.map((r) =>
+        r.id === reminderId
+          ? { ...r, position: parkBeside(base), anchorPlayerId: playerId }
+          : r,
       ),
     });
   }
@@ -884,6 +915,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onToggleGhostVote={toggleGhostVote}
                 onAddReminder={addReminder}
                 onMoveReminder={moveReminder}
+                onAttachReminder={attachReminder}
                 onRemoveReminder={removeReminder}
                 onRestoreReminder={restoreReminder}
                 onSwapCharacter={swapCharacter}

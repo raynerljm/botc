@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { getCharacter, type Character } from "./characters";
 import {
+  anchoredReminderPosition,
   buildBagTokens,
   circlePosition,
   createGame,
   GAME_SCHEMA_VERSION,
   heldCharacterIds,
   insertAtSeat,
+  nextPadReminderPosition,
   shuffleTokens,
   withRestoredReminder,
   type Player,
@@ -79,6 +81,7 @@ describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => 
     characterId: null,
     label: "Poisoned",
     position: { x: 10, y: 20 },
+    anchorPlayerId: null,
   };
 
   it("appends a restored reminder that isn't already present", () => {
@@ -133,6 +136,47 @@ describe("circlePosition", () => {
     // Symmetric around the centre (50, 50).
     expect(right.x - 50).toBeCloseTo(50 - left.x);
     expect(bottom.y - 50).toBeCloseTo(50 - top.y);
+  });
+});
+
+describe("nextPadReminderPosition (issue #71)", () => {
+  it("puts the first reminder dead centre, matching prior default-position behavior", () => {
+    expect(nextPadReminderPosition(0)).toEqual({ x: 50, y: 50 });
+  });
+
+  it("spreads each later reminder to a distinct point, never stacking on centre or on each other", () => {
+    const positions = [0, 1, 2, 3, 4].map((count) => nextPadReminderPosition(count));
+    const dedup = new Set(positions.map((p) => `${p.x},${p.y}`));
+    expect(dedup.size).toBe(positions.length);
+  });
+
+  it("keeps every position within the pad's clamped bounds", () => {
+    for (let count = 0; count < 30; count++) {
+      const { x, y } = nextPadReminderPosition(count);
+      expect(x).toBeGreaterThanOrEqual(4);
+      expect(x).toBeLessThanOrEqual(96);
+      expect(y).toBeGreaterThanOrEqual(4);
+      expect(y).toBeLessThanOrEqual(96);
+    }
+  });
+});
+
+describe("anchoredReminderPosition (issue #71)", () => {
+  it("places the first reminder below the seat, clear of its token+name block", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 50 }, 0);
+    expect(position.x).toBe(50);
+    expect(position.y).toBeGreaterThan(50 + 8);
+  });
+
+  it("stacks a second reminder on the same seat further down, not on top of the first", () => {
+    const first = anchoredReminderPosition({ x: 50, y: 50 }, 0);
+    const second = anchoredReminderPosition({ x: 50, y: 50 }, 1);
+    expect(second.y).toBeGreaterThan(first.y);
+  });
+
+  it("clamps within the pad's bounds for a seat near the bottom edge", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 94 }, 0);
+    expect(position.y).toBeLessThanOrEqual(96);
   });
 });
 
