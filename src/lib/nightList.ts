@@ -10,6 +10,14 @@ export function phaseForNight(nightNumber: number): NightPhase {
   return nightNumber <= 1 ? "first" : "other";
 }
 
+// The night currently open, or the one "Start night" would open next —
+// nights fully completed plus one. The single source of every place that
+// needs "which night is this" (the heading, computeNightList's own one-shot
+// acts-as check, and setting an acts-as target mid-game).
+export function currentNightNumber(game: GameDocument): number {
+  return game.night + 1;
+}
+
 export interface NightListEntry {
   id: string;
   kind: "fixed" | "character";
@@ -24,6 +32,13 @@ export interface NightListEntry {
   // and auto-skipped in the UI, but always present in the list (never
   // hidden), per issue #16's acceptance criteria.
   skipped: boolean;
+  // Set only for an acts-as entry (CONTEXT.md: Acts as) — the acting
+  // player's own actual character id (e.g. the Philosopher), distinct from
+  // `characterId`, which stays the *target* character whose ability and
+  // reminder text this entry represents. Lets the UI show the physical
+  // token to wake (the player's own character) while attributing the
+  // ability to the character it was borrowed from (issue #17 AC).
+  actingCharacterId: string | null;
 }
 
 const FIXED_DUSK = "fixed:dusk";
@@ -88,6 +103,7 @@ function fixedEntry(id: string, bucket: number): RawEntry {
     dead: false,
     isDrunk: false,
     skipped: false,
+    actingCharacterId: null,
     defaultBucket: bucket,
     nightValue: bucket,
   };
@@ -123,6 +139,60 @@ export interface ComputeNightListInput {
   unskippedIds: ReadonlySet<string>;
 }
 
+interface NightAction {
+  nightValue: number;
+  overrideRank: number | undefined;
+  acts: boolean;
+  reminderText: string;
+}
+
+// Shared by a character's own entry and an acts-as entry borrowing another
+// character's ability — both need the identical "does it act tonight, where
+// does it sort, which reminder text applies" derivation, so the two can't
+// drift apart (issue #17 code review). `oneShot` is only relevant to
+// acts-as: a target with no position this phase is still treated as acting,
+// at its first-night value, when it was set on exactly this night and truly
+// has a first-night position — by dataset value *or* by a script's own
+// night-order override, matching how `acts` itself already honors overrides.
+function resolveNightAction(
+  character: Character,
+  phase: NightPhase,
+  order: string[] | null,
+  firstNightOrder: string[] | null,
+  oneShot: boolean,
+): NightAction {
+  const primaryValue = phase === "first" ? character.firstNight : character.otherNight;
+  const overrideRankThisPhase = metaRank(order, character.id, true);
+  const actsPrimary = primaryValue > 0 || overrideRankThisPhase !== undefined;
+
+  const firstNightOverrideRank = metaRank(firstNightOrder, character.id, true);
+  const oneShotEligible =
+    !actsPrimary &&
+    phase === "other" &&
+    oneShot &&
+    (character.firstNight > 0 || firstNightOverrideRank !== undefined);
+
+  const acts = actsPrimary || oneShotEligible;
+  const nightValue = actsPrimary
+    ? primaryValue
+    : oneShotEligible
+      ? character.firstNight
+      : Number.MAX_SAFE_INTEGER;
+  // A one-shot eligibility that comes purely from a first-night override
+  // (character.firstNight is 0 in the dataset) has no meaningful nightValue
+  // to sort by — surface that override's own rank instead, so it sorts via
+  // the same rank-supremacy path any script-named character already gets,
+  // rather than a bare nightValue of 0 sorting it before every real actor.
+  const overrideRank =
+    overrideRankThisPhase ?? (oneShotEligible ? firstNightOverrideRank : undefined);
+  const reminderText =
+    phase === "first" || oneShotEligible
+      ? character.firstNightReminder
+      : character.otherNightReminder;
+
+  return { nightValue, overrideRank, acts, reminderText };
+}
+
 export function computeNightList({
   game,
   characterById,
@@ -134,6 +204,11 @@ export function computeNightList({
   const includeMinionDemonInfo =
     phase === "first" && minionDemonInfoEligible(game);
 
+  // Needed to resolve a first-night-only acts-as target chosen on a later
+  // night to the one specific night it was set (issue #17 AC), not every
+  // night thereafter.
+  const nightNumber = currentNightNumber(game);
+
   const raw: RawEntry[] = [fixedEntry(FIXED_DUSK, 0)];
   if (includeMinionDemonInfo) {
     raw.push(fixedEntry(FIXED_MINION_INFO, 1));
@@ -142,36 +217,61 @@ export function computeNightList({
 
   for (const player of game.players) {
     if (!player.characterId) continue;
+    // Once a player has an acts-as target, their own character's generic
+    // entry is suppressed — the ability they'd otherwise be walked through
+    // (e.g. the Philosopher's own "choose an ability" prompt) is replaced by
+    // the acts-as entry generated below (issue #17 AC) — but show-all still
+    // reveals it, same as every other non-acting entry, so it stays a full
+    // reference view rather than gaining an unconditionally hidden case.
+    if (player.actsAs && !showAll) continue;
     const character = characterById.get(player.characterId);
     if (!character) continue;
 
-    const nightValue = phase === "first" ? character.firstNight : character.otherNight;
-    // A character explicitly named in the script's night-order override acts
-    // tonight regardless of its dataset nightValue — the override itself is
-    // the storyteller's evidence it belongs (e.g. a Demon like the Imp, whose
-    // own firstNight is 0 because "Demon info" is the fixed step that
-    // actually covers first night, still needs to appear when the script
-    // places it explicitly). Computed once and reused for sorting below, so
-    // "does it act" and "where does it sort" can never drift apart.
-    const overrideRank = metaRank(order, character.id, true);
-    const acts = nightValue > 0 || overrideRank !== undefined;
-    if (!acts && !showAll) continue;
+    const action = resolveNightAction(character, phase, order, null, false);
+    if (!action.acts && !showAll) continue;
 
     raw.push({
       id: `char:${player.id}`,
       kind: "character",
       label: character.name,
-      reminderText:
-        phase === "first" ? character.firstNightReminder : character.otherNightReminder,
+      reminderText: action.reminderText,
       characterId: character.id,
       playerId: player.id,
       playerName: player.name,
       dead: player.dead,
       isDrunk: player.isDrunk,
       skipped: player.dead && !unskippedIds.has(`char:${player.id}`),
-      defaultBucket: acts ? 3 : 4,
-      nightValue: acts ? nightValue : Number.MAX_SAFE_INTEGER,
-      overrideRank,
+      actingCharacterId: null,
+      defaultBucket: action.acts ? 3 : 4,
+      nightValue: action.nightValue,
+      overrideRank: action.overrideRank,
+    });
+  }
+
+  for (const player of game.players) {
+    if (!player.actsAs) continue;
+    const target = characterById.get(player.actsAs);
+    if (!target) continue;
+
+    const oneShot = player.actsAsSetOnNight === nightNumber;
+    const action = resolveNightAction(target, phase, order, game.firstNightOrder, oneShot);
+    if (!action.acts && !showAll) continue;
+
+    raw.push({
+      id: `actsas:${player.id}`,
+      kind: "character",
+      label: target.name,
+      reminderText: action.reminderText,
+      characterId: target.id,
+      actingCharacterId: player.characterId,
+      playerId: player.id,
+      playerName: player.name,
+      dead: player.dead,
+      isDrunk: player.isDrunk,
+      skipped: player.dead && !unskippedIds.has(`actsas:${player.id}`),
+      defaultBucket: action.acts ? 3 : 4,
+      nightValue: action.nightValue,
+      overrideRank: action.overrideRank,
     });
   }
 
@@ -220,5 +320,6 @@ export function computeNightList({
     dead: entry.dead,
     isDrunk: entry.isDrunk,
     skipped: entry.skipped,
+    actingCharacterId: entry.actingCharacterId,
   }));
 }

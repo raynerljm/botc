@@ -155,6 +155,8 @@ describe("buildGameSnapshot", () => {
       ghostVoteSpent: false,
       position: null,
       claim: null,
+      actsAs: null,
+      actsAsSetOnNight: null,
     };
     const withTraveller = {
       ...game,

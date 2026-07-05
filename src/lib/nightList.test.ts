@@ -374,3 +374,282 @@ describe("computeNightList: script _meta night-order overrides", () => {
     expect(acting.map((e) => e.id)).toEqual(expectedOrder);
   });
 });
+
+describe("computeNightList: acts-as (issue #17)", () => {
+  it("inserts an entry at the target's night position, attributed to the acting player with the target's reminder text", () => {
+    // Empath recurs on other nights (otherNight > 0) — a simple non-one-shot
+    // target to prove basic attribution and reminder-text borrowing.
+    const game = gameWith(["philosopher", "imp", "empath"]);
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      players: game.players.map((p) =>
+        p.id === philosopher.id ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 } : p,
+      ),
+    };
+    const chars = characterById(withActsAs);
+    const entries = computeNightList({
+      game: withActsAs,
+      characterById: chars,
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    const entry = entries.find((e) => e.id === `actsas:${philosopher.id}`);
+    expect(entry).toBeDefined();
+    expect(entry!.characterId).toBe("empath");
+    expect(entry!.actingCharacterId).toBe("philosopher");
+    expect(entry!.playerId).toBe(philosopher.id);
+    expect(entry!.reminderText).toBe(chars.get("empath")!.otherNightReminder);
+    // Sorted at the target's (empath) night position, not the actor's own.
+    const impIndex = entries.findIndex((e) => e.characterId === "imp");
+    const empathValue = chars.get("empath")!.otherNight;
+    const impValue = chars.get("imp")!.otherNight;
+    const entryIndex = entries.indexOf(entry!);
+    expect(entryIndex < impIndex).toBe(empathValue < impValue);
+  });
+
+  it("suppresses the acting player's own generic entry once acts-as is set", () => {
+    const game = gameWith(["philosopher", "imp", "empath"]);
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      players: game.players.map((p) =>
+        p.id === philosopher.id ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 } : p,
+      ),
+    };
+    const entries = computeNightList({
+      game: withActsAs,
+      characterById: characterById(withActsAs),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    expect(entries.some((e) => e.id === `char:${philosopher.id}`)).toBe(false);
+  });
+
+  it("still reveals the suppressed own entry under show-all, like every other non-acting entry", () => {
+    const game = gameWith(["philosopher", "imp", "empath"]);
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      players: game.players.map((p) =>
+        p.id === philosopher.id ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 } : p,
+      ),
+    };
+
+    const hidden = computeNightList({
+      game: withActsAs,
+      characterById: characterById(withActsAs),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    expect(hidden.some((e) => e.id === `char:${philosopher.id}`)).toBe(false);
+
+    const revealed = computeNightList({
+      game: withActsAs,
+      characterById: characterById(withActsAs),
+      phase: "other",
+      showAll: true,
+      unskippedIds: new Set(),
+    });
+    expect(revealed.some((e) => e.id === `char:${philosopher.id}`)).toBe(true);
+    // Both the player's own entry and their acts-as entry are visible.
+    expect(revealed.some((e) => e.id === `actsas:${philosopher.id}`)).toBe(true);
+  });
+
+  it("uses the target's other-night reminder, not first-night, for an override-placed non-one-shot other-night entry", () => {
+    // A homebrew character with no other-night dataset position, but placed
+    // in the script's own other-night order — acts via the override alone,
+    // not the one-shot rule, so it must use its other-night reminder text.
+    const homebrew: Character = {
+      id: "custom-scryer",
+      name: "Custom Scryer",
+      edition: null,
+      team: "townsfolk",
+      ability: "A homebrew ability.",
+      firstNight: 0,
+      firstNightReminder: "",
+      otherNight: 0,
+      otherNightReminder: "Show a card.",
+      reminders: [],
+      remindersGlobal: [],
+      setup: false,
+      jinxes: [],
+      image: null,
+    };
+    const game = gameWith(["philosopher", "imp"], {
+      otherNightOrder: ["dusk", "custom-scryer", "imp", "dawn"],
+    });
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      characterPool: [...game.characterPool, homebrew],
+      players: game.players.map((p) =>
+        p.id === philosopher.id
+          ? { ...p, actsAs: "custom-scryer", actsAsSetOnNight: 1 }
+          : p,
+      ),
+    };
+    const entries = computeNightList({
+      game: withActsAs,
+      characterById: characterById(withActsAs),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    const entry = entries.find((e) => e.id === `actsas:${philosopher.id}`)!;
+    expect(entry).toBeDefined();
+    expect(entry.reminderText).toBe("Show a card.");
+  });
+
+  it("treats a target whose only first-night position comes from a script override as one-shot too", () => {
+    // Dataset firstNight is 0, but the script's own first-night order names
+    // it explicitly — the acting rule already honors this for a normal
+    // character entry, so the one-shot acts-as fallback must too.
+    const homebrew: Character = {
+      id: "custom-oracle",
+      name: "Custom Oracle",
+      edition: null,
+      team: "townsfolk",
+      ability: "A homebrew ability.",
+      firstNight: 0,
+      firstNightReminder: "Reveal a card.",
+      otherNight: 0,
+      otherNightReminder: "",
+      reminders: [],
+      remindersGlobal: [],
+      setup: false,
+      jinxes: [],
+      image: null,
+    };
+    const game = gameWith(["philosopher", "imp"], {
+      night: 2,
+      firstNightOrder: ["dusk", "custom-oracle", "dawn"],
+    });
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const withActsAs: GameDocument = {
+      ...game,
+      characterPool: [...game.characterPool, homebrew],
+      players: game.players.map((p) =>
+        p.id === philosopher.id
+          ? { ...p, actsAs: "custom-oracle", actsAsSetOnNight: 3 }
+          : p,
+      ),
+    };
+    const entries = computeNightList({
+      game: withActsAs,
+      characterById: characterById(withActsAs),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    const entry = entries.find((e) => e.id === `actsas:${philosopher.id}`);
+    expect(entry).toBeDefined();
+    expect(entry!.reminderText).toBe("Reveal a card.");
+    // Regression (code review): an override-only one-shot has no real
+    // nightValue to sort by (the dataset firstNight is 0), so it must sort
+    // via the override's own rank — like any other script-named entry ranks
+    // ahead of unranked ones — not by a bare nightValue of 0, which would
+    // misplace it at the very start of the acting bucket regardless of
+    // where the override actually named it.
+    const impIndex = entries.findIndex((e) => e.characterId === "imp");
+    const entryIndex = entries.indexOf(entry!);
+    expect(entryIndex).toBeLessThan(impIndex);
+  });
+
+  it("inserts a first-night-only target chosen on a later night for that night only, then never again", () => {
+    // Washerwoman only has a first-night position (otherNight === 0).
+    const game = gameWith(["philosopher", "imp", "washerwoman"]);
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const chosenOnNight3: GameDocument = {
+      ...game,
+      night: 2, // "night: game.night + 1" is the night currently open — 3.
+      players: game.players.map((p) =>
+        p.id === philosopher.id ? { ...p, actsAs: "washerwoman", actsAsSetOnNight: 3 } : p,
+      ),
+    };
+    const chars = characterById(chosenOnNight3);
+
+    const night3 = computeNightList({
+      game: chosenOnNight3,
+      characterById: chars,
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    expect(night3.some((e) => e.id === `actsas:${philosopher.id}`)).toBe(true);
+    const entry = night3.find((e) => e.id === `actsas:${philosopher.id}`)!;
+    expect(entry.reminderText).toBe(chars.get("washerwoman")!.firstNightReminder);
+
+    const night4: GameDocument = { ...chosenOnNight3, night: 3 };
+    const otherEntries = computeNightList({
+      game: night4,
+      characterById: characterById(night4),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    expect(otherEntries.some((e) => e.id === `actsas:${philosopher.id}`)).toBe(false);
+  });
+
+  it("treats a recurring target's own later night normally, without needing actsAsSetOnNight to match", () => {
+    const game = gameWith(["philosopher", "imp", "empath"]);
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    // Set on night 1, still recurring fine many nights later.
+    const laterGame: GameDocument = {
+      ...game,
+      night: 4,
+      players: game.players.map((p) =>
+        p.id === philosopher.id ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 } : p,
+      ),
+    };
+    const entries = computeNightList({
+      game: laterGame,
+      characterById: characterById(laterGame),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    expect(entries.some((e) => e.id === `actsas:${philosopher.id}`)).toBe(true);
+  });
+
+  it("marks a dead acting player's acts-as entry skipped unless un-skipped, independently of their suppressed own entry", () => {
+    const game = gameWith(["philosopher", "imp", "empath"]);
+    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const deadWithActsAs: GameDocument = {
+      ...game,
+      players: game.players.map((p) =>
+        p.id === philosopher.id
+          ? { ...p, actsAs: "empath", actsAsSetOnNight: 1, dead: true }
+          : p,
+      ),
+    };
+    const entries = computeNightList({
+      game: deadWithActsAs,
+      characterById: characterById(deadWithActsAs),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    const entry = entries.find((e) => e.id === `actsas:${philosopher.id}`)!;
+    expect(entry.dead).toBe(true);
+    expect(entry.skipped).toBe(true);
+
+    const unskipped = computeNightList({
+      game: deadWithActsAs,
+      characterById: characterById(deadWithActsAs),
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set([`actsas:${philosopher.id}`]),
+    });
+    expect(unskipped.find((e) => e.id === `actsas:${philosopher.id}`)!.skipped).toBe(false);
+  });
+});

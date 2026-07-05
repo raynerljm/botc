@@ -161,6 +161,8 @@ describe("Day phase: vote tally and threshold", () => {
             ghostVoteSpent: false,
             position: null,
             claim: null,
+            actsAs: null,
+            actsAsSetOnNight: null,
           },
         ];
       })(),
@@ -257,6 +259,8 @@ describe("Day phase: ghost votes", () => {
             ghostVoteSpent: false,
             position: null,
             claim: null,
+            actsAs: null,
+            actsAsSetOnNight: null,
           },
         ];
       })(),

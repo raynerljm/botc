@@ -31,6 +31,8 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     ghostVoteSpent: false,
     position: null,
     claim: null,
+    actsAs: null,
+    actsAsSetOnNight: null,
     ...overrides,
   };
 }
@@ -84,6 +86,7 @@ function makeHandlers() {
     onAddFabled: vi.fn(),
     onRemoveFabled: vi.fn(),
     onSetClaim: vi.fn(),
+    onSetActsAs: vi.fn(),
   };
 }
 
@@ -405,6 +408,46 @@ describe("claims", () => {
     renderBoard([makePlayer({ claim: null })]);
 
     expect(screen.queryByText(/claims/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("acts-as (issue #17)", () => {
+  it("sets a player's acts-as target from their token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/acts as/i), "librarian");
+
+    expect(handlers.onSetActsAs).toHaveBeenCalledWith("p1", "librarian");
+  });
+
+  it("clears an acts-as target back to none", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer({ actsAs: "librarian" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/acts as/i), "");
+
+    expect(handlers.onSetActsAs).toHaveBeenCalledWith("p1", null);
+  });
+
+  it("renders a small acts-as badge by the token", () => {
+    const { container } = renderBoard([makePlayer({ actsAs: "librarian" })]);
+
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    expect(within(summary).getByText(/acts as librarian/i)).toBeInTheDocument();
+  });
+
+  it("shows no acts-as badge when the player has no acts-as target", () => {
+    const { container } = renderBoard([makePlayer({ actsAs: null })]);
+
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    expect(within(summary).queryByText(/acts as/i)).not.toBeInTheDocument();
   });
 });
 

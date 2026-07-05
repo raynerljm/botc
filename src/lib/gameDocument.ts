@@ -7,12 +7,13 @@ import { normalizeCharacterId } from "./scriptParser";
 // night-list fields: night, nightOpen, nightChecked, nightUnskipped,
 // firstNightOrder, otherNightOrder), again for issue #18 (Player gained
 // `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), again
-// for issue #20 (GameDocument gained `nominations`), and again for issue #26
+// for issue #20 (GameDocument gained `nominations`), again for issue #26
 // (GameDocument gained the required `setupWalkthroughOffered`/
-// `setupWalkthroughSteps` fields) — a document saved under an older shape
-// must be rejected by gameStorage's version check rather than loaded with
-// any of these fields silently undefined.
-export const GAME_SCHEMA_VERSION = 8;
+// `setupWalkthroughSteps` fields), and again for issue #17 (Player gained
+// `actsAs`/`actsAsSetOnNight`) — a document saved under an older shape must
+// be rejected by gameStorage's version check rather than loaded with any of
+// these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 9;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -98,6 +99,16 @@ export interface Player {
   // alike (CONTEXT.md: Claim). Current claim only — no history, matching a
   // finished game's export (ADR 0002 spirit).
   claim: string | null;
+  // The character whose ability this player resolves instead of (or in
+  // addition to) their own — a target character id, or null when unset
+  // (CONTEXT.md: Acts as; issue #17: Philosopher, Alchemist, Boffin,
+  // homebrew ability-thieves).
+  actsAs: string | null;
+  // The night number (matching GameDocument.night + 1) at which actsAs was
+  // last set. Only meaningful when actsAs is non-null — used to resolve a
+  // first-night-only target chosen on a later night to a single one-shot
+  // night-list entry rather than a recurring one (issue #17 AC).
+  actsAsSetOnNight: number | null;
 }
 
 export interface GameDocument {
@@ -369,6 +380,8 @@ export function createGame({
     ghostVoteSpent: false,
     position: null,
     claim: null,
+    actsAs: null,
+    actsAsSetOnNight: null,
   }));
 
   const characterPool = Array.from(

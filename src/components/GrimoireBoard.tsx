@@ -67,6 +67,7 @@ export interface GrimoireBoardProps {
   onAddFabled: (characterId: string) => void;
   onRemoveFabled: (characterId: string) => void;
   onSetClaim: (playerId: string, characterId: string | null) => void;
+  onSetActsAs: (playerId: string, characterId: string | null) => void;
   // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
   // when there's nothing for it to show, so no button renders.
   onOpenSetupWalkthrough?: () => void;
@@ -135,6 +136,7 @@ export function GrimoireBoard({
   onAddFabled,
   onRemoveFabled,
   onSetClaim,
+  onSetActsAs,
   onOpenSetupWalkthrough,
 }: GrimoireBoardProps) {
   const claimById = useMemo(
@@ -515,6 +517,11 @@ export function GrimoireBoard({
                         Claims {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
                     )}
+                    {player.actsAs && (
+                      <span className={styles.claimBadge}>
+                        Acts as {claimById.get(player.actsAs)?.name ?? player.actsAs}
+                      </span>
+                    )}
                     {nominatorTodayIds?.has(player.id) && (
                       <span className={styles.note}>Nominated</span>
                     )}
@@ -597,6 +604,31 @@ export function GrimoireBoard({
                         }
                       >
                         <option value="">No claim</option>
+                        {claimGroups.map((group) => (
+                          <optgroup key={group.team} label={teamNames[group.team]}>
+                            {group.characters.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label
+                      className={styles.field}
+                      htmlFor={`token-acts-as-${player.id}`}
+                    >
+                      Acts as
+                      <select
+                        id={`token-acts-as-${player.id}`}
+                        value={player.actsAs ?? ""}
+                        onChange={(event) =>
+                          onSetActsAs(player.id, event.target.value || null)
+                        }
+                      >
+                        <option value="">Not acting as anyone</option>
                         {claimGroups.map((group) => (
                           <optgroup key={group.team} label={teamNames[group.team]}>
                             {group.characters.map((c) => (

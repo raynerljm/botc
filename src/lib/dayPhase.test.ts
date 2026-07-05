@@ -27,6 +27,8 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     ghostVoteSpent: false,
     position: null,
     claim: null,
+    actsAs: null,
+    actsAsSetOnNight: null,
     ...overrides,
   };
 }

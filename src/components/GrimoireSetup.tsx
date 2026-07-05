@@ -22,6 +22,7 @@ import {
   type SetupWalkthroughStepStatus,
 } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
+import { currentNightNumber } from "@/lib/nightList";
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
@@ -409,6 +410,29 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({ ...game, players: updatePlayer(playerId, { claim: characterId }) });
   }
 
+  // The night this acts-as takes effect is whichever night is currently
+  // open (or about to open) — the same number the night list itself uses
+  // (CONTEXT.md: Night list) — so a first-night-only target chosen mid-game
+  // resolves to that specific night, not night 1.
+  //
+  // The target picker offers the script's full character list (any
+  // not-in-play character is a legitimate target — a Philosopher choosing a
+  // character nobody currently holds is the canonical case), so — exactly
+  // like swapCharacter/addFabled — the target must be added to
+  // characterPool or the night list's characterById (in-play only) can
+  // never resolve it and the acts-as entry silently never appears.
+  function setActsAs(playerId: string, characterId: string | null) {
+    const character = characterId ? scriptCharacterById.get(characterId) : undefined;
+    update({
+      ...game,
+      players: updatePlayer(playerId, {
+        actsAs: characterId,
+        actsAsSetOnNight: characterId ? currentNightNumber(game) : null,
+      }),
+      characterPool: withCharacterInPool(game.characterPool, character),
+    });
+  }
+
   function startDraw() {
     if (!nextUnassignedSeat) return;
     setDraw({
@@ -526,6 +550,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ghostVoteSpent: false,
       position: null,
       claim: null,
+      actsAs: null,
+      actsAsSetOnNight: null,
     };
 
     update({
@@ -564,6 +590,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ghostVoteSpent: false,
       position: null,
       claim: null,
+      actsAs: null,
+      actsAsSetOnNight: null,
     };
 
     update({
@@ -827,6 +855,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onAddFabled={addFabled}
                 onRemoveFabled={removeFabled}
                 onSetClaim={setClaim}
+                onSetActsAs={setActsAs}
                 onOpenSetupWalkthrough={
                   walkthroughSteps.length > 0 ? openWalkthrough : undefined
                 }
