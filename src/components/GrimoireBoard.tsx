@@ -41,6 +41,8 @@ export interface GrimoireBoardProps {
   almanacUrl?: string | null;
   reminders?: ReminderToken[];
   activeFabled: string[];
+  nominatorTodayIds?: ReadonlySet<string>;
+  nomineeTodayIds?: ReadonlySet<string>;
   onRename: (playerId: string, name: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
@@ -113,6 +115,8 @@ export function GrimoireBoard({
   almanacUrl,
   reminders = [],
   activeFabled,
+  nominatorTodayIds,
+  nomineeTodayIds,
   onRename,
   onMove,
   onReCircle,
@@ -442,6 +446,12 @@ export function GrimoireBoard({
                       <span className={styles.claimBadge}>
                         Claims {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
+                    )}
+                    {nominatorTodayIds?.has(player.id) && (
+                      <span className={styles.note}>Nominated</span>
+                    )}
+                    {nomineeTodayIds?.has(player.id) && (
+                      <span className={styles.note}>Nominee</span>
                     )}
                   </summary>
 

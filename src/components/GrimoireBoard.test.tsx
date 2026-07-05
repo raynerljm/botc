@@ -116,6 +116,8 @@ function renderBoard(
       reminders?: ReminderToken[];
       activeFabled?: string[];
       claimOptions?: typeof claimOptions;
+      nominatorTodayIds?: ReadonlySet<string>;
+      nomineeTodayIds?: ReadonlySet<string>;
     }
   > = {},
 ) {
@@ -124,6 +126,8 @@ function renderBoard(
     activeFabled,
     claimOptions: claimOptionsOverride,
     almanacUrl,
+    nominatorTodayIds,
+    nomineeTodayIds,
     ...handlerOverrides
   } = overrides;
   const handlers = { ...makeHandlers(), ...handlerOverrides };
@@ -135,6 +139,8 @@ function renderBoard(
       almanacUrl={almanacUrl}
       reminders={reminders}
       activeFabled={activeFabled ?? []}
+      nominatorTodayIds={nominatorTodayIds}
+      nomineeTodayIds={nomineeTodayIds}
       {...handlers}
     />,
   );
@@ -211,6 +217,29 @@ describe("GrimoireBoard rendering", () => {
     const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
     expect(wrap.style.left).toBe("12%");
     expect(wrap.style.top).toBe("34%");
+  });
+
+  it("badges a player who has already nominated or been nominated today (issue #20)", () => {
+    const { container } = renderBoard(
+      [
+        makePlayer({ id: "p1", seat: 1 }),
+        makePlayer({ id: "p2", seat: 2, characterId: "imp" }),
+      ],
+      {
+        nominatorTodayIds: new Set(["p1"]),
+        nomineeTodayIds: new Set(["p2"]),
+      },
+    );
+
+    const p1Summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const p2Summary = container.querySelector(
+      "[data-player-id='p2'] summary",
+    ) as HTMLElement;
+    expect(within(p1Summary).getByText("Nominated")).toBeInTheDocument();
+    expect(within(p2Summary).getByText("Nominee")).toBeInTheDocument();
+    expect(within(p1Summary).queryByText("Nominee")).not.toBeInTheDocument();
   });
 });
 
