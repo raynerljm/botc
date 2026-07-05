@@ -271,6 +271,13 @@ export function GrimoireBoard({
   ) {
     const board = boardRef.current;
     if (!board) return;
+    // While a reminder is armed for tap-to-place, a seat tap must always
+    // land as a clean click — never a drag — so ordinary finger jitter past
+    // the drag threshold can't get read as "reposition this seat" and
+    // silently swallow the attach (code review finding). Placement is a
+    // single quick tap; there's no legitimate reason to reposition a seat
+    // in the middle of it.
+    if (placingReminderId && kind === "player") return;
     // A second pointer touching any token (even the same one already being
     // dragged) must not clobber the gesture in progress — its own
     // pointerup/pointermove would then fail the pointerId check below and

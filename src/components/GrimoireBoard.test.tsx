@@ -1012,9 +1012,9 @@ describe("reminder placement (issue #71)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("doesn't attach the armed reminder to an unrelated seat that was just dragged, not tapped (code review finding)", () => {
+  it("completes the attach even if the tap overshoots the drag threshold, instead of silently repositioning the seat (code review finding)", () => {
     const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
-    const { container, onAttachReminder } = renderBoard(
+    const { container, onAttachReminder, onMove } = renderBoard(
       [makePlayer({ id: "p1", name: "Alice", position: { x: 30, y: 40 } })],
       { reminders: [reminder] },
     );
@@ -1027,6 +1027,10 @@ describe("reminder placement (issue #71)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Attach to seat" }));
 
+    // A real finger tap easily drifts past the drag threshold — while
+    // placement is armed this must still land as a tap-to-attach on this
+    // seat, not get read as "reposition the seat" (which would silently
+    // swallow the attach with no feedback other than the still-open banner).
     const seatSummary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
@@ -1035,8 +1039,9 @@ describe("reminder placement (issue #71)", () => {
     fireEvent(seatSummary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 180 }));
     fireEvent.click(seatSummary);
 
-    expect(onAttachReminder).not.toHaveBeenCalled();
-    expect(screen.getByText(/tap a seat/i)).toBeInTheDocument();
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onAttachReminder).toHaveBeenCalledWith("r1", "p1");
+    expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
   });
 
   it("clears the armed placement state when removing the reminder currently being placed (code review finding)", async () => {

@@ -1370,6 +1370,39 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders).toHaveLength(1);
   });
 
+  it("detaches a restored reminder whose anchor seat was removed during the undo window (code review finding)", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const circle = await completedBoard(user);
+
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+    expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).not.toBeNull();
+
+    // Remove the reminder (parked in the undo buffer, still carrying its
+    // original anchorPlayerId), then separately remove the seat it was
+    // anchored to — that seat is gone from game.reminders/players by the
+    // time Undo runs, so restoring the raw snapshot would bring back a
+    // dangling reference were it not for the fix.
+    await user.click(within(circle).getByText("Townsfolk"));
+    await user.click(within(circle).getByRole("button", { name: "Remove reminder" }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(0);
+
+    await user.click(within(wrap).getByText("Player 1"));
+    await user.click(within(wrap).getByRole("button", { name: /remove player/i }));
+    expect((loadGame() as GameDocument).players).toHaveLength(1);
+
+    await user.click(within(circle).getByRole("button", { name: /undo/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
+    confirmSpy.mockRestore();
+  });
+
   it("persists a reminder added from a seat's own menu as anchored to that seat (issue #71)", async () => {
     const user = userEvent.setup();
     const circle = await completedBoard(user);

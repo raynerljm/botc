@@ -280,13 +280,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   // Tap-to-place (issue #71 AC: "a reminder can be attached to a seat
   // without a drag gesture") — parks the reminder beside the chosen seat's
-  // current position and remembers the seat so it keeps tracking it.
+  // current position and remembers the seat so it keeps tracking it. Builds
+  // off gameRef.current (not the `game` this render closed over), the same
+  // defensive precedent addReminder set — a tap-to-place click always
+  // follows some other gesture (opening the reminder's menu, at minimum),
+  // so this must never risk reading a stale pre-update snapshot (code
+  // review finding).
   function attachReminder(reminderId: string, playerId: string) {
-    if (!game.players.some((p) => p.id === playerId)) return;
-    const base = livePlayerPosition(playerId, game.players);
+    if (!gameRef.current.players.some((p) => p.id === playerId)) return;
+    const base = livePlayerPosition(playerId, gameRef.current.players);
     update({
-      ...game,
-      reminders: game.reminders.map((r) =>
+      ...gameRef.current,
+      reminders: gameRef.current.reminders.map((r) =>
         r.id === reminderId
           ? { ...r, position: parkBeside(base), anchorPlayerId: playerId }
           : r,
@@ -306,8 +311,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // how it was, even though the token lands at the end of the array if other
   // reminders were added or removed in the meantime. withRestoredReminder is
   // idempotent by id, so a rapid double-tap on Undo can't duplicate it.
+  // If the seat it was anchored to was itself removed during the undo
+  // window, restoring the raw snapshot would bring back a dangling
+  // anchorPlayerId — permanently invisible to the pad-spiral's unanchored
+  // count and stuck at a stale never-updated position (code review
+  // finding), so drop the anchor the same way removePlayer does for every
+  // reminder still anchored to a live seat at removal time.
   function restoreReminder(reminder: ReminderToken) {
-    update({ ...game, reminders: withRestoredReminder(game.reminders, reminder) });
+    const anchorStillLive =
+      reminder.anchorPlayerId === null ||
+      game.players.some((p) => p.id === reminder.anchorPlayerId);
+    const restored = anchorStillLive
+      ? reminder
+      : { ...reminder, anchorPlayerId: null };
+    update({ ...game, reminders: withRestoredReminder(game.reminders, restored) });
   }
 
   // The auto-offer is shown once (Start or Skip both count as "handled") —
