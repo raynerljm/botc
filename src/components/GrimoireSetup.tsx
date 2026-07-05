@@ -356,16 +356,31 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
-  // isDrunk always clears: a deliberate swap — whether it's the dedicated
-  // Drunk reveal or a storyteller correction to some other character — ends
-  // the stand-in illusion either way, so there's nothing left to disguise.
-  function swapCharacter(playerId: string, characterId: string) {
+  // isDrunk clears by default: a deliberate swap — whether it's the
+  // dedicated Drunk reveal or a storyteller correction to some other
+  // character — ordinarily ends the stand-in illusion, since there's
+  // nothing left to disguise. The one exception is reassigning the Drunk's
+  // stand-in itself (issue #52's reassignStandIn below) — that only changes
+  // which Townsfolk the disguise is, not whether there's a disguise at all,
+  // so it opts out via endDisguise: false.
+  function swapCharacter(
+    playerId: string,
+    characterId: string,
+    { endDisguise = true }: { endDisguise?: boolean } = {},
+  ) {
     const character = getCharacter(characterId);
     update({
       ...game,
-      players: updatePlayer(playerId, { characterId, isDrunk: false }),
+      players: updatePlayer(
+        playerId,
+        endDisguise ? { characterId, isDrunk: false } : { characterId },
+      ),
       characterPool: withCharacterInPool(game.characterPool, character),
     });
+  }
+
+  function reassignStandIn(playerId: string, characterId: string) {
+    swapCharacter(playerId, characterId, { endDisguise: false });
   }
 
   function removePlayer(playerId: string) {
@@ -895,6 +910,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               players={game.players}
               characterPool={game.characterPool}
               onResolveStep={resolveWalkthroughStep}
+              onReassignStandIn={reassignStandIn}
               onClose={() => setShowWalkthrough(false)}
             />
           )}

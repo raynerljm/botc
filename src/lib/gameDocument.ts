@@ -221,6 +221,18 @@ export function parkBeside(position: PlayerPosition): PlayerPosition {
 // action and display in the grimoire components) shares one source of truth.
 export const DRUNK_ID = "drunk";
 
+// Every character id currently held by a seated player — the "who holds
+// what" set several pickers filter against (GrimoireBoard's reminder
+// picker, the setup walkthrough's stand-in reassignment) so it's computed
+// once here instead of re-typing the null-filter at each call site.
+export function heldCharacterIds(players: Player[]): Set<string> {
+  return new Set(
+    players
+      .map((player) => player.characterId)
+      .filter((id): id is string => id !== null),
+  );
+}
+
 // A declared winner is what marks a game ended; `winner` and `endedAt` are
 // always set (and cleared) together, so either can stand for "ended" — this
 // helper keeps every call site reading the same one.

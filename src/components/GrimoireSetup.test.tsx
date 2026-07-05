@@ -524,6 +524,91 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
   });
 });
 
+describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52)", () => {
+  async function drunkBoard(user: ReturnType<typeof userEvent.setup>) {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: [
+        getCharacter("drunk")!,
+        getCharacter("chef")!,
+        getCharacter("grandmother")!,
+      ],
+      standIn: getCharacter("washerwoman")!,
+      extraCopies: {},
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Chef",
+    );
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", {
+      name: /drunk — review the stand-in/i,
+    });
+    return { dialog, step };
+  }
+
+  it("changes what the grimoire records without ending the disguise", async () => {
+    const user = userEvent.setup();
+    const { step } = await drunkBoard(user);
+
+    await user.selectOptions(
+      within(step).getByLabelText(/new stand-in/i),
+      "Grandmother",
+    );
+    await user.click(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const drunkPlayer = reloaded.players.find((p) => p.isDrunk)!;
+    expect(drunkPlayer.characterId).toBe("grandmother");
+    expect(drunkPlayer.isDrunk).toBe(true);
+    expect(drunkPlayer.startingCharacterId).toBe("washerwoman");
+  });
+
+  it("updates what the Drunk's player is told they are on the board", async () => {
+    const user = userEvent.setup();
+    const { step } = await drunkBoard(user);
+
+    await user.selectOptions(
+      within(step).getByLabelText(/new stand-in/i),
+      "Grandmother",
+    );
+    await user.click(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const summary = wrap.querySelector("details > summary") as HTMLElement;
+    expect(within(summary).getByText("Grandmother")).toBeInTheDocument();
+    expect(within(summary).getByText(/actually the Drunk/i)).toBeInTheDocument();
+  });
+
+  it("excludes a Townsfolk already held by another player from the picker", async () => {
+    const user = userEvent.setup();
+    const { step } = await drunkBoard(user);
+
+    const options = Array.from(
+      within(step).getByLabelText(/new stand-in/i).querySelectorAll("option"),
+    ).map((o) => o.textContent);
+
+    expect(options).not.toContain("Chef");
+    expect(options).toContain("Grandmother");
+  });
+});
+
 describe("bag-draw setup page polish (issue #49)", () => {
   it("does not offer to add a new character before every seat is assigned", () => {
     const game = makeGame({ playerCount: 2 });

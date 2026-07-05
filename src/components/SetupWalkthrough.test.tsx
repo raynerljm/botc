@@ -50,10 +50,12 @@ function renderWalkthrough(
     players: Player[];
     stepStatuses: Record<string, "answered" | "skipped">;
     onResolveStep: ReturnType<typeof vi.fn>;
+    onReassignStandIn: ReturnType<typeof vi.fn>;
     onClose: ReturnType<typeof vi.fn>;
   }> = {},
 ) {
   const onResolveStep = overrides.onResolveStep ?? vi.fn();
+  const onReassignStandIn = overrides.onReassignStandIn ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
   const players = overrides.players ?? [
     makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
@@ -69,10 +71,11 @@ function renderWalkthrough(
       players={players}
       characterPool={characterPool}
       onResolveStep={onResolveStep}
+      onReassignStandIn={onReassignStandIn}
       onClose={onClose}
     />,
   );
-  return { onResolveStep, onClose, players, ...view };
+  return { onResolveStep, onReassignStandIn, onClose, players, ...view };
 }
 
 const fortuneTellerStep: SetupWalkthroughStep = {
@@ -410,6 +413,76 @@ describe("review step (Drunk)", () => {
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: "drunk", label: "Drunk" }),
     ]);
+  });
+
+  it("shows the current stand-in and offers a way to change it (issue #52)", () => {
+    renderWalkthrough({ steps: [drunkStep] });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    expect(within(step).getByText(/current stand-in: washerwoman/i)).toBeInTheDocument();
+    expect(within(step).getByLabelText(/new stand-in/i)).toBeInTheDocument();
+  });
+
+  it("keeps the stand-in picker visible after the step is answered, unlike the reminder controls (code review finding)", () => {
+    renderWalkthrough({
+      steps: [drunkStep],
+      stepStatuses: { p1: "answered" },
+    });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    expect(within(step).getByText(/answered/i)).toBeInTheDocument();
+    expect(within(step).getByLabelText(/new stand-in/i)).toBeInTheDocument();
+    expect(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("reassigns the stand-in without touching the reminder/status resolution", async () => {
+    const user = userEvent.setup();
+    const { onReassignStandIn, onResolveStep } = renderWalkthrough({
+      steps: [drunkStep],
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "washerwoman" }),
+        makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+      ],
+    });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    await user.selectOptions(within(step).getByLabelText(/new stand-in/i), "Chef");
+    await user.click(within(step).getByRole("button", { name: /change stand-in/i }));
+
+    expect(onReassignStandIn).toHaveBeenCalledWith("p1", "chef");
+    expect(onResolveStep).not.toHaveBeenCalled();
+  });
+
+  it("excludes Townsfolk already held by another player from the stand-in picker", async () => {
+    renderWalkthrough({
+      steps: [drunkStep],
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "washerwoman" }),
+        makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "chef" }),
+        makePlayer({ id: "p3", seat: 3, name: "Cara", characterId: "grandmother" }),
+      ],
+    });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    const options = within(step)
+      .getByLabelText(/new stand-in/i)
+      .querySelectorAll("option");
+    const optionText = Array.from(options).map((o) => o.textContent);
+
+    expect(optionText).not.toContain("Chef");
+    expect(optionText).not.toContain("Grandmother");
+    expect(optionText).toContain("Washerwoman");
+  });
+
+  it("disables the change button until a different character is chosen", async () => {
+    renderWalkthrough({ steps: [drunkStep] });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    expect(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    ).toBeDisabled();
   });
 });
 

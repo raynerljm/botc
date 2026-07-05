@@ -6,6 +6,7 @@ import {
   circlePosition,
   createGame,
   GAME_SCHEMA_VERSION,
+  heldCharacterIds,
   insertAtSeat,
   shuffleTokens,
   withRestoredReminder,
@@ -36,6 +37,21 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     ...overrides,
   };
 }
+
+describe("heldCharacterIds", () => {
+  it("collects every seated player's characterId, skipping unassigned seats", () => {
+    const players = [
+      makePlayer({ id: "p1", characterId: "washerwoman" }),
+      makePlayer({ id: "p2", characterId: null }),
+      makePlayer({ id: "p3", characterId: "imp" }),
+    ];
+    expect(heldCharacterIds(players)).toEqual(new Set(["washerwoman", "imp"]));
+  });
+
+  it("returns an empty set for no players", () => {
+    expect(heldCharacterIds([])).toEqual(new Set());
+  });
+});
 
 describe("shuffleTokens", () => {
   it("returns every item, none added or dropped", () => {
