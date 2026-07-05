@@ -4,9 +4,9 @@ import { useState } from "react";
 
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
-  circlePosition,
   DRUNK_ID,
   heldCharacterIds,
+  livePlayerPosition,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -24,6 +24,7 @@ export interface SetupWalkthroughReminderInput {
   characterId: string | null;
   label: string;
   position: PlayerPosition;
+  anchorPlayerId: string | null;
 }
 
 export interface SetupWalkthroughProps {
@@ -53,15 +54,7 @@ export interface SetupWalkthroughProps {
 // "parked beside them" convention GrimoireBoard uses when a reminder is
 // added from a player's own token menu.
 function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
-  const player = players.find((p) => p.id === playerId);
-  const sorted = [...players].sort((a, b) => a.seat - b.seat);
-  const base =
-    player?.position ??
-    circlePosition(
-      sorted.findIndex((p) => p.id === playerId),
-      sorted.length,
-    );
-  return parkBeside(base);
+  return parkBeside(livePlayerPosition(playerId, players));
 }
 
 function characterOf(
@@ -197,6 +190,7 @@ function StepPanel({
                     characterId: step.characterId,
                     label: step.reminderLabel,
                     position: anchorPosition(playerId, players),
+                    anchorPlayerId: playerId,
                   },
                 ])
               }
@@ -219,11 +213,13 @@ function StepPanel({
                     // with nothing recording it (code review finding).
                     label: `${step.trueLabel} (${character.name})`,
                     position: anchorPosition(truePlayerId, players),
+                    anchorPlayerId: truePlayerId,
                   },
                   {
                     characterId: step.characterId,
                     label: `${step.falseLabel} (${character.name})`,
                     position: anchorPosition(falsePlayerId, players),
+                    anchorPlayerId: falsePlayerId,
                   },
                 ])
               }
@@ -247,6 +243,7 @@ function StepPanel({
                           characterId: step.characterId,
                           label: step.reminderLabel,
                           position: anchorPosition(step.playerId, players),
+                          anchorPlayerId: step.playerId,
                         },
                       ]
                     : [],
@@ -264,6 +261,7 @@ function StepPanel({
                     characterId: null,
                     label: `Thinks: ${demon.name}`,
                     position: anchorPosition(step.playerId, players),
+                    anchorPlayerId: step.playerId,
                   },
                 ])
               }
@@ -295,6 +293,7 @@ function StepPanel({
                           characterId: "drunk",
                           label: step.reminderLabel,
                           position: anchorPosition(step.playerId, players),
+                          anchorPlayerId: step.playerId,
                         },
                       ]
                     : [],
@@ -313,6 +312,7 @@ function StepPanel({
                     characterId: step.characterId,
                     label,
                     position: anchorPosition(step.playerId, players),
+                    anchorPlayerId: step.playerId,
                   })),
                 )
               }
