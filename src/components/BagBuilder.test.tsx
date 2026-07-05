@@ -742,7 +742,6 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
         extraCopies: {},
       }),
     );
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     render(
       <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
@@ -756,17 +755,25 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
       screen.getByRole("button", { name: /Continue anyway/i }),
     );
 
+    const warning = screen.getByRole("alertdialog", {
+      name: /already in progress/i,
+    });
+    await user.click(
+      within(warning).getByRole("button", { name: /cancel/i }),
+    );
+
     // Cancelled: no new game, no navigation, the existing game is untouched.
-    expect(confirm).toHaveBeenCalled();
     expect(loadGame()?.scriptName).toBe("Existing game");
     expect(push).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
     await user.click(
       screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Start new game/i }),
     );
 
     expect(loadGame()?.scriptName).toBe("Trouble Brewing");

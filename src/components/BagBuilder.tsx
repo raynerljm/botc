@@ -26,6 +26,7 @@ import {
 } from "@/lib/bagBuilder";
 
 import { CharacterToken } from "./CharacterToken";
+import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./BagBuilder.module.css";
 
 // Setup characters whose bracket text isn't a structured count delta, but
@@ -149,6 +150,7 @@ export function BagBuilder({
   const [extraCopies, setExtraCopies] = useState<Record<string, number>>({});
   const [standInId, setStandInId] = useState<string | null>(null);
   const [showCountWarning, setShowCountWarning] = useState(false);
+  const [showInProgressWarning, setShowInProgressWarning] = useState(false);
   const countWarningDialogRef = useRef<HTMLDivElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -347,14 +349,16 @@ export function BagBuilder({
     // an in-progress game is easy to lose track of — confirm before adding
     // another (advisory, ADR 0003: the storyteller can always proceed).
     const inProgress = listGames().some((g) => !isGameEnded(g));
-    if (
-      inProgress &&
-      !window.confirm(
-        "You already have a game in progress. Start a new game as well? Your existing game stays saved.",
-      )
-    ) {
+    if (inProgress) {
+      setShowInProgressWarning(true);
       return;
     }
+    createAndEnterGame();
+  }
+
+  function createAndEnterGame() {
+    if (!scriptId || !scriptName) return;
+    setShowInProgressWarning(false);
     const game = createGame({
       scriptId,
       scriptName,
@@ -521,6 +525,16 @@ export function BagBuilder({
             </div>
           </div>
         </div>
+      )}
+
+      {showInProgressWarning && (
+        <ConfirmDialog
+          title="Game already in progress"
+          message="You already have a game in progress. Start a new game as well? Your existing game stays saved."
+          confirmLabel="Start new game"
+          onConfirm={createAndEnterGame}
+          onCancel={() => setShowInProgressWarning(false)}
+        />
       )}
 
       {relaxedCharacters.length > 0 && (

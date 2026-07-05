@@ -1,0 +1,60 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgb(0 0 0 / 60%);
+}
+
+.dialog {
+  max-width: 26rem;
+  width: 100%;
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.message {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.actions button {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.1rem;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface-raised);
+  color: var(--foreground);
+}
+
+.confirm {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--background);
+}
+
+.destructive {
+  background: var(--team-demon);
+  border-color: var(--team-demon);
+  color: var(--background);
+}
