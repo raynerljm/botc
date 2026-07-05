@@ -143,8 +143,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   );
 
   // Mid-game token add (issue #15): any official-team character, script-first
-  // then the rest of the dataset — travellers and Fabled have their own add
-  // flows, so they're excluded here.
+  // then the rest of the dataset — travellers have their own add flow, and
+  // Fabled have no add flow at all (issue #50), so both are excluded here.
   const addTokenOptions = useMemo(
     () =>
       characterPickerPool(game.characterPool).filter((c) =>
@@ -340,9 +340,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   // Any mutation that can introduce a character id the game hasn't seen
-  // before (a swap, a mid-game add, a Fabled) has to also add it here —
-  // characterPool is what every token/board lookup resolves display info
-  // from, official or homebrew (gameDocument.ts).
+  // before (a swap, a mid-game add) has to also add it here — characterPool
+  // is what every token/board lookup resolves display info from, official
+  // or homebrew (gameDocument.ts).
   function withCharacterInPool(
     pool: Character[],
     character: Character | undefined,
