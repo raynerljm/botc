@@ -5,6 +5,7 @@ import { createGame, type GameDocument, type Player } from "./gameDocument";
 import {
   buildGameSnapshot,
   downloadGameSnapshot,
+  EXPORT_SCHEMA_VERSION,
   gameSnapshotFilename,
   serializeGameSnapshot,
 } from "./gameExport";
@@ -34,6 +35,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       seat: 1,
       name: "Rayner",
       characterId: "imp",
+      startingCharacterId: "imp",
       isDrunk: false,
       isTraveller: false,
       travellerAlignment: null,
@@ -43,6 +45,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       seat: 2,
       name: "Sarah",
       characterId: "washerwoman",
+      startingCharacterId: "washerwoman",
       isDrunk: false,
       isTraveller: false,
       travellerAlignment: null,
@@ -52,6 +55,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       seat: 3,
       name: "Alex",
       characterId: "librarian",
+      startingCharacterId: "librarian",
       isDrunk: true,
       isTraveller: false,
       travellerAlignment: null,
@@ -65,7 +69,7 @@ describe("buildGameSnapshot", () => {
   it("stamps schema version, script, and player count (travellers excluded)", () => {
     const snapshot = buildGameSnapshot(makeGame());
 
-    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.schemaVersion).toBe(EXPORT_SCHEMA_VERSION);
     expect(snapshot.script.name).toBe("Trouble Brewing");
     expect(snapshot.playerCount).toBe(3);
   });
@@ -78,6 +82,25 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.script.characters).toContain("baron");
   });
 
+  it("lists the full script pool, not just in-play characters, so a not-in-play claim or bluff always resolves against it", () => {
+    const game = makeGame({
+      scriptCharacters: [
+        getCharacter("imp")!,
+        getCharacter("washerwoman")!,
+        getCharacter("librarian")!,
+        getCharacter("baron")!,
+        // Not selected into this game's bag/characterPool.
+        getCharacter("chef")!,
+      ],
+      demonBluffs: ["chef", null, null],
+    });
+
+    const snapshot = buildGameSnapshot(game);
+
+    expect(snapshot.script.characters).toContain("chef");
+    expect(snapshot.demonBluffs).toContain("chef");
+  });
+
   it("records each player's starting and final character (equal until a swap slice lands)", () => {
     const snapshot = buildGameSnapshot(makeGame());
     const rayner = snapshot.players.find((p) => p.name === "Rayner")!;
@@ -85,6 +108,26 @@ describe("buildGameSnapshot", () => {
     expect(rayner.seat).toBe(1);
     expect(rayner.startingCharacter).toBe("imp");
     expect(rayner.finalCharacter).toBe("imp");
+  });
+
+  it("keeps a swapped player's starting character/alignment distinct from their final one", () => {
+    const game = makeGame();
+    const swapped: Player = {
+      ...game.players[1],
+      characterId: "imp",
+    };
+    const withSwap = {
+      ...game,
+      players: game.players.map((p, i) => (i === 1 ? swapped : p)),
+    };
+
+    const snapshot = buildGameSnapshot(withSwap);
+    const sarah = snapshot.players.find((p) => p.name === "Sarah")!;
+
+    expect(sarah.startingCharacter).toBe("washerwoman");
+    expect(sarah.finalCharacter).toBe("imp");
+    expect(sarah.startingAlignment).toBe("good");
+    expect(sarah.finalAlignment).toBe("evil");
   });
 
   it("derives good/evil alignment from the character's team", () => {
@@ -104,12 +147,14 @@ describe("buildGameSnapshot", () => {
       seat: 4,
       name: "Nomad",
       characterId: "scapegoat",
+      startingCharacterId: "scapegoat",
       isDrunk: false,
       isTraveller: true,
       travellerAlignment: "evil",
       dead: false,
       ghostVoteSpent: false,
       position: null,
+      claim: null,
     };
     const withTraveller = {
       ...game,
@@ -147,12 +192,66 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.endedAt).toBeNull();
   });
 
-  it("defaults forward-looking fields not yet tracked (dead, claim, demonBluffs)", () => {
+  it("defaults dead, claim, and demonBluffs when none are set", () => {
     const snapshot = buildGameSnapshot(makeGame());
 
-    expect(snapshot.players.every((p) => p.dead === false)).toBe(true);
     expect(snapshot.players.every((p) => p.claim === null)).toBe(true);
     expect(snapshot.demonBluffs).toEqual([]);
+  });
+
+  it("records a player's dead state", () => {
+    const game = makeGame();
+    const withDeath = {
+      ...game,
+      players: game.players.map((p, i) => (i === 0 ? { ...p, dead: true } : p)),
+    };
+
+    const snapshot = buildGameSnapshot(withDeath);
+
+    expect(snapshot.players.find((p) => p.name === "Rayner")!.dead).toBe(true);
+    expect(snapshot.players.find((p) => p.name === "Sarah")!.dead).toBe(false);
+  });
+
+  it("carries the game's active Fabled", () => {
+    const snapshot = buildGameSnapshot(
+      makeGame({ activeFabled: ["angel", "buddhist"] }),
+    );
+
+    expect(snapshot.activeFabled).toEqual(["angel", "buddhist"]);
+  });
+
+  it("carries each player's dead state and claim into the snapshot", () => {
+    const game = makeGame();
+    const [rayner, sarah] = game.players;
+    const withState = {
+      ...game,
+      players: [
+        { ...rayner, dead: true, claim: "washerwoman" },
+        { ...sarah, claim: "librarian" },
+        ...game.players.slice(2),
+      ],
+    };
+
+    const snapshot = buildGameSnapshot(withState);
+
+    expect(snapshot.players.find((p) => p.name === "Rayner")).toMatchObject({
+      dead: true,
+      claim: "washerwoman",
+    });
+    expect(snapshot.players.find((p) => p.name === "Sarah")).toMatchObject({
+      dead: false,
+      claim: "librarian",
+    });
+  });
+
+  it("carries only the filled Demon bluff slots into the snapshot", () => {
+    const game = makeGame({
+      demonBluffs: ["fortuneteller", null, "slayer"],
+    });
+
+    const snapshot = buildGameSnapshot(game);
+
+    expect(snapshot.demonBluffs).toEqual(["fortuneteller", "slayer"]);
   });
 });
 

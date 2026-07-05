@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { decodeScriptForShare } from "@/lib/scriptShare";
+
 import ScriptSheetPage, { generateStaticParams } from "./page";
 
 async function renderSheet(scriptId: string) {
@@ -47,6 +49,28 @@ describe("script sheet", () => {
     expect(
       screen.getByRole("link", { name: /Build the bag/ }),
     ).toHaveAttribute("href", "/scripts/tb/bag");
+  });
+
+  it("offers to share the script via QR", async () => {
+    await renderSheet("tb");
+
+    expect(
+      screen.getByRole("button", { name: /share via qr/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shares the base edition's real name, even though base editions carry no _meta.name of their own", async () => {
+    await renderSheet("tb");
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    const shareUrl = screen.getByText(/\/share\/#/).textContent!;
+    const encoded = shareUrl.split("#")[1];
+
+    const result = decodeScriptForShare(encoded);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta.name).toBe("Trouble Brewing");
   });
 
   it("reveals ability text and the official wiki link when a character is tapped", async () => {

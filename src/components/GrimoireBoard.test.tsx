@@ -23,12 +23,14 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     seat: 1,
     name: "Alice",
     characterId: "washerwoman",
+    startingCharacterId: "washerwoman",
     isDrunk: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
     ghostVoteSpent: false,
     position: null,
+    claim: null,
     ...overrides,
   };
 }
@@ -37,6 +39,16 @@ const characterById = new Map([
   ["washerwoman", getCharacter("washerwoman")!],
   ["imp", getCharacter("imp")!],
 ]);
+
+// Deliberately distinct from the "washerwoman"/"imp" characters used as
+// player tokens elsewhere in this file, so a claim <option>'s text (present
+// in the DOM even inside a closed token menu) never collides with a token's
+// own rendered name.
+const claimOptions = [
+  getCharacter("librarian")!,
+  getCharacter("monk")!,
+  getCharacter("recluse")!,
+];
 
 // jsdom has no real PointerEvent constructor, so a plain MouseEvent stands in
 // with pointerId grafted on — React's synthetic event reads whatever
@@ -66,6 +78,12 @@ function makeHandlers() {
     onMoveReminder: vi.fn(),
     onRemoveReminder: vi.fn(),
     onRestoreReminder: vi.fn(),
+    onSwapCharacter: vi.fn(),
+    onRemovePlayer: vi.fn(),
+    onRevealDrunk: vi.fn(),
+    onAddFabled: vi.fn(),
+    onRemoveFabled: vi.fn(),
+    onSetClaim: vi.fn(),
   };
 }
 
@@ -96,17 +114,27 @@ function renderBoard(
     ReturnType<typeof makeHandlers> & {
       almanacUrl?: string | null;
       reminders?: ReminderToken[];
+      activeFabled?: string[];
+      claimOptions?: typeof claimOptions;
     }
   > = {},
 ) {
-  const { reminders = [], almanacUrl, ...handlerOverrides } = overrides;
+  const {
+    reminders = [],
+    activeFabled,
+    claimOptions: claimOptionsOverride,
+    almanacUrl,
+    ...handlerOverrides
+  } = overrides;
   const handlers = { ...makeHandlers(), ...handlerOverrides };
   const view = render(
     <GrimoireBoard
       players={players}
       characterById={characterById}
+      claimOptions={claimOptionsOverride ?? claimOptions}
       almanacUrl={almanacUrl}
       reminders={reminders}
+      activeFabled={activeFabled ?? []}
       {...handlers}
     />,
   );
@@ -122,14 +150,22 @@ describe("GrimoireBoard rendering", () => {
           makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
         ]}
         characterById={characterById}
+        activeFabled={[]}
+        claimOptions={claimOptions}
         {...noop}
       />,
     );
 
-    expect(screen.getByText("Alice")).toBeInTheDocument();
-    expect(screen.getByText("Bob")).toBeInTheDocument();
-    expect(screen.getByText("Washerwoman")).toBeInTheDocument();
-    expect(screen.getByText("Imp")).toBeInTheDocument();
+    const aliceSummary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const bobSummary = container.querySelector(
+      "[data-player-id='p2'] summary",
+    ) as HTMLElement;
+    expect(within(aliceSummary).getByText("Alice")).toBeInTheDocument();
+    expect(within(bobSummary).getByText("Bob")).toBeInTheDocument();
+    expect(within(aliceSummary).getByText("Washerwoman")).toBeInTheDocument();
+    expect(within(bobSummary).getByText("Imp")).toBeInTheDocument();
     expect(container.querySelectorAll("img")).toHaveLength(2);
   });
 
@@ -140,11 +176,14 @@ describe("GrimoireBoard rendering", () => {
   });
 
   it("shows a traveller's alignment", () => {
-    renderBoard([
+    const { container } = renderBoard([
       makePlayer({ isTraveller: true, travellerAlignment: "evil", characterId: "imp" }),
     ]);
 
-    expect(screen.getByText(/evil/i)).toBeInTheDocument();
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    expect(within(summary).getByText(/evil/i)).toBeInTheDocument();
   });
 
   it("positions each seat around the circle by default, each at a distinct spot", () => {
@@ -235,7 +274,9 @@ describe("token menu", () => {
       <GrimoireBoard
         players={[makePlayer({ characterId: "custom-oracle" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         almanacUrl="https://example.com/almanac"
+        activeFabled={[]}
         {...noop}
       />,
     );
@@ -259,7 +300,9 @@ describe("token menu", () => {
       <GrimoireBoard
         players={[makePlayer({ characterId: "custom-oracle" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         almanacUrl="javascript:alert(1)"
+        activeFabled={[]}
         {...noop}
       />,
     );
@@ -285,7 +328,9 @@ describe("token menu", () => {
       <GrimoireBoard
         players={[makePlayer({ characterId: "imp" })]}
         characterById={byId}
+        claimOptions={claimOptions}
         almanacUrl="https://example.com/almanac"
+        activeFabled={[]}
         {...noop}
       />,
     );
@@ -296,6 +341,40 @@ describe("token menu", () => {
     expect(screen.getByText(reskinned.ability)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
+  });
+});
+
+describe("claims", () => {
+  it("sets a player's claim from their token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/claim/i), "librarian");
+
+    expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", "librarian");
+  });
+
+  it("clears a claim back to none", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer({ claim: "librarian" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/claim/i), "");
+
+    expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", null);
+  });
+
+  it("renders a small claim badge by the token", () => {
+    renderBoard([makePlayer({ claim: "librarian" })]);
+
+    expect(screen.getByText(/claims librarian/i)).toBeInTheDocument();
+  });
+
+  it("shows no claim badge when the player hasn't claimed anything", () => {
+    renderBoard([makePlayer({ claim: null })]);
+
+    expect(screen.queryByText(/claims/i)).not.toBeInTheDocument();
   });
 });
 
@@ -721,8 +800,12 @@ describe("info tokens (issue #19)", () => {
     const controls = container.querySelector("[data-controls]") as HTMLElement;
     await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
-    const group = within(screen.getByRole("group", { name: "Demons" }));
-    await user.click(group.getByRole("button", { name: "Imp" }));
+    // Scoped to the Info tokens dialog — the board's own "Swap character"
+    // <select> also has a Demons <optgroup> (an implicit role="group" too),
+    // which would otherwise collide with this picker's fieldset.
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    const group = within(dialog).getByRole("group", { name: "Demons" });
+    await user.click(within(group).getByRole("button", { name: "Imp" }));
     await user.click(screen.getByRole("button", { name: "Show" }));
 
     expect(screen.queryByRole("dialog", { name: "Info tokens" })).not.toBeInTheDocument();
@@ -823,5 +906,205 @@ describe("info tokens (issue #19)", () => {
     expect(
       within(controls).queryByRole("button", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("swap character", () => {
+  it("lets the storyteller swap a player's character from their token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.selectOptions(screen.getByLabelText(/swap character/i), "imp");
+
+    expect(handlers.onSwapCharacter).toHaveBeenCalledWith("p1", "imp");
+  });
+
+  it("never offers a Fabled or Loric character — they're never held by a player", async () => {
+    const user = userEvent.setup();
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["angel", getCharacter("angel")!],
+    ]);
+    render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        activeFabled={["angel"]}
+        {...noop}
+      />,
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const options = within(
+      screen.getByLabelText(/swap character/i),
+    ).getAllByRole("option");
+
+    expect(options.some((o) => o.textContent === "Angel")).toBe(false);
+  });
+
+  it("never offers a Traveller character — swapping to one wouldn't set isTraveller/travellerAlignment", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const options = within(
+      screen.getByLabelText(/swap character/i),
+    ).getAllByRole("option");
+
+    expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
+  });
+
+  it("lists the script's own characters first within each team group", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/swap character/i);
+    const options = within(select).getAllByRole("option");
+    const townsfolkGroup = within(select).getByRole("group", {
+      name: /townsfolk/i,
+    });
+    const demonGroup = within(select).getByRole("group", { name: /demons/i });
+
+    // characterById (the script pool) only has washerwoman and imp — each is
+    // first in its own team's group, with the rest of the dataset after.
+    expect(within(townsfolkGroup).getAllByRole("option")[0]).toHaveTextContent(
+      "Washerwoman",
+    );
+    expect(within(demonGroup).getAllByRole("option")[0]).toHaveTextContent(
+      "Imp",
+    );
+    expect(options.length).toBeGreaterThan(2);
+  });
+});
+
+describe("remove player", () => {
+  it("lets the storyteller remove a player from their token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: /remove player/i }));
+
+    expect(handlers.onRemovePlayer).toHaveBeenCalledWith("p1");
+  });
+});
+
+describe("Drunk reveal", () => {
+  it("offers to reveal the Drunk for a stand-in seat, calling onRevealDrunk", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer({ isDrunk: true })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: /reveal drunk/i }));
+
+    expect(handlers.onRevealDrunk).toHaveBeenCalledWith("p1");
+  });
+
+  it("doesn't offer to reveal the Drunk for a seat that isn't one", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ isDrunk: false })]);
+
+    await user.click(screen.getByText("Alice"));
+    expect(
+      screen.queryByRole("button", { name: /reveal drunk/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the real Drunk token openly once revealed, dropping the stand-in note", async () => {
+    const user = userEvent.setup();
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["drunk", getCharacter("drunk")!],
+    ]);
+    const { container } = render(
+      <GrimoireBoard
+        players={[makePlayer({ isDrunk: true, characterId: "drunk" })]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        activeFabled={[]}
+        {...noop}
+      />,
+    );
+
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    expect(within(summary).getByText("Drunk")).toBeInTheDocument();
+    expect(within(summary).queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
+    await user.click(screen.getByText("Alice"));
+    expect(
+      screen.queryByRole("button", { name: /reveal drunk/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("Fabled", () => {
+  it("shows active Fabled outside the circle", () => {
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["angel", getCharacter("angel")!],
+    ]);
+    const { container } = render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        activeFabled={["angel"]}
+        {...noop}
+      />,
+    );
+
+    const fabledRow = screen.getByRole("region", { name: "Fabled" });
+    expect(within(fabledRow).getByText("Angel")).toBeInTheDocument();
+    expect(container.querySelector("[data-board]")).not.toContainElement(
+      within(fabledRow).getByText("Angel"),
+    );
+  });
+
+  it("adds a Fabled from the picker", async () => {
+    const user = userEvent.setup();
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["angel", getCharacter("angel")!],
+    ]);
+    const handlers = { ...makeHandlers() };
+    render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        activeFabled={[]}
+        {...handlers}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText(/add fabled/i), "angel");
+
+    expect(handlers.onAddFabled).toHaveBeenCalledWith("angel");
+  });
+
+  it("removes an active Fabled", async () => {
+    const user = userEvent.setup();
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["angel", getCharacter("angel")!],
+    ]);
+    const handlers = { ...makeHandlers() };
+    render(
+      <GrimoireBoard
+        players={[makePlayer()]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        activeFabled={["angel"]}
+        {...handlers}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /remove angel/i }));
+
+    expect(handlers.onRemoveFabled).toHaveBeenCalledWith("angel");
   });
 });

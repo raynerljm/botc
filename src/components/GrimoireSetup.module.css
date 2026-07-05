@@ -135,3 +135,22 @@
   font-style: italic;
   color: var(--accent);
 }
+
+.circleLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Tablet+: the night list sits beside the board as its own panel instead of
+   stacking full-width below it. */
+@media (min-width: 768px) {
+  .circleLayout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .circleLayout > :first-child {
+    flex: 1;
+  }
+}

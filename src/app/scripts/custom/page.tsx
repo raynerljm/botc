@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { ScriptSheet } from "@/components/ScriptSheet";
+import { ShareScriptButton } from "@/components/ShareScriptButton";
 import { getCustomScript } from "@/lib/customScripts";
 import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
 
@@ -23,6 +24,15 @@ function CustomScriptContent() {
           ← Scripts
         </Link>
         {stored && <h1 className={styles.title}>{stored.name}</h1>}
+        {result?.ok && stored && (
+          <ShareScriptButton
+            // The script's own JSON may have no _meta.name — fall back to
+            // the name the storyteller assigned when saving it locally
+            // (customScripts.ts), same as the heading above does.
+            meta={{ ...result.script.meta, name: result.script.meta.name ?? stored.name }}
+            characters={result.script.characters}
+          />
+        )}
       </header>
       {!stored && (
         <p className={styles.message}>
