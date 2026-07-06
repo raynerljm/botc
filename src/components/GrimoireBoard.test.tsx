@@ -1309,6 +1309,37 @@ describe("swap character", () => {
     expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
   });
 
+  it("scopes a Traveller's own swap select to traveller characters, showing their current character as its initial value (issue #70)", async () => {
+    const user = userEvent.setup();
+    renderBoard([
+      makePlayer({
+        isTraveller: true,
+        travellerAlignment: "good",
+        characterId: "scapegoat",
+      }),
+    ]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText<HTMLSelectElement>(/swap character/i);
+
+    expect(select.value).toBe("scapegoat");
+    const options = within(select).getAllByRole("option");
+    expect(options.some((o) => o.textContent === "Washerwoman")).toBe(false);
+    expect(options.some((o) => o.textContent === "Beggar")).toBe(true);
+  });
+
+  it("keeps a non-traveller seat's swap select scoped away from traveller characters (unchanged)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const options = within(
+      screen.getByLabelText(/swap character/i),
+    ).getAllByRole("option");
+
+    expect(options.some((o) => o.textContent === "Beggar")).toBe(false);
+  });
+
   it("lists the script's own characters first within each team group", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer()]);
@@ -1330,6 +1361,85 @@ describe("swap character", () => {
       "Imp",
     );
     expect(options.length).toBeGreaterThan(2);
+  });
+});
+
+describe("token menu exclusivity and dismissal (issue #70)", () => {
+  it("closes a previously open seat's menu when another seat's menu is opened", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
+      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+    ]);
+    const aliceDetails = container.querySelector(
+      "[data-player-id='p1'] details",
+    ) as HTMLDetailsElement;
+    const bobDetails = container.querySelector(
+      "[data-player-id='p2'] details",
+    ) as HTMLDetailsElement;
+
+    await user.click(screen.getByText("Alice"));
+    expect(aliceDetails.open).toBe(true);
+
+    await user.click(screen.getByText("Bob"));
+    expect(bobDetails.open).toBe(true);
+    expect(aliceDetails.open).toBe(false);
+  });
+
+  it("dismisses the open menu when tapping outside it", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const details = container.querySelector(
+      "[data-player-id='p1'] details",
+    ) as HTMLDetailsElement;
+
+    await user.click(screen.getByText("Alice"));
+    expect(details.open).toBe(true);
+
+    await user.click(container.querySelector("[data-board]") as HTMLElement);
+    expect(details.open).toBe(false);
+  });
+
+  it("keeps a seat's own menu open when its 'Add reminder' button opens the reminder picker overlay", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const details = container.querySelector(
+      "[data-player-id='p1'] details",
+    ) as HTMLDetailsElement;
+
+    await user.click(screen.getByText("Alice"));
+    expect(details.open).toBe(true);
+
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: /add reminder/i }));
+
+    // Interacting inside the resulting picker overlay (which renders outside
+    // Alice's own <details>) must not read as an "outside tap" that closes
+    // her still-relevant menu.
+    await user.click(
+      screen.getByRole("checkbox", { name: /show all characters/i }),
+    );
+    expect(details.open).toBe(true);
+  });
+
+  it("closes an open seat menu when the grimoire is hidden via keyboard activation, and doesn't reopen it when shown again", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const details = () =>
+      container.querySelector(
+        "[data-player-id='p1'] details",
+      ) as HTMLDetailsElement;
+
+    await user.click(screen.getByText("Alice"));
+    expect(details().open).toBe(true);
+
+    // fireEvent.click fires no preceding pointerdown — the same event
+    // sequence a keyboard (Enter/Space) activation produces, unlike a real
+    // pointer tap (userEvent.click, used above to open the menu).
+    fireEvent.click(screen.getByRole("button", { name: /hide grimoire/i }));
+    fireEvent.click(screen.getByRole("button", { name: /show grimoire/i }));
+
+    expect(details().open).toBe(false);
   });
 });
 

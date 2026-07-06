@@ -157,10 +157,9 @@ export function GrimoireBoard({
   // Restricted the same way as the mid-game "Add character" flow: Fabled/
   // Loric are never held by a player (they get their own Fabled slot below),
   // and a Traveller's alignment is a separate explicit field a plain swap
-  // can't set — swapping one in here would leave isTraveller/
-  // travellerAlignment stale and the export unable to derive an alignment.
-  // Correcting a traveller's character goes through remove-and-re-add
-  // instead, which sets both properly.
+  // can't set — swapping a non-traveller seat to one would leave
+  // isTraveller/travellerAlignment stale and the export unable to derive an
+  // alignment.
   const swapOptions = useMemo(
     () =>
       groupByTeam(
@@ -168,6 +167,15 @@ export function GrimoireBoard({
           SEAT_HOLDING_TEAMS.includes(c.team),
         ),
       ),
+    [scriptPool],
+  );
+  // A Traveller's own seat swaps within the traveller team instead —
+  // isTraveller/travellerAlignment are already set and untouched by a plain
+  // swap, so offering another traveller-team character here is safe (unlike
+  // the non-traveller list above) and is what lets this select actually
+  // show the player's current character as its initial value (issue #70).
+  const travellerSwapOptions = useMemo(
+    () => groupByTeam(characterPickerPool(scriptPool, "traveller")),
     [scriptPool],
   );
   // The dragged token's position while a gesture is in progress — updated
@@ -191,6 +199,51 @@ export function GrimoireBoard({
     | { type: "infoTokens" }
     | null
   >(null);
+  // Which single seat/reminder popover is open, if any — native <details>
+  // has no built-in notion of "only one of these," so this is the one
+  // source of truth every menu's `open` prop is derived from (issue #70:
+  // opening one must close any other, and a tap outside must close it too).
+  const [openMenu, setOpenMenu] = useState<{ kind: TokenKind; id: string } | null>(
+    null,
+  );
+  const openMenuElRef = useRef<HTMLDetailsElement | null>(null);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    function handlePointerDownOutside(event: PointerEvent) {
+      // A pad-level overlay (reminder picker, info token library) can be
+      // opened from inside a seat's own menu — e.g. its "Add reminder"
+      // button — and renders outside that seat's <details>. Without this
+      // guard, the very first tap inside that overlay reads as "outside"
+      // the seat menu and closes it as a surprising side effect, even
+      // though the storyteller never left that seat's workflow.
+      if (activeOverlay) return;
+      const target = event.target as Node | null;
+      if (openMenuElRef.current && target && openMenuElRef.current.contains(target)) {
+        return;
+      }
+      openMenuElRef.current = null;
+      setOpenMenu(null);
+    }
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    return () =>
+      document.removeEventListener("pointerdown", handlePointerDownOutside);
+  }, [openMenu, activeOverlay]);
+
+  function handleMenuToggle(
+    kind: TokenKind,
+    id: string,
+    event: React.SyntheticEvent<HTMLDetailsElement>,
+  ) {
+    const details = event.currentTarget;
+    if (details.open) {
+      openMenuElRef.current = details;
+      setOpenMenu({ kind, id });
+    } else if (openMenu?.kind === kind && openMenu.id === id) {
+      openMenuElRef.current = null;
+      setOpenMenu(null);
+    }
+  }
   const reminderPicker =
     activeOverlay?.type === "reminder" ? activeOverlay : null;
   const infoTokenLibraryOpen = activeOverlay?.type === "infoTokens";
@@ -403,10 +456,17 @@ export function GrimoireBoard({
   // Re-circling or hiding the board while a drag is still in progress must
   // discard that in-progress gesture — otherwise its stale local position
   // either overrides the freshly re-circled layout, or resurfaces at an
-  // unsaved coordinate once the board is shown again.
+  // unsaved coordinate once the board is shown again. Hiding (or showing
+  // the info token library) unmounts every seat's <details>, so an open
+  // menu's `openMenu` state must go with it too — otherwise a keyboard
+  // activation of these controls (which fires no pointerdown, so the
+  // outside-tap-close effect never runs) leaves it stale, and the next
+  // mount reopens the same seat's menu unprompted (issue #70 code review).
   function cancelActiveDrag() {
     dragRef.current = null;
     setLiveDrag(null);
+    openMenuElRef.current = null;
+    setOpenMenu(null);
   }
 
   // Full-screen show mode replaces the board outright rather than layering
@@ -538,6 +598,9 @@ export function GrimoireBoard({
             const character = player.characterId
               ? characterById.get(player.characterId)
               : undefined;
+            const swapOptionsForPlayer = player.isTraveller
+              ? travellerSwapOptions
+              : swapOptions;
             const position = positionByPlayerId.get(player.id)!;
             const official = character ? isOfficialCharacter(character) : false;
             // True only while the player is still wearing the stand-in's
@@ -552,7 +615,11 @@ export function GrimoireBoard({
                 data-player-id={player.id}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
-                <details className={styles.menu}>
+                <details
+                  className={styles.menu}
+                  open={openMenu?.kind === "player" && openMenu.id === player.id}
+                  onToggle={(event) => handleMenuToggle("player", player.id, event)}
+                >
                   <summary
                     className={styles.tokenSummary}
                     data-dead={player.dead || undefined}
@@ -636,7 +703,7 @@ export function GrimoireBoard({
                           onSwapCharacter(player.id, event.target.value)
                         }
                       >
-                        {swapOptions.map((group) => (
+                        {swapOptionsForPlayer.map((group) => (
                           <optgroup key={group.team} label={teamNames[group.team]}>
                             {group.characters.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -809,7 +876,11 @@ export function GrimoireBoard({
                 data-reminder-id={reminder.id}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
-                <details className={styles.menu}>
+                <details
+                  className={styles.menu}
+                  open={openMenu?.kind === "reminder" && openMenu.id === reminder.id}
+                  onToggle={(event) => handleMenuToggle("reminder", reminder.id, event)}
+                >
                   <summary
                     className={styles.tokenSummary}
                     onPointerDown={(event) =>
