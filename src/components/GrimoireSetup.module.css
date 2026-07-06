@@ -270,4 +270,19 @@
       "circle dayphase";
     align-items: start;
   }
+
+  /* A grid item's automatic minimum width defaults to its content's
+     min-content size, which for this column is the circle wrapper's
+     (fixed-or-JS-sized) board width — so the 1fr track refused to shrink
+     below that even when the 24rem side column didn't leave enough room,
+     forcing the whole row wider than the viewport. That overflow was
+     invisible (clipped by the page's overflow-x: hidden) rather than
+     visible, so the night/day panel just silently rendered partway off
+     the right edge (issue #69). min-width: 0 lets the track shrink to
+     whatever's actually left; GrimoireBoard's own resize-fit logic (#98)
+     then measures that narrower space and shrinks the circle to match,
+     down to its existing 320px floor, instead of overflowing. */
+  .circleArea {
+    min-width: 0;
+  }
 }
