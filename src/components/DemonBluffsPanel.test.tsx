@@ -137,4 +137,22 @@ describe("DemonBluffsPanel", () => {
     await user.click(screen.getByRole("button", { name: /close/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("hides the body while collapsed, but keeps the heading reachable (issue #79)", () => {
+    renderPanel({ demonBluffsCollapsed: true });
+
+    expect(screen.queryByLabelText("Bluff slot 1")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Demon bluffs" }),
+    ).toBeInTheDocument();
+  });
+
+  it("toggles the persisted collapsed state via the heading", async () => {
+    const user = userEvent.setup();
+    const { onChange, game } = renderPanel();
+
+    await user.click(screen.getByRole("button", { name: "Demon bluffs" }));
+
+    expect(onChange).toHaveBeenCalledWith({ ...game, demonBluffsCollapsed: true });
+  });
 });

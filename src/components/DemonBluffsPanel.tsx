@@ -6,6 +6,7 @@ import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { DEMON_BLUFF_SLOTS, type GameDocument } from "@/lib/gameDocument";
 
 import { CharacterToken } from "./CharacterToken";
+import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./DemonBluffsPanel.module.css";
 
 export interface DemonBluffsPanelProps {
@@ -58,8 +59,13 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
 
   return (
     <section className={styles.panel} aria-label="Demon bluffs">
-      <div className={styles.heading}>
-        <h2 className={styles.title}>Demon bluffs</h2>
+      <CollapsibleSection
+        title="Demon bluffs"
+        collapsed={game.demonBluffsCollapsed}
+        onToggleCollapsed={(collapsed) =>
+          onChange({ ...game, demonBluffsCollapsed: collapsed })
+        }
+      >
         <label className={styles.showAll}>
           <input
             type="checkbox"
@@ -68,71 +74,71 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
           />
           Show all characters
         </label>
-      </div>
 
-      <ul className={styles.slots}>
-        {Array.from({ length: DEMON_BLUFF_SLOTS }, (_, index) => {
-          const character = bluffCharacters[index];
-          return (
-            <li key={index} className={styles.slot}>
-              <span className={styles.slotVisual}>
-                {character ? (
-                  <CharacterToken character={character} />
-                ) : (
-                  <span className={styles.emptySlot} aria-hidden="true" />
-                )}
-              </span>
-              <select
-                aria-label={`Bluff slot ${index + 1}`}
-                value={bluffs[index] ?? ""}
-                onChange={(event) => setSlot(index, event.target.value || null)}
-              >
-                <option value="">Not set</option>
-                {groupsForSlot(index).map((group) => (
-                  <optgroup key={group.team} label={teamNames[group.team]}>
-                    {group.characters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </li>
-          );
-        })}
-      </ul>
-
-      <button
-        type="button"
-        className={styles.showButton}
-        disabled={!anyBluffSet}
-        onClick={() => setShowingToDemon(true)}
-      >
-        Show to Demon
-      </button>
-
-      {showingToDemon && (
-        <div className={styles.overlay} role="dialog" aria-label="Demon bluffs">
-          <ul className={styles.overlaySlots}>
-            {bluffCharacters.map((character, index) => (
-              <li key={index} className={styles.overlaySlot}>
-                {character ? (
-                  <>
+        <ul className={styles.slots}>
+          {Array.from({ length: DEMON_BLUFF_SLOTS }, (_, index) => {
+            const character = bluffCharacters[index];
+            return (
+              <li key={index} className={styles.slot}>
+                <span className={styles.slotVisual}>
+                  {character ? (
                     <CharacterToken character={character} />
-                    <span className={styles.overlayName}>{character.name}</span>
-                  </>
-                ) : (
-                  <span className={styles.overlayName}>Not set</span>
-                )}
+                  ) : (
+                    <span className={styles.emptySlot} aria-hidden="true" />
+                  )}
+                </span>
+                <select
+                  aria-label={`Bluff slot ${index + 1}`}
+                  value={bluffs[index] ?? ""}
+                  onChange={(event) => setSlot(index, event.target.value || null)}
+                >
+                  <option value="">Not set</option>
+                  {groupsForSlot(index).map((group) => (
+                    <optgroup key={group.team} label={teamNames[group.team]}>
+                      {group.characters.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => setShowingToDemon(false)}>
-            Close
-          </button>
-        </div>
-      )}
+            );
+          })}
+        </ul>
+
+        <button
+          type="button"
+          className={styles.showButton}
+          disabled={!anyBluffSet}
+          onClick={() => setShowingToDemon(true)}
+        >
+          Show to Demon
+        </button>
+
+        {showingToDemon && (
+          <div className={styles.overlay} role="dialog" aria-label="Demon bluffs">
+            <ul className={styles.overlaySlots}>
+              {bluffCharacters.map((character, index) => (
+                <li key={index} className={styles.overlaySlot}>
+                  {character ? (
+                    <>
+                      <CharacterToken character={character} />
+                      <span className={styles.overlayName}>{character.name}</span>
+                    </>
+                  ) : (
+                    <span className={styles.overlayName}>Not set</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => setShowingToDemon(false)}>
+              Close
+            </button>
+          </div>
+        )}
+      </CollapsibleSection>
     </section>
   );
 }

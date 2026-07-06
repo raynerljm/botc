@@ -992,7 +992,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               above. */}
           <div hidden={showWalkthrough || screenObscured}>
             <DemonBluffsPanel game={game} onChange={update} />
-            <ClaimsList players={game.players} characterById={scriptCharacterById} />
+            <ClaimsList
+              players={game.players}
+              characterById={scriptCharacterById}
+              collapsed={game.claimsCollapsed}
+              onToggleCollapsed={(collapsed) => update({ ...game, claimsCollapsed: collapsed })}
+            />
           </div>
           {showWalkthrough && (
             <SetupWalkthrough

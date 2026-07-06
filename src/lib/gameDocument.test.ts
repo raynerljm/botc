@@ -9,9 +9,11 @@ import {
   GAME_SCHEMA_VERSION,
   heldCharacterIds,
   insertAtSeat,
+  isEndGamePanelCollapsed,
   nextPadReminderPosition,
   shuffleTokens,
   withRestoredReminder,
+  type GameDocument,
   type Player,
   type ReminderToken,
 } from "./gameDocument";
@@ -599,5 +601,56 @@ describe("createGame", () => {
     });
 
     expect(game.scriptCharacters).toEqual(selected);
+  });
+
+  it("starts with Demon bluffs and Claims expanded, and the end-game panel's collapse left unset (issue #79)", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.demonBluffsCollapsed).toBe(false);
+    expect(game.claimsCollapsed).toBe(false);
+    expect(game.endGamePanelCollapsed).toBeNull();
+  });
+});
+
+describe("isEndGamePanelCollapsed (issue #79)", () => {
+  function gameWith(overrides: Partial<GameDocument>): GameDocument {
+    return {
+      ...createGame({
+        scriptId: "tb",
+        scriptName: "Trouble Brewing",
+        playerCount: 1,
+        selectedCharacters: characters("washerwoman"),
+        standIn: null,
+        extraCopies: {},
+      }),
+      ...overrides,
+    };
+  }
+
+  it("defaults to collapsed before the first night has ended", () => {
+    expect(isEndGamePanelCollapsed(gameWith({ night: 0 }))).toBe(true);
+  });
+
+  it("defaults to expanded once the first night has ended", () => {
+    expect(isEndGamePanelCollapsed(gameWith({ night: 1 }))).toBe(false);
+  });
+
+  it("honors an explicit manual collapse even after the first night has ended", () => {
+    expect(
+      isEndGamePanelCollapsed(gameWith({ night: 2, endGamePanelCollapsed: true })),
+    ).toBe(true);
+  });
+
+  it("honors an explicit manual expand even before the first night has ended", () => {
+    expect(
+      isEndGamePanelCollapsed(gameWith({ night: 0, endGamePanelCollapsed: false })),
+    ).toBe(false);
   });
 });
