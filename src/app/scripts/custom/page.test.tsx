@@ -54,8 +54,15 @@ describe("custom script page", () => {
     await renderCustomScriptPage(saved.id);
     const user = userEvent.setup();
 
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
     await user.click(screen.getByRole("button", { name: /share via qr/i }));
-    const shareUrl = screen.getByText(/\/share\/#/).textContent!;
+    await user.click(screen.getByRole("button", { name: /copy link/i }));
+    const shareUrl = writeText.mock.calls[0][0] as string;
     const encoded = shareUrl.split("#")[1];
 
     const result = decodeScriptForShare(encoded);

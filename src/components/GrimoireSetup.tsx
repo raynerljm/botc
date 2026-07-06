@@ -775,7 +775,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 <PlayerNamePicker
                   onSelect={(name) => renamePlayer(draw.seatId, name)}
                 />
-                <button type="button" onClick={hideAndPass}>
+                <button
+                  type="button"
+                  className={styles.drawAction}
+                  onClick={hideAndPass}
+                >
                   Hide &amp; pass
                 </button>
               </div>
@@ -787,7 +791,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               <p>
                 Card hidden. Pass the device to {nextUnassignedSeat?.name}.
               </p>
-              <button type="button" onClick={readyForNextDraw}>
+              <button
+                type="button"
+                className={styles.drawAction}
+                onClick={readyForNextDraw}
+              >
                 Ready to draw
               </button>
             </div>
@@ -858,7 +866,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               ))}
             </select>
           </label>
-          <button type="submit">Add to the circle</button>
+          <button type="submit" className={styles.formSubmit}>
+            Add to the circle
+          </button>
         </form>
       )}
 
@@ -1012,9 +1022,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             <DemonBluffsPanel game={game} onChange={update} />
             <ClaimsList
               players={game.players}
-              characterById={scriptCharacterById}
+              claimOptions={game.scriptCharacters}
               collapsed={game.claimsCollapsed}
               onToggleCollapsed={(collapsed) => update({ ...game, claimsCollapsed: collapsed })}
+              onSetClaim={setClaim}
             />
           </div>
           {showWalkthrough && (

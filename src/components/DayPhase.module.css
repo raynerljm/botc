@@ -99,7 +99,19 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  min-height: 2.75rem;
   font-size: 0.85rem;
+}
+
+.submit {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.1rem;
+  background: var(--accent);
+  color: var(--background);
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .note {

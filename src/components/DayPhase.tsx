@@ -146,7 +146,9 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
             ))}
           </select>
         </label>
-        <button type="submit">Record nomination</button>
+        <button type="submit" className={styles.submit}>
+          Record nomination
+        </button>
       </form>
 
       <ul className={styles.nominations}>

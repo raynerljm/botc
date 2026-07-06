@@ -100,6 +100,7 @@
   align-items: center;
   gap: 0.6rem;
   flex: 1;
+  min-height: 2.75rem;
   /* Flex items default to min-width: auto, which lets a long acting-as
      string (playerName — characterName as label) refuse to shrink below
      its own content width and push past .entry's edge — the actual

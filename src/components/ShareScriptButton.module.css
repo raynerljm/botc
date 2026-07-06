@@ -1,4 +1,5 @@
 .trigger {
+  min-height: 2.75rem;
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
   border: 1px solid var(--border, #ccc);
@@ -57,13 +58,6 @@
   text-align: center;
 }
 
-.url {
-  font-size: 0.75rem;
-  word-break: break-all;
-  text-align: center;
-  color: var(--muted, #555);
-}
-
 .copy {
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
@@ -71,4 +65,11 @@
   background: var(--surface, #fff);
   color: var(--foreground, #111);
   cursor: pointer;
+}
+
+.url {
+  font-size: 0.75rem;
+  word-break: break-all;
+  text-align: center;
+  color: var(--muted, #555);
 }

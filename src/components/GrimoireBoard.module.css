@@ -4,8 +4,16 @@
   gap: 1rem;
 }
 
+/* This row used to always have the full-width (640px) board underneath it,
+   plenty of room for every button on one line. Letting the circle column
+   shrink on narrower tablet widths (issue #69) means this row can now run
+   out of room too — flex-wrap (not each button wrapping its own label text
+   internally) is what keeps a spillover button on its own line, full
+   height, instead of clipping a wrapped second line against whatever sits
+   below the row. */
 .controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -17,6 +25,7 @@
   color: var(--foreground);
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .board {
@@ -114,7 +123,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
+  /* The clickable element is this <summary>, not just the token icon inside
+     it — sized to the touch-target floor directly (issue #82) so a busy
+     board's shrinking icon never drags the real tap target under 44px,
+     without growing the icon itself and crowding neighbors (issue #82 code
+     review: growing the icon overlapped adjacent seats on phone-width
+     viewports at high player counts). */
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   list-style: none;
   cursor: grab;
   text-align: center;
@@ -226,6 +244,37 @@
   min-height: 2.75rem;
 }
 
+.markDead {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.claimSelect {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+}
+
+.detailSummary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0;
+  cursor: pointer;
+}
+
 .seatControls {
   display: flex;
   gap: 0.5rem;
@@ -243,8 +292,12 @@
      it (issue #70 code review). */
   position: relative;
   z-index: 6;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-top: 0.35rem;
-  padding: 0.2rem 0.5rem;
+  padding: 0.4rem 0.75rem;
   font-size: 0.7rem;
   background: var(--surface-raised);
   border: 1px solid var(--border);
