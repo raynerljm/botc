@@ -6,6 +6,7 @@ import {
   buildBagTokens,
   circlePosition,
   createGame,
+  firstNightEnded,
   GAME_SCHEMA_VERSION,
   heldCharacterIds,
   insertAtSeat,
@@ -616,6 +617,31 @@ describe("createGame", () => {
     expect(game.demonBluffsCollapsed).toBe(false);
     expect(game.claimsCollapsed).toBe(false);
     expect(game.endGamePanelCollapsed).toBeNull();
+  });
+});
+
+describe("firstNightEnded (issues #68, #79)", () => {
+  function gameWith(night: number): GameDocument {
+    return {
+      ...createGame({
+        scriptId: "tb",
+        scriptName: "Trouble Brewing",
+        playerCount: 1,
+        selectedCharacters: characters("washerwoman"),
+        standIn: null,
+        extraCopies: {},
+      }),
+      night,
+    };
+  }
+
+  it("is false before any night has ended", () => {
+    expect(firstNightEnded(gameWith(0))).toBe(false);
+  });
+
+  it("is true once at least one night has ended", () => {
+    expect(firstNightEnded(gameWith(1))).toBe(true);
+    expect(firstNightEnded(gameWith(2))).toBe(true);
   });
 });
 

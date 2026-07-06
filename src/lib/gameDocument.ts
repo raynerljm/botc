@@ -349,12 +349,19 @@ export function isGameEnded(game: GameDocument): boolean {
   return game.winner !== null;
 }
 
+// `night` is nights fully completed, not the current night number — 0 until
+// the first night has actually ended, so >= 1 is exactly "past the first
+// night" (issue #68's setup-decision banner, issue #79's end-game default).
+export function firstNightEnded(game: GameDocument): boolean {
+  return game.night >= 1;
+}
+
 // Storyteller-first default (issue #79 AC: "starts collapsed... until the
 // first night has ended — but always manually openable"): collapsed while
 // still in setup, expanded once play is underway, unless the storyteller has
 // explicitly toggled it — a deliberate choice always wins over the default.
 export function isEndGamePanelCollapsed(game: GameDocument): boolean {
-  return game.endGamePanelCollapsed ?? game.night < 1;
+  return game.endGamePanelCollapsed ?? !firstNightEnded(game);
 }
 
 // The distribution-table player count — travellers are extra and never counted

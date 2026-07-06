@@ -22,17 +22,24 @@ export function CollapsibleSection({
 }: CollapsibleSectionProps) {
   return (
     <>
-      <button
-        type="button"
-        className={styles.heading}
-        aria-expanded={!collapsed}
-        onClick={() => onToggleCollapsed(!collapsed)}
-      >
-        <h2 className={styles.title}>{title}</h2>
-        <span className={styles.chevron} aria-hidden="true">
-          {collapsed ? "▸" : "▾"}
-        </span>
-      </button>
+      {/* The button nests inside the heading, not the other way around — a
+          heading can't be button content (HTML content model: button only
+          takes phrasing content), and burying it would also cost screen
+          readers' heading-navigation landmark for this panel title (code
+          review finding). */}
+      <h2 className={styles.title}>
+        <button
+          type="button"
+          className={styles.heading}
+          aria-expanded={!collapsed}
+          onClick={() => onToggleCollapsed(!collapsed)}
+        >
+          {title}
+          <span className={styles.chevron} aria-hidden="true">
+            {collapsed ? "▸" : "▾"}
+          </span>
+        </button>
+      </h2>
       {!collapsed && children}
     </>
   );

@@ -33,6 +33,19 @@ describe("CollapsibleSection", () => {
     );
   });
 
+  it("wraps the toggle button in a heading, not the other way around (code review finding)", () => {
+    render(
+      <CollapsibleSection title="Claims" collapsed={false} onToggleCollapsed={vi.fn()}>
+        <p>Body content</p>
+      </CollapsibleSection>,
+    );
+
+    const heading = screen.getByRole("heading", { level: 2, name: "Claims" });
+    expect(
+      heading.querySelector('button[aria-expanded]'),
+    ).toBe(screen.getByRole("button", { name: "Claims" }));
+  });
+
   it("toggles collapsed state on click", async () => {
     const user = userEvent.setup();
     const onToggleCollapsed = vi.fn();

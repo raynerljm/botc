@@ -48,7 +48,7 @@ export function EndGamePanel({
       <CollapsibleSection
         title="Game"
         collapsed={collapsed}
-        onToggleCollapsed={(next) => onChange({ ...game, endGamePanelCollapsed: next })}
+        onToggleCollapsed={(collapsed) => onChange({ ...game, endGamePanelCollapsed: collapsed })}
       >
         {ended && (
           <p className={styles.result} role="status">
