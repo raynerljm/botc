@@ -78,10 +78,14 @@ export interface GrimoireBoardProps {
   onOpenSetupWalkthrough?: () => void;
 }
 
-// The floor is 2.75rem (44px) — below that, the token (the primary tap
-// target for opening a seat's menu) would miss the touch-target guideline at
-// the maximum player count, however busy the board gets (issue #82).
-const MIN_TOKEN_REM = 2.75;
+// The token *icon* keeps shrinking at high player counts (visual density,
+// not a tap target) — growing it to a 44px floor was tried (issue #82) and
+// measured to actually overlap adjacent seats' icons on common phone widths
+// at 20 players, since the circle's diameter is capped by viewport width
+// while the icon floor isn't. The real tap target is .tokenSummary, the
+// <summary> wrapping the icon and name text — that's widened to 44px
+// instead (below), leaving the icon's own visual size untouched.
+const MIN_TOKEN_REM = 1.9;
 const MAX_TOKEN_REM = 3.4;
 const MIN_TOKEN_COUNT = 5;
 const MAX_TOKEN_COUNT = 20;
