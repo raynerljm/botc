@@ -88,7 +88,7 @@
 }
 
 .entry[data-checked] {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
+  background-color: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
 }
 
 .entry[data-skipped] {
