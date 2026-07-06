@@ -54,7 +54,7 @@ function renderList(
 function optionValues(select: HTMLElement) {
   return Array.from(select.querySelectorAll("option")).map((o) => ({
     value: (o as HTMLOptionElement).value,
-    label: o.textContent,
+    label: (o as HTMLOptionElement).text,
   }));
 }
 
