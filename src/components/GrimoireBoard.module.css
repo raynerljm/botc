@@ -4,8 +4,16 @@
   gap: 1rem;
 }
 
+/* This row used to always have the full-width (640px) board underneath it,
+   plenty of room for every button on one line. Letting the circle column
+   shrink on narrower tablet widths (issue #69) means this row can now run
+   out of room too — flex-wrap (not each button wrapping its own label text
+   internally) is what keeps a spillover button on its own line, full
+   height, instead of clipping a wrapped second line against whatever sits
+   below the row. */
 .controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -17,6 +25,7 @@
   color: var(--foreground);
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .board {
