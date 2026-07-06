@@ -283,10 +283,18 @@ describe("token menu", () => {
     const { container } = renderBoard([makePlayer({ dead: false })]);
 
     const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
-    const shroud = wrap.querySelector('[aria-hidden="true"]') as HTMLElement;
+    // The shroud is always the last child of its wrapper span — unlike
+    // `[aria-hidden="true"]` alone, this doesn't also match a fallback
+    // CharacterToken's initials span (also aria-hidden) for a character
+    // with no vendored art.
+    const shroud = wrap.querySelector('[aria-hidden="true"]:last-child') as HTMLElement;
+    // The shroud's visibility keys off this ancestor's data-dead via CSS
+    // (`.tokenSummary[data-dead] .shroud`), so that's the state that should
+    // be absent while alive, not an attribute on the shroud itself.
+    const summary = wrap.querySelector("summary") as HTMLElement;
 
     expect(shroud).toBeInTheDocument();
-    expect(shroud).not.toHaveAttribute("data-dead");
+    expect(summary).not.toHaveAttribute("data-dead");
   });
 
   it("opens the character detail popover with ability text and an official wiki link", async () => {

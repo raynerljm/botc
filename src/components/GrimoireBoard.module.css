@@ -69,10 +69,13 @@
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   font-size: 0.85rem;
-  animation: banner-in 200ms ease;
+  animation: fade-slide-in 200ms ease;
 }
 
-@keyframes banner-in {
+/* Shared by the undo/placing banners above and the seat/reminder menu body
+   below — same "fade in, settle down 4px" motion, just different durations
+   at each call site. */
+@keyframes fade-slide-in {
   from {
     opacity: 0;
     transform: translateY(-4px);
@@ -143,7 +146,7 @@
   pointer-events: none;
 }
 
-.shroud[data-dead] {
+.tokenSummary[data-dead] .shroud {
   opacity: 1;
 }
 
@@ -191,18 +194,7 @@
    to rendered — so this replays every time the seat/reminder menu opens,
    with no JS needed to detect the transition. */
 .menu[open] > .menuBody {
-  animation: menu-in 160ms ease;
-}
-
-@keyframes menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: fade-slide-in 160ms ease;
 }
 
 .field {

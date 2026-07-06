@@ -574,12 +574,11 @@ export function GrimoireBoard({
                       {/* Always mounted (not conditional on player.dead) so
                           the CSS opacity transition it drives plays both
                           ways — draping over on death, fading off on a
-                          revive — instead of only ever popping in. */}
-                      <span
-                        className={styles.shroud}
-                        data-dead={player.dead || undefined}
-                        aria-hidden="true"
-                      />
+                          revive — instead of only ever popping in. Its
+                          visibility keys off the ancestor summary's own
+                          data-dead (above) rather than repeating that state
+                          on a second attribute here. */}
+                      <span className={styles.shroud} aria-hidden="true" />
                     </span>
                     {character && (
                       <span className={styles.characterName}>{character.name}</span>
