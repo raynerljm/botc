@@ -900,6 +900,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             </select>
           </label>
           <button type="submit">Add to the grimoire</button>
+          <button type="button" onClick={() => setTokenFormOpen(false)}>
+            Cancel
+          </button>
         </form>
       )}
 

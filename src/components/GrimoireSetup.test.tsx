@@ -1076,6 +1076,22 @@ describe("mid-game token management (issue #15)", () => {
     expect(reloaded.characterPool.map((c) => c.id)).toContain("baron");
   });
 
+  it("cancels the 'Add character' form without adding a player or reopening it (issue #83)", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+    await user.selectOptions(screen.getByLabelText("Character"), "baron");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Add to the grimoire" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add character" })).toBeInTheDocument();
+    const reloaded = loadGame()!;
+    expect(reloaded.players).toHaveLength(2);
+    expect(reloaded.players.some((p) => p.characterId === "baron")).toBe(false);
+  });
+
   it("computes 'At the end' from the highest seat number, not the player count, once a removal has left a gap", async () => {
     const { user, circle } = await completeSetup(3, [
       getCharacter("washerwoman")!,
