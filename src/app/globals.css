@@ -43,3 +43,15 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* One rule to honor prefers-reduced-motion everywhere (issue #77 AC), rather
+   than repeating the check in every component that animates. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

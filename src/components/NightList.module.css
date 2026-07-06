@@ -78,10 +78,17 @@
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
+  transition:
+    opacity 200ms ease,
+    background-color 200ms ease;
 }
 
 .entry[data-dead] {
   opacity: 0.65;
+}
+
+.entry[data-checked] {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
 }
 
 .entry[data-skipped] {

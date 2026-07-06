@@ -157,6 +157,32 @@ describe("Night list: entries", () => {
 
     expect(latest.nightChecked).toContain(`char:${latest.players[0].id}`);
   });
+
+  it("marks a checked-off entry with data-checked, for its CSS transition to key off", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    const washerwoman = getCharacter("washerwoman")!;
+    const checkbox = screen.getByRole("checkbox", {
+      name: `${washerwoman.name} — Seat 1`,
+    });
+    expect(checkbox.closest("li")).not.toHaveAttribute("data-checked");
+
+    await user.click(checkbox);
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+    );
+
+    expect(
+      screen
+        .getByRole("checkbox", { name: `${washerwoman.name} — Seat 1` })
+        .closest("li"),
+    ).toHaveAttribute("data-checked");
+  });
 });
 
 describe("Night list: dead players", () => {

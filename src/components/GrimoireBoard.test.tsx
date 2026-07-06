@@ -279,6 +279,16 @@ describe("token menu", () => {
     expect(screen.getByRole("button", { name: /mark alive/i })).toBeInTheDocument();
   });
 
+  it("keeps the shroud element mounted while alive, so a later death fades it in via CSS rather than popping it in", () => {
+    const { container } = renderBoard([makePlayer({ dead: false })]);
+
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const shroud = wrap.querySelector('[aria-hidden="true"]') as HTMLElement;
+
+    expect(shroud).toBeInTheDocument();
+    expect(shroud).not.toHaveAttribute("data-dead");
+  });
+
   it("opens the character detail popover with ability text and an official wiki link", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer({ characterId: "washerwoman" })]);

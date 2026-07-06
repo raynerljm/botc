@@ -124,6 +124,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
               className={styles.entry}
               data-dead={entry.dead || undefined}
               data-skipped={entry.skipped || undefined}
+              data-checked={checkedIds.has(entry.id) || undefined}
             >
               <label className={styles.entryMain}>
                 <input

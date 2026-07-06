@@ -132,6 +132,20 @@
   padding: 2rem;
   background: var(--background);
   text-align: center;
+  animation: reveal-in 200ms ease;
+}
+
+/* The physical beat this mirrors is flipping a drawn token face-up, not a
+   generic fade — a quick scale-up reads closer to that than opacity alone. */
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .addTraveller {

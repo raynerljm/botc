@@ -43,6 +43,20 @@
   transform: translate(-50%, -50%);
   touch-action: none;
   z-index: 1;
+  /* Only plays on mount (a newly-placed reminder) — dragging an existing
+     one just updates its left/top style on the same element, no remount. */
+  animation: chip-in 200ms ease;
+}
+
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 .undoBanner,
@@ -55,6 +69,18 @@
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   font-size: 0.85rem;
+  animation: banner-in 200ms ease;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .undoBanner button,
@@ -112,6 +138,13 @@
   border-radius: 50%;
   background: color-mix(in srgb, var(--background) 65%, transparent);
   box-shadow: inset 0 0 0 2px var(--muted);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.shroud[data-dead] {
+  opacity: 1;
 }
 
 .characterName {
@@ -151,6 +184,25 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
+}
+
+/* Browsers restart a CSS animation whenever an element goes from `display:
+   none` (a closed <details>'s default UA style for its non-summary content)
+   to rendered — so this replays every time the seat/reminder menu opens,
+   with no JS needed to detect the transition. */
+.menu[open] > .menuBody {
+  animation: menu-in 160ms ease;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .field {
