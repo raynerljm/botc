@@ -859,6 +859,13 @@ export function GrimoireBoard({
                         }
                       >
                         <option value="">No claim</option>
+                        {/* A claim recorded before the script last changed can
+                            reference a character no longer in claimOptions —
+                            keep it selectable/visible by id rather than
+                            silently resetting the row to "No claim". */}
+                        {player.claim && !claimById.has(player.claim) && (
+                          <option value={player.claim}>{player.claim}</option>
+                        )}
                         {claimGroups.map((group) => (
                           <optgroup key={group.team} label={teamNames[group.team]}>
                             {group.characters.map((c) => (

@@ -1012,9 +1012,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             <DemonBluffsPanel game={game} onChange={update} />
             <ClaimsList
               players={game.players}
-              characterById={scriptCharacterById}
+              claimOptions={game.scriptCharacters}
               collapsed={game.claimsCollapsed}
               onToggleCollapsed={(collapsed) => update({ ...game, claimsCollapsed: collapsed })}
+              onSetClaim={setClaim}
             />
           </div>
           {showWalkthrough && (

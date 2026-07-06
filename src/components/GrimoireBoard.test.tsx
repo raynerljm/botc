@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCharacter } from "@/lib/characters";
 import type { Player, ReminderToken } from "@/lib/gameDocument";
 
+import { ClaimsList } from "./ClaimsList";
 import { GrimoireBoard } from "./GrimoireBoard";
 
 function makeReminder(overrides: Partial<ReminderToken> = {}): ReminderToken {
@@ -1692,5 +1693,56 @@ describe("board sizing (issue #78)", () => {
 
     expect(board.style.width).toBe("604px");
     expect(board.style.height).toBe("604px");
+  });
+});
+
+describe("claim option parity with the Claims panel (issue #75)", () => {
+  function optionValues(select: HTMLElement) {
+    return Array.from(select.querySelectorAll("option")).map((o) => ({
+      value: (o as HTMLOptionElement).value,
+      label: (o as HTMLOptionElement).text,
+    }));
+  }
+
+  it("offers the token menu's claim select the exact same options as the Claims panel select, given the same script", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+    await user.click(screen.getByText("Alice"));
+    const boardSelect = screen.getByLabelText(/^claim$/i);
+
+    const { container: panelContainer } = render(
+      <ClaimsList
+        players={[makePlayer()]}
+        claimOptions={claimOptions}
+        collapsed={false}
+        onToggleCollapsed={vi.fn()}
+        onSetClaim={vi.fn()}
+      />,
+    );
+    const panelSelect = within(panelContainer).getByRole("combobox");
+
+    expect(optionValues(panelSelect)).toEqual(optionValues(boardSelect));
+  });
+
+  it("both selects render the same orphaned-claim fallback option when the stored claim isn't in claimOptions", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ claim: "poisoner" })]);
+    await user.click(screen.getByText("Alice"));
+    const boardSelect = screen.getByLabelText(/^claim$/i);
+
+    const { container: panelContainer } = render(
+      <ClaimsList
+        players={[makePlayer({ claim: "poisoner" })]}
+        claimOptions={claimOptions}
+        collapsed={false}
+        onToggleCollapsed={vi.fn()}
+        onSetClaim={vi.fn()}
+      />,
+    );
+    const panelSelect = within(panelContainer).getByRole("combobox");
+
+    expect(boardSelect).toHaveValue("poisoner");
+    expect(panelSelect).toHaveValue("poisoner");
+    expect(optionValues(panelSelect)).toEqual(optionValues(boardSelect));
   });
 });
