@@ -113,6 +113,16 @@ describe("ClaimsList", () => {
     expect(onSetClaim).toHaveBeenCalledWith("p1", null);
   });
 
+  it("keeps a claim visible instead of silently resetting to 'No claim' when the id isn't in claimOptions", () => {
+    renderList([
+      makePlayer({ id: "p1", name: "Alice", claim: "poisoner" }),
+    ]);
+
+    const select = screen.getByRole("combobox");
+    expect(select).toHaveValue("poisoner");
+    expect(within(select).getByText("poisoner")).toBeInTheDocument();
+  });
+
   it("lists players in seat order regardless of array order", () => {
     const { container } = renderList([
       makePlayer({ id: "p2", seat: 2, name: "Bob" }),

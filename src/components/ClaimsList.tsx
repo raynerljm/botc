@@ -27,8 +27,15 @@ export function ClaimsList({
   onToggleCollapsed,
   onSetClaim,
 }: ClaimsListProps) {
-  const sorted = [...players].sort((a, b) => a.seat - b.seat);
+  const sorted = useMemo(
+    () => [...players].sort((a, b) => a.seat - b.seat),
+    [players],
+  );
   const claimGroups = useMemo(() => groupByTeam(claimOptions), [claimOptions]);
+  const claimIds = useMemo(
+    () => new Set(claimOptions.map((c) => c.id)),
+    [claimOptions],
+  );
 
   return (
     <section className={styles.panel} aria-label="Claims">
@@ -41,28 +48,32 @@ export function ClaimsList({
           {sorted.map((player) => (
             <li key={player.id} className={styles.row}>
               <span className={styles.name}>{player.name}</span>
-              <label className={styles.field} htmlFor={`claims-panel-claim-${player.id}`}>
-                <span className={styles.srOnly}>Claim for {player.name}</span>
-                <select
-                  id={`claims-panel-claim-${player.id}`}
-                  className={styles.claimSelect}
-                  value={player.claim ?? ""}
-                  onChange={(event) =>
-                    onSetClaim(player.id, event.target.value || null)
-                  }
-                >
-                  <option value="">No claim</option>
-                  {claimGroups.map((group) => (
-                    <optgroup key={group.team} label={teamNames[group.team]}>
-                      {group.characters.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
+              <select
+                aria-label={`Claim for ${player.name}`}
+                className={styles.claimSelect}
+                value={player.claim ?? ""}
+                onChange={(event) =>
+                  onSetClaim(player.id, event.target.value || null)
+                }
+              >
+                <option value="">No claim</option>
+                {/* A claim recorded before the script last changed can
+                    reference a character no longer in claimOptions — keep it
+                    selectable/visible by id rather than silently resetting
+                    the row to "No claim" out from under the storyteller. */}
+                {player.claim && !claimIds.has(player.claim) && (
+                  <option value={player.claim}>{player.claim}</option>
+                )}
+                {claimGroups.map((group) => (
+                  <optgroup key={group.team} label={teamNames[group.team]}>
+                    {group.characters.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </li>
           ))}
         </ul>
