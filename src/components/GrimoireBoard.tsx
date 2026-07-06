@@ -90,6 +90,32 @@ function tokenSizeRem(total: number): number {
   return MAX_TOKEN_REM - t * (MAX_TOKEN_REM - MIN_TOKEN_REM);
 }
 
+// A circle any smaller than this stops reading as "the board" regardless of
+// how little viewport is left — better to require a small scroll in that
+// extreme case than to shrink the circle into illegibility.
+const MIN_BOARD_PX = 320;
+// Previous width-only cap (`min(90vw, 40rem)`), kept as a sane ceiling so the
+// circle doesn't balloon on a large desktop display once it's no longer
+// bottlenecked by viewport height.
+const MAX_BOARD_REM = 40;
+// Breathing room between the circle's bottom edge and the viewport edge.
+const BOARD_BOTTOM_RESERVE_PX = 16;
+
+// The circle previously sized itself from viewport *width* alone
+// (`min(90vw, 40rem)`), so on a short landscape viewport it overflowed
+// vertically and clipped seats below the fold (issue #78). Fitting it to
+// whatever space is actually available in both dimensions keeps the whole
+// circle on screen without scrolling, using genuinely spare width instead of
+// capping early.
+function fitBoardSizePx(
+  availableWidthPx: number,
+  availableHeightPx: number,
+  rootFontSizePx: number,
+): number {
+  const maxPx = MAX_BOARD_REM * rootFontSizePx;
+  return Math.max(MIN_BOARD_PX, Math.min(availableWidthPx, availableHeightPx, maxPx));
+}
+
 // A real finger drag always moves a few pixels before settling — without a
 // threshold, every tap-to-open-the-menu would also fire a (near-zero) move.
 const DRAG_THRESHOLD_PX = 6;
@@ -147,6 +173,44 @@ export function GrimoireBoard({
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
+  // Null until the first client-side measurement lands; the CSS module's
+  // own width/height rule (a width-only fallback) covers that brief gap.
+  const [boardSizePx, setBoardSizePx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const board = boardRef.current;
+    const wrapper = board?.parentElement;
+    if (!board || !wrapper) return;
+
+    function measure() {
+      const rect = board!.getBoundingClientRect();
+      const rootFontSizePx =
+        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const availableHeightPx =
+        window.innerHeight - rect.top - BOARD_BOTTOM_RESERVE_PX;
+      setBoardSizePx(
+        fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx),
+      );
+    }
+
+    measure();
+    window.addEventListener("resize", measure);
+    // Observing `wrapper` alone only catches *its own* box changing size —
+    // not the board's top offset shifting because something rendered above
+    // it (the toolbar wrapping to a second row once the day-phase column
+    // claims space, a banner appearing) grew *without* resizing wrapper
+    // itself. document.body resizes for either kind of change, so it's the
+    // one target that reliably catches a shifted top offset too.
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(measure);
+      observer.observe(document.body);
+    }
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, []);
 
   // "Script's characters first, then everything in the dataset" (issue #15
   // AC) — the script pool is whatever's already resolvable on this board.
@@ -591,7 +655,14 @@ export function GrimoireBoard({
         className={styles.board}
         data-board
         data-hidden={hidden}
-        style={{ "--token-size": `${tokenSize}rem` } as React.CSSProperties}
+        style={
+          {
+            "--token-size": `${tokenSize}rem`,
+            ...(boardSizePx !== null
+              ? { width: `${boardSizePx}px`, height: `${boardSizePx}px` }
+              : {}),
+          } as React.CSSProperties
+        }
       >
         {!hidden &&
           sorted.map((player, index) => {

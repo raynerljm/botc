@@ -1567,3 +1567,72 @@ describe("Fabled", () => {
     expect(handlers.onRemoveFabled).toHaveBeenCalledWith("angel");
   });
 });
+
+describe("board sizing (issue #78)", () => {
+  const originalInnerHeight = window.innerHeight;
+
+  afterEach(() => {
+    Object.defineProperty(window, "innerHeight", {
+      value: originalInnerHeight,
+      configurable: true,
+    });
+  });
+
+  function measureWith({
+    innerHeight,
+    wrapperWidth,
+    boardTop,
+  }: {
+    innerHeight: number;
+    wrapperWidth: number;
+    boardTop: number;
+  }) {
+    const { container } = renderBoard([makePlayer()]);
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    const wrapper = board.parentElement as HTMLElement;
+    Object.defineProperty(window, "innerHeight", {
+      value: innerHeight,
+      configurable: true,
+    });
+    Object.defineProperty(wrapper, "clientWidth", {
+      value: wrapperWidth,
+      configurable: true,
+    });
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: boardTop,
+      width: 0,
+      height: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: boardTop,
+      toJSON() {},
+    });
+    fireEvent(window, new Event("resize"));
+    return board;
+  }
+
+  it("fits the shorter of the available width and available height", () => {
+    // Landscape iPad (1180x820): plenty of width, but only 604px of height
+    // remains below the board's top offset once the reserve is subtracted.
+    const board = measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+
+    expect(board.style.width).toBe("604px");
+    expect(board.style.height).toBe("604px");
+  });
+
+  it("never shrinks the circle below the legibility floor", () => {
+    const board = measureWith({ innerHeight: 300, wrapperWidth: 200, boardTop: 250 });
+
+    expect(board.style.width).toBe("320px");
+    expect(board.style.height).toBe("320px");
+  });
+
+  it("caps the circle at 40rem once nothing is bottlenecking it", () => {
+    const board = measureWith({ innerHeight: 2000, wrapperWidth: 2000, boardTop: 0 });
+
+    expect(board.style.width).toBe("640px");
+    expect(board.style.height).toBe("640px");
+  });
+});
