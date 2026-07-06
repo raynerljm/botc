@@ -300,6 +300,42 @@ describe("special flow: Drunk stand-in (AC4)", () => {
   });
 });
 
+describe("Drunk stand-in tallies count once, as an Outsider (issue #76)", () => {
+  it("doesn't inflate Townsfolk when a stand-in is picked", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    expect(screen.getByText("Townsfolk 0/3")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+
+    // The Drunk already counts once, as an Outsider — the stand-in is the
+    // same physical token, not a second, independent Townsfolk pick.
+    expect(screen.getByText("Townsfolk 0/3")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
+  });
+
+  it("marks the stand-in's own card as standing in for the Drunk, not a normal pick", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.selectOptions(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+
+    const washerwoman = screen.getByRole("button", { name: /^Washerwoman/ });
+    expect(washerwoman).toHaveAttribute("aria-pressed", "false");
+    expect(washerwoman).toHaveTextContent(/drunk's stand-in/i);
+  });
+});
+
 describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
   it("selects the Damsel automatically once the Huntsman is selected", async () => {
     const user = userEvent.setup();
