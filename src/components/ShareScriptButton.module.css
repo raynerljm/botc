@@ -39,6 +39,11 @@
 
 .close {
   align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   border: none;
   background: none;
   color: var(--foreground, #111);

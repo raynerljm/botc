@@ -142,6 +142,12 @@ describe("SetupWalkthrough shell", () => {
     expect(within(step).getByRole("button", { name: /skip/i })).toHaveFocus();
   });
 
+  it("themes the per-step Skip button instead of leaving it bare (issue #74)", () => {
+    renderWalkthrough({ steps: [fortuneTellerStep] });
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    expect(within(step).getByRole("button", { name: /skip/i }).className).not.toBe("");
+  });
+
   it("skips a step with one tap, without producing any reminder", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({

@@ -606,6 +606,7 @@ export function BagBuilder({
                     </button>
                     {choiceOptions && (
                       <select
+                        className={styles.select}
                         aria-label={`${character.name} setup choice`}
                         value={modifierChoices[character.id] ?? 0}
                         onChange={(event) =>

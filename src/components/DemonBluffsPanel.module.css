@@ -111,3 +111,14 @@
   font-weight: 700;
   color: var(--foreground);
 }
+
+.closeButton {
+  padding: 0.6rem 1rem;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface-raised);
+  color: var(--foreground);
+  cursor: pointer;
+  min-height: 2.75rem;
+}

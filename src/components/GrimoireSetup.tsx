@@ -855,6 +855,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <label>
             Seat position
             <select
+              className={styles.select}
               value={travellerSeat}
               onChange={(event) => setTravellerSeat(Number(event.target.value))}
             >
@@ -899,6 +900,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <label>
             Seat position
             <select
+              className={styles.select}
               value={tokenSeat}
               onChange={(event) => setTokenSeat(Number(event.target.value))}
             >
@@ -936,10 +938,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       actionable (issue #68). */}
                   {firstNightEnded(game) ? "pending." : "to make before the first night."}
                 </p>
-                <button type="button" onClick={openWalkthrough}>
+                <button
+                  type="button"
+                  className={styles.walkthroughStart}
+                  onClick={openWalkthrough}
+                >
                   Start walkthrough
                 </button>
-                <button type="button" onClick={dismissWalkthroughOffer}>
+                <button
+                  type="button"
+                  className={styles.walkthroughSkip}
+                  onClick={dismissWalkthroughOffer}
+                >
                   Skip
                 </button>
               </div>
@@ -1087,6 +1097,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                     <label>
                       Assign seat {player.seat} manually
                       <select
+                        className={styles.select}
                         value=""
                         onChange={(event) =>
                           assignManually(player.id, event.target.value)

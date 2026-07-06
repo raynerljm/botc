@@ -803,6 +803,7 @@ export function GrimoireBoard({
                       Swap character
                       <select
                         id={`swap-character-${player.id}`}
+                        className={styles.select}
                         value={player.characterId ?? ""}
                         onChange={(event) =>
                           onSwapCharacter(player.id, event.target.value)

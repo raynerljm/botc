@@ -139,6 +139,15 @@ describe("DemonBluffsPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("themes the full-screen reveal's Close button instead of leaving it plain grey (issue #74)", async () => {
+    const user = userEvent.setup();
+    renderPanel({ demonBluffs: ["washerwoman", "librarian", null] });
+
+    await user.click(screen.getByRole("button", { name: /show to demon/i }));
+
+    expect(screen.getByRole("button", { name: /close/i }).className).not.toBe("");
+  });
+
   it("hides the body while collapsed, but keeps the heading reachable (issue #79)", () => {
     renderPanel({ demonBluffsCollapsed: true });
 
