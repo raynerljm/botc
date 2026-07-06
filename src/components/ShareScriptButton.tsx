@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 import type { Character } from "@/lib/characters";
@@ -63,6 +63,14 @@ function ShareScriptModal({
   const tooLargeForQr = exceedsQrCapacity(url);
   const tooLargeToScanReliably = !tooLargeForQr && isTooLargeForReliableQr(url);
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   async function copyUrl() {
     try {
       await navigator.clipboard.writeText(url);
@@ -104,7 +112,6 @@ function ShareScriptModal({
             the link below instead if scanning fails.
           </p>
         )}
-        <p className={styles.url}>{url}</p>
         <button type="button" className={styles.copy} onClick={copyUrl}>
           {copied ? "Copied!" : "Copy link"}
         </button>

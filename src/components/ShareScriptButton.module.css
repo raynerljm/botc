@@ -52,13 +52,6 @@
   text-align: center;
 }
 
-.url {
-  font-size: 0.75rem;
-  word-break: break-all;
-  text-align: center;
-  color: var(--muted, #555);
-}
-
 .copy {
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
