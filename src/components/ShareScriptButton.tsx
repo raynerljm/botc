@@ -100,26 +100,29 @@ function ShareScriptModal({
         </button>
         {tooLargeForQr ? (
           <p role="alert" className={styles.warning}>
-            This script is too large to encode as a QR code. Share the link
-            below instead.
+            This script is too large to encode as a QR code. Use Copy link
+            instead.
           </p>
         ) : (
           <QRCodeSVG value={url} size={220} />
         )}
         {tooLargeToScanReliably && (
           <p role="alert" className={styles.warning}>
-            This script is large — the QR code may not scan reliably. Share
-            the link below instead if scanning fails.
+            This script is large — the QR code may not scan reliably. Use
+            Copy link if scanning fails.
           </p>
         )}
         <button type="button" className={styles.copy} onClick={copyUrl}>
           {copied ? "Copied!" : "Copy link"}
         </button>
         {copyFailed && (
-          <p className={styles.warning}>
-            Couldn&apos;t copy automatically — select and copy the link above
-            instead.
-          </p>
+          <>
+            <p className={styles.warning}>
+              Couldn&apos;t copy automatically — select and copy the link
+              below instead.
+            </p>
+            <p className={styles.url}>{url}</p>
+          </>
         )}
       </dialog>
     </div>

@@ -154,7 +154,7 @@ describe("ShareScriptButton", () => {
     }
   });
 
-  it("shows a friendly message if copying to the clipboard fails", async () => {
+  it("shows a friendly message if copying to the clipboard fails, and reveals the link as a manual fallback", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     Object.defineProperty(navigator, "clipboard", {
@@ -164,11 +164,17 @@ describe("ShareScriptButton", () => {
     render(<ShareScriptButton meta={{}} characters={[washerwoman]} />);
 
     await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).not.toHaveTextContent(/\/share\/#/);
+
     await user.click(screen.getByRole("button", { name: /copy link/i }));
 
     expect(
       await screen.findByText(/couldn't copy/i),
     ).toBeInTheDocument();
+    // With no automatic copy and no visible link, the storyteller would have
+    // no way at all to get the URL — reveal it now as the last-resort path.
+    expect(dialog).toHaveTextContent(/\/share\/#/);
   });
 
   it("clears the 'Copied!' state if a later copy attempt fails, so the button and warning never disagree", async () => {

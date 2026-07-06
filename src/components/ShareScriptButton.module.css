@@ -60,3 +60,10 @@
   color: var(--foreground, #111);
   cursor: pointer;
 }
+
+.url {
+  font-size: 0.75rem;
+  word-break: break-all;
+  text-align: center;
+  color: var(--muted, #555);
+}
