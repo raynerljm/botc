@@ -242,7 +242,7 @@ describe("GrimoireBoard rendering", () => {
     const p2Summary = container.querySelector(
       "[data-player-id='p2'] summary",
     ) as HTMLElement;
-    expect(within(p1Summary).getByText("Nominated")).toBeInTheDocument();
+    expect(within(p1Summary).getByText("Nominator")).toBeInTheDocument();
     expect(within(p2Summary).getByText("Nominee")).toBeInTheDocument();
     expect(within(p1Summary).queryByText("Nominee")).not.toBeInTheDocument();
   });
