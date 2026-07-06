@@ -18,6 +18,7 @@ import {
   subscribeGames,
 } from "@/lib/gameStorage";
 
+import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./GamesList.module.css";
 
 const EMPTY: GameDocument[] = [];
@@ -46,6 +47,9 @@ export function GamesList() {
   // passing. Only ongoing games show "Elapsed", so skip the timer entirely
   // when every saved game has already ended.
   const [, tick] = useState(0);
+  const [pendingDelete, setPendingDelete] = useState<GameDocument | null>(
+    null,
+  );
   const hasOngoingGame = games.some((game) => !isGameEnded(game));
 
   useEffect(() => {
@@ -62,13 +66,13 @@ export function GamesList() {
   }
 
   function remove(game: GameDocument) {
-    if (
-      window.confirm(
-        `Delete "${game.scriptName}"? This can't be undone — export it first if you want to keep it.`,
-      )
-    ) {
-      deleteGame(game.id);
-    }
+    setPendingDelete(game);
+  }
+
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    deleteGame(pendingDelete.id);
+    setPendingDelete(null);
   }
 
   return (
@@ -114,6 +118,16 @@ export function GamesList() {
           );
         })}
       </ul>
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete game"
+          message={`Delete "${pendingDelete.scriptName}"? This can't be undone — export it first if you want to keep it.`}
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </section>
   );
 }

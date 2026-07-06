@@ -175,27 +175,30 @@ describe("GamesList", () => {
 
   it("deletes a game after confirmation", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     saveGame(makeGame("Trouble Brewing"));
 
     render(<GamesList />);
 
     const row = screen.getByText("Trouble Brewing").closest("li")!;
     await user.click(within(row).getByRole("button", { name: /delete/i }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /delete/i }));
 
     expect(listGames()).toHaveLength(0);
   });
 
   it("keeps a game when deletion is cancelled", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     saveGame(makeGame("Trouble Brewing"));
 
     render(<GamesList />);
 
     const row = screen.getByText("Trouble Brewing").closest("li")!;
     await user.click(within(row).getByRole("button", { name: /delete/i }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
 
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(listGames()).toHaveLength(1);
   });
 });

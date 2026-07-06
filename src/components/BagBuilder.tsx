@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   getCharacter,
@@ -26,6 +26,7 @@ import {
 } from "@/lib/bagBuilder";
 
 import { CharacterToken } from "./CharacterToken";
+import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./BagBuilder.module.css";
 
 // Setup characters whose bracket text isn't a structured count delta, but
@@ -149,39 +150,7 @@ export function BagBuilder({
   const [extraCopies, setExtraCopies] = useState<Record<string, number>>({});
   const [standInId, setStandInId] = useState<string | null>(null);
   const [showCountWarning, setShowCountWarning] = useState(false);
-  const countWarningDialogRef = useRef<HTMLDivElement>(null);
-  const continueButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Traps Tab/Shift+Tab within the warning dialog's own controls while it's
-  // open (its overlay only visually covers the rest of the page — nothing
-  // stops keyboard focus from reaching a covered control otherwise), and
-  // returns focus to Continue once it closes so a keyboard user doesn't lose
-  // their place.
-  useEffect(() => {
-    if (!showCountWarning) return;
-    const dialog = countWarningDialogRef.current;
-    const focusable = dialog?.querySelectorAll<HTMLElement>("button") ?? [];
-    focusable[0]?.focus();
-
-    function trapTab(event: KeyboardEvent) {
-      if (event.key !== "Tab" || focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", trapTab);
-    const continueButton = continueButtonRef.current;
-    return () => {
-      document.removeEventListener("keydown", trapTab);
-      continueButton?.focus();
-    };
-  }, [showCountWarning]);
+  const [showInProgressWarning, setShowInProgressWarning] = useState(false);
 
   // The selectable pool is the script's characters plus anything a special
   // flow auto-adds (e.g. Huntsman pulling in the Damsel) that the script
@@ -347,14 +316,16 @@ export function BagBuilder({
     // an in-progress game is easy to lose track of — confirm before adding
     // another (advisory, ADR 0003: the storyteller can always proceed).
     const inProgress = listGames().some((g) => !isGameEnded(g));
-    if (
-      inProgress &&
-      !window.confirm(
-        "You already have a game in progress. Start a new game as well? Your existing game stays saved.",
-      )
-    ) {
+    if (inProgress) {
+      setShowInProgressWarning(true);
       return;
     }
+    createAndEnterGame();
+  }
+
+  function createAndEnterGame() {
+    if (!scriptId || !scriptName) return;
+    setShowInProgressWarning(false);
     const game = createGame({
       scriptId,
       scriptName,
@@ -478,7 +449,6 @@ export function BagBuilder({
         {scriptId && scriptName && (
           <button
             type="button"
-            ref={continueButtonRef}
             className={styles.continue}
             onClick={handleContinue}
           >
@@ -488,39 +458,35 @@ export function BagBuilder({
       </div>
 
       {showCountWarning && (
-        <div className={styles.overlay}>
-          <div
-            ref={countWarningDialogRef}
-            className={styles.dialog}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Bag counts don't match the script"
-          >
-            <h2>Bag counts don&apos;t match the script</h2>
-            <ul>
-              {countMismatches.map(({ team, selected, target }) => (
-                <li key={team}>
-                  {teamNames[team]}: {selected}/{target} (
-                  {selected > target
-                    ? `${selected - target} over`
-                    : `${target - selected} under`}
-                  )
-                </li>
-              ))}
-            </ul>
-            <div className={styles.dialogActions}>
-              <button
-                type="button"
-                onClick={() => setShowCountWarning(false)}
-              >
-                Go back
-              </button>
-              <button type="button" onClick={proceedToGame}>
-                Continue anyway
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Bag counts don't match the script"
+          confirmLabel="Continue anyway"
+          cancelLabel="Go back"
+          onConfirm={proceedToGame}
+          onCancel={() => setShowCountWarning(false)}
+        >
+          <ul>
+            {countMismatches.map(({ team, selected, target }) => (
+              <li key={team}>
+                {teamNames[team]}: {selected}/{target} (
+                {selected > target
+                  ? `${selected - target} over`
+                  : `${target - selected} under`}
+                )
+              </li>
+            ))}
+          </ul>
+        </ConfirmDialog>
+      )}
+
+      {showInProgressWarning && (
+        <ConfirmDialog
+          title="Game already in progress"
+          message="You already have a game in progress. Start a new game as well? Your existing game stays saved."
+          confirmLabel="Start new game"
+          onConfirm={createAndEnterGame}
+          onCancel={() => setShowInProgressWarning(false)}
+        />
       )}
 
       {relaxedCharacters.length > 0 && (

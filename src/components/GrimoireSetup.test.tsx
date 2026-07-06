@@ -86,6 +86,19 @@ async function completeSetup(
   return { user, circle };
 }
 
+// Clicks a seat's "Remove player" button and confirms the in-app dialog
+// (issue #73 — replaces the old window.confirm() for this flow).
+async function removePlayerAndConfirm(
+  user: ReturnType<typeof userEvent.setup>,
+  wrap: HTMLElement,
+) {
+  await user.click(
+    within(wrap).getByRole("button", { name: /remove player/i }),
+  );
+  const dialog = screen.getByRole("alertdialog", { name: /remove player/i });
+  await user.click(within(dialog).getByRole("button", { name: /^remove$/i }));
+}
+
 afterEach(() => {
   clearGames();
 });
@@ -811,17 +824,13 @@ describe("bag-draw setup page polish (issue #49)", () => {
     await user.click(screen.getByRole("button", { name: "Add character" }));
     expect(screen.getByLabelText("Character")).toBeInTheDocument();
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     for (const name of ["Player 1", "Player 2"]) {
       const wrap = within(circle)
         .getByText(name)
         .closest("[data-player-id]") as HTMLElement;
       await user.click(within(wrap).getByText(name));
-      await user.click(
-        within(wrap).getByRole("button", { name: /remove player/i }),
-      );
+      await removePlayerAndConfirm(user, wrap);
     }
-    confirmSpy.mockRestore();
 
     // Roster is empty — setupComplete is false, so the token form is
     // gone (not just visually swapped for the button).
@@ -877,24 +886,18 @@ describe("mid-game token management (issue #15)", () => {
   });
 
   it("removes a player after confirmation", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { user, circle } = await completeSetup();
 
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.click(
-      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
-    );
+    await removePlayerAndConfirm(user, seat1Wrap);
 
-    expect(confirmSpy).toHaveBeenCalled();
     const reloaded = loadGame()!;
     expect(reloaded.players).toHaveLength(1);
     expect(reloaded.players.map((p) => p.name)).toEqual(["Player 2"]);
-    confirmSpy.mockRestore();
   });
 
   it("keeps every player when the storyteller declines the removal confirmation", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     const { user, circle } = await completeSetup();
 
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
@@ -902,13 +905,13 @@ describe("mid-game token management (issue #15)", () => {
     await user.click(
       within(seat1Wrap).getByRole("button", { name: /remove player/i }),
     );
+    const dialog = screen.getByRole("alertdialog", { name: /remove player/i });
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
 
     expect(loadGame()!.players).toHaveLength(2);
-    confirmSpy.mockRestore();
   });
 
   it("scrubs a removed player's votes from every nomination, so they stop counting toward the tally (issue #20)", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     const game = makeGame({
       playerCount: 2,
@@ -942,12 +945,9 @@ describe("mid-game token management (issue #15)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.click(
-      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
-    );
+    await removePlayerAndConfirm(user, seat1Wrap);
 
     expect(loadGame()!.nominations[0].votes).toEqual([game.players[1].id]);
-    confirmSpy.mockRestore();
   });
 
   it("reveals the Drunk, showing the real character openly from then on", async () => {
@@ -1072,7 +1072,6 @@ describe("mid-game token management (issue #15)", () => {
   });
 
   it("computes 'At the end' from the highest seat number, not the player count, once a removal has left a gap", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { user, circle } = await completeSetup(3, [
       getCharacter("washerwoman")!,
       getCharacter("imp")!,
@@ -1083,10 +1082,7 @@ describe("mid-game token management (issue #15)", () => {
     // highest seat number in play is still 3.
     const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
     await user.click(within(seat2Wrap).getByText("Player 2"));
-    await user.click(
-      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
-    );
-    confirmSpy.mockRestore();
+    await removePlayerAndConfirm(user, seat2Wrap);
 
     await user.click(screen.getByRole("button", { name: "Add character" }));
     await user.selectOptions(screen.getByLabelText("Character"), "baron");
@@ -1108,7 +1104,6 @@ describe("mid-game token management (issue #15)", () => {
   });
 
   async function removeMiddleSeat(extraCharacters: NonNullable<ReturnType<typeof getCharacter>>[] = []) {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { user, circle } = await completeSetup(3, [
       getCharacter("washerwoman")!,
       getCharacter("imp")!,
@@ -1118,10 +1113,7 @@ describe("mid-game token management (issue #15)", () => {
 
     const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
     await user.click(within(seat2Wrap).getByText("Player 2"));
-    await user.click(
-      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
-    );
-    confirmSpy.mockRestore();
+    await removePlayerAndConfirm(user, seat2Wrap);
     return user;
   }
 
@@ -1372,7 +1364,6 @@ describe("reminder tokens (issue #14)", () => {
 
   it("detaches a restored reminder whose anchor seat was removed during the undo window (code review finding)", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const circle = await completedBoard(user);
 
     const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
@@ -1392,7 +1383,7 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders).toHaveLength(0);
 
     await user.click(within(wrap).getByText("Player 1"));
-    await user.click(within(wrap).getByRole("button", { name: /remove player/i }));
+    await removePlayerAndConfirm(user, wrap);
     expect((loadGame() as GameDocument).players).toHaveLength(1);
 
     await user.click(within(circle).getByRole("button", { name: /undo/i }));
@@ -1400,7 +1391,6 @@ describe("reminder tokens (issue #14)", () => {
     const reloaded = loadGame() as GameDocument;
     expect(reloaded.reminders).toHaveLength(1);
     expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
-    confirmSpy.mockRestore();
   });
 
   it("persists a reminder added from a seat's own menu as anchored to that seat (issue #71)", async () => {
@@ -1470,7 +1460,6 @@ describe("reminder tokens (issue #14)", () => {
 
   it("detaches a reminder whose anchor seat is removed, instead of leaving it pointing at a player id that no longer exists (code review finding)", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const circle = await completedBoard(user);
 
     const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
@@ -1482,7 +1471,7 @@ describe("reminder tokens (issue #14)", () => {
     expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).toBe(anchorPlayerId);
 
     await user.click(within(wrap).getByText("Player 1"));
-    await user.click(within(wrap).getByRole("button", { name: /remove player/i }));
+    await removePlayerAndConfirm(user, wrap);
 
     const reloaded = loadGame() as GameDocument;
     expect(reloaded.players.some((p) => p.id === anchorPlayerId)).toBe(false);
@@ -1491,7 +1480,6 @@ describe("reminder tokens (issue #14)", () => {
     // than silently keeping whatever stale position the reminder happened
     // to store while anchored (which never updated as the seat moved).
     expect(reloaded.reminders[0].position).toBeDefined();
-    confirmSpy.mockRestore();
   });
 });
 
