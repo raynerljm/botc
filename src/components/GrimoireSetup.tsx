@@ -12,6 +12,7 @@ import {
 import {
   anchoredReminderPosition,
   DRUNK_ID,
+  firstNightEnded,
   insertAtSeat,
   livePlayerPosition,
   parkBeside,
@@ -120,9 +121,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       }),
     [game.players, game.characterPool],
   );
-  // `night` is nights fully completed (gameDocument.ts) — 0 until the first
-  // night has actually ended, so >= 1 is exactly "past the first night".
-  const firstNightEnded = game.night >= 1;
 
   // Claims (and Demon bluffs) aren't limited to in-play characters, so they
   // resolve names from the script's full pool rather than characterById.
@@ -923,7 +921,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       night" reads as if a night is still ahead rather than
                       past — drop that framing but keep the offer itself
                       actionable (issue #68). */}
-                  {firstNightEnded ? "pending." : "to make before the first night."}
+                  {firstNightEnded(game) ? "pending." : "to make before the first night."}
                 </p>
                 <button type="button" onClick={openWalkthrough}>
                   Start walkthrough
@@ -999,7 +997,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               above. */}
           <div hidden={showWalkthrough || screenObscured}>
             <DemonBluffsPanel game={game} onChange={update} />
-            <ClaimsList players={game.players} characterById={scriptCharacterById} />
+            <ClaimsList
+              players={game.players}
+              characterById={scriptCharacterById}
+              collapsed={game.claimsCollapsed}
+              onToggleCollapsed={(collapsed) => update({ ...game, claimsCollapsed: collapsed })}
+            />
           </div>
           {showWalkthrough && (
             <SetupWalkthrough

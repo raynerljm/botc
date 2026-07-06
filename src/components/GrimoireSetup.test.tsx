@@ -360,6 +360,9 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     ).not.toBeInTheDocument();
     // Export/end-game stay reachable even here (issue #21 AC) — only the
     // board/bluffs/claims (which would show every player's identity) hide.
+    // The Game panel itself starts collapsed pre-first-night (issue #79),
+    // so export is one tap away rather than already on screen.
+    await user.click(screen.getByRole("button", { name: "Game" }));
     expect(
       screen.getByRole("button", { name: "Export game" }),
     ).toBeInTheDocument();
@@ -382,7 +385,9 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     );
 
     // Reveal is up, but this isn't the last seat — export/end-game stay
-    // reachable through it.
+    // reachable through it. The Game panel starts collapsed pre-first-night
+    // (issue #79), so open it first.
+    await user.click(screen.getByRole("button", { name: "Game" }));
     expect(
       screen.getByRole("button", { name: "Export game" }),
     ).toBeInTheDocument();
@@ -1282,9 +1287,13 @@ describe("autosave (issue #12)", () => {
 });
 
 describe("end game and export (issue #21)", () => {
-  it("keeps export reachable while a game is still in progress", () => {
+  it("keeps export reachable while a game is still in progress", async () => {
+    const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 5 })} />);
 
+    // The Game panel starts collapsed pre-first-night (issue #79), but
+    // remains one tap away — export isn't gated behind anything further.
+    await user.click(screen.getByRole("button", { name: "Game" }));
     expect(
       screen.getByRole("button", { name: /export game/i }),
     ).toBeInTheDocument();
@@ -1294,7 +1303,13 @@ describe("end game and export (issue #21)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 5 })} />);
 
+    await user.click(screen.getByRole("button", { name: "Game" }));
     await user.click(screen.getByRole("button", { name: /evil wins/i }));
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: /declare/i,
+      }),
+    );
 
     const reloaded = loadGame() as GameDocument;
     expect(reloaded.winner).toBe("evil");

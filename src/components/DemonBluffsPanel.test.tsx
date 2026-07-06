@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
@@ -135,6 +136,43 @@ describe("DemonBluffsPanel", () => {
     expect(within(dialog).getByText("Librarian")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("hides the body while collapsed, but keeps the heading reachable (issue #79)", () => {
+    renderPanel({ demonBluffsCollapsed: true });
+
+    expect(screen.queryByLabelText("Bluff slot 1")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Demon bluffs" }),
+    ).toBeInTheDocument();
+  });
+
+  it("toggles the persisted collapsed state via the heading", async () => {
+    const user = userEvent.setup();
+    const { onChange, game } = renderPanel();
+
+    await user.click(screen.getByRole("button", { name: "Demon bluffs" }));
+
+    expect(onChange).toHaveBeenCalledWith({ ...game, demonBluffsCollapsed: true });
+  });
+
+  it("doesn't reopen 'Show to Demon' on its own after collapsing and re-expanding the section (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    function Wrapper() {
+      const [game, setGame] = useState(() =>
+        makeGame({ demonBluffs: ["washerwoman", "librarian", null] }),
+      );
+      return <DemonBluffsPanel game={game} onChange={setGame} />;
+    }
+    render(<Wrapper />);
+
+    await user.click(screen.getByRole("button", { name: /show to demon/i }));
+    expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Demon bluffs" })); // collapse
+    await user.click(screen.getByRole("button", { name: "Demon bluffs" })); // expand
+
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

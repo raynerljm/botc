@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
@@ -13,6 +14,10 @@ vi.mock("@/lib/gameExport", async (importOriginal) => {
 });
 import { downloadGameSnapshot } from "@/lib/gameExport";
 
+// Defaults to a night already having ended, so the panel starts expanded
+// (issue #79) and every pre-existing test below keeps exercising the panel's
+// own behavior rather than re-opening it first; the dedicated "starts
+// collapsed" tests further down override `night` back to 0.
 function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
   return {
     ...createGame({
@@ -24,6 +29,7 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
       extraCopies: {},
       createdAt: "2026-07-04T00:00:00.000Z",
     }),
+    night: 1,
     ...overrides,
   };
 }
@@ -39,7 +45,7 @@ describe("EndGamePanel", () => {
     expect(downloadGameSnapshot).toHaveBeenCalledWith(game);
   });
 
-  it("declares a winner and stamps the end time", async () => {
+  it("asks for confirmation before declaring a winner, then stamps the end time (issue #79)", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
@@ -51,6 +57,10 @@ describe("EndGamePanel", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /good wins/i }));
+    expect(onChange).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /declare/i }));
 
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -58,6 +68,18 @@ describe("EndGamePanel", () => {
         endedAt: "2026-07-04T05:00:00.000Z",
       }),
     );
+  });
+
+  it("cancels a pending winner declaration without changing the game", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<EndGamePanel game={makeGame()} onChange={onChange} />);
+
+    await user.click(screen.getByRole("button", { name: /evil wins/i }));
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("shows the result once the game has ended", () => {
@@ -115,5 +137,59 @@ describe("EndGamePanel", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ winner: null, endedAt: null }),
     );
+  });
+
+  it("starts collapsed before the first night has ended (issue #79)", () => {
+    render(<EndGamePanel game={makeGame({ night: 0 })} onChange={vi.fn()} />);
+
+    expect(screen.queryByLabelText(/notes/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Game" })).toBeInTheDocument();
+  });
+
+  it("is always manually openable before the first night has ended (rule zero)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ night: 0 });
+    let latest = game;
+    const { rerender } = render(
+      <EndGamePanel
+        game={game}
+        onChange={(next) => {
+          latest = next;
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Game" }));
+    rerender(<EndGamePanel game={latest} onChange={vi.fn()} />);
+
+    expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+  });
+
+  it("persists a manual collapse toggle onto the game document", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const game = makeGame();
+    render(<EndGamePanel game={game} onChange={onChange} />);
+
+    await user.click(screen.getByRole("button", { name: "Game" }));
+
+    expect(onChange).toHaveBeenCalledWith({ ...game, endGamePanelCollapsed: true });
+  });
+
+  it("doesn't reopen the declare-winner confirmation on its own after collapsing and re-expanding the section (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    function Wrapper() {
+      const [game, setGame] = useState(() => makeGame());
+      return <EndGamePanel game={game} onChange={setGame} />;
+    }
+    render(<Wrapper />);
+
+    await user.click(screen.getByRole("button", { name: /good wins/i }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Game" })); // collapse
+    await user.click(screen.getByRole("button", { name: "Game" })); // expand
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });

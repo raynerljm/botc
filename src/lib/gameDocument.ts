@@ -10,11 +10,13 @@ import { normalizeCharacterId } from "./scriptParser";
 // for issue #20 (GameDocument gained `nominations`), again for issue #26
 // (GameDocument gained the required `setupWalkthroughOffered`/
 // `setupWalkthroughSteps` fields), again for issue #17 (Player gained
-// `actsAs`/`actsAsSetOnNight`), and again for issue #71 (ReminderToken
-// gained the required `anchorPlayerId` field) — a document saved under an
-// older shape must be rejected by gameStorage's version check rather than
-// loaded with any of these fields silently undefined.
-export const GAME_SCHEMA_VERSION = 10;
+// `actsAs`/`actsAsSetOnNight`), again for issue #71 (ReminderToken gained the
+// required `anchorPlayerId` field), and again for issue #79 (GameDocument
+// gained `demonBluffsCollapsed`/`claimsCollapsed`/`endGamePanelCollapsed`) —
+// a document saved under an older shape must be rejected by gameStorage's
+// version check rather than loaded with any of these fields silently
+// undefined.
+export const GAME_SCHEMA_VERSION = 11;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -199,6 +201,17 @@ export interface GameDocument {
   // only") — cleared whenever a night ends and the next day begins (issue
   // #20 AC: "nomination eligibility resets at dawn").
   nominations: Nomination[];
+  // Collapsed/expanded state for the board's secondary panels, persisted so
+  // it survives a reload (issue #79: a 15-player game's always-expanded
+  // panels push mid-game controls several screen-heights below the board).
+  // Demon bluffs and Claims are plain manual toggles, defaulting expanded to
+  // match pre-#79 behavior. The end-game panel's default instead comes from
+  // `isEndGamePanelCollapsed` below — null here means "follow that computed
+  // default," with an explicit true/false recording a deliberate manual
+  // toggle that should stick regardless of night progression.
+  demonBluffsCollapsed: boolean;
+  claimsCollapsed: boolean;
+  endGamePanelCollapsed: boolean | null;
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -334,6 +347,21 @@ export function heldCharacterIds(players: Player[]): Set<string> {
 // helper keeps every call site reading the same one.
 export function isGameEnded(game: GameDocument): boolean {
   return game.winner !== null;
+}
+
+// `night` is nights fully completed, not the current night number — 0 until
+// the first night has actually ended, so >= 1 is exactly "past the first
+// night" (issue #68's setup-decision banner, issue #79's end-game default).
+export function firstNightEnded(game: GameDocument): boolean {
+  return game.night >= 1;
+}
+
+// Storyteller-first default (issue #79 AC: "starts collapsed... until the
+// first night has ended — but always manually openable"): collapsed while
+// still in setup, expanded once play is underway, unless the storyteller has
+// explicitly toggled it — a deliberate choice always wins over the default.
+export function isEndGamePanelCollapsed(game: GameDocument): boolean {
+  return game.endGamePanelCollapsed ?? !firstNightEnded(game);
 }
 
 // The distribution-table player count — travellers are extra and never counted
@@ -528,6 +556,9 @@ export function createGame({
     nightChecked: [],
     nightUnskipped: [],
     nominations: [],
+    demonBluffsCollapsed: false,
+    claimsCollapsed: false,
+    endGamePanelCollapsed: null,
   };
 }
 
