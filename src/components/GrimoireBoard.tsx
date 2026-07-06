@@ -197,27 +197,38 @@ export function GrimoireBoard({
     // every measurement.
     const rootFontSizePx =
       parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    // The last size actually written to the DOM — skipping a no-op write
+    // avoids forcing more layout than necessary and avoids feeding a
+    // same-value change back into the ResizeObserver below on every tick.
+    let lastSize: number | null = null;
 
     function measure() {
       const rect = node!.getBoundingClientRect();
-      const availableHeightPx =
-        window.innerHeight - rect.top - BOARD_BOTTOM_RESERVE_PX;
+      // A mid-scroll resize (iOS Safari's chrome collapsing, iOS overscroll)
+      // can read a negative `rect.top`, which would otherwise overstate how
+      // much height is left below the board.
+      const topPx = Math.max(0, rect.top);
+      const availableHeightPx = window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX;
       const size = fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx);
+      if (size === lastSize) return;
+      lastSize = size;
       node!.style.width = `${size}px`;
       node!.style.height = `${size}px`;
     }
 
     measure();
     window.addEventListener("resize", measure);
-    // Observing `wrapper` alone only catches *its own* box changing size —
-    // not the board's top offset shifting because something rendered above
-    // it (the toolbar wrapping to a second row once the day-phase column
-    // claims space, a banner appearing) grew *without* resizing wrapper
-    // itself. document.body resizes for either kind of change, so it's the
-    // one target that reliably catches a shifted top offset too.
+    // `wrapper` alone catches its own box changing size (the containing
+    // column narrowing/widening) but not the board's top offset shifting
+    // because something rendered *above* it grew without resizing wrapper
+    // itself (the toolbar wrapping to a second row, a banner appearing) —
+    // and document.body alone catches top-offset shifts but can miss a
+    // column-width-only change that doesn't alter body's own box. Observing
+    // both covers each other's blind spot.
     let observer: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(measure);
+      observer.observe(wrapper);
       observer.observe(document.body);
     }
     boardMeasureCleanupRef.current = () => {
