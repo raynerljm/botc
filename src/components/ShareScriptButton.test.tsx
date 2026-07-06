@@ -11,6 +11,15 @@ import { ShareScriptButton } from "./ShareScriptButton";
 const washerwoman = resolveCharacterId("washerwoman")!;
 const imp = resolveCharacterId("imp")!;
 
+// Must be called after userEvent.setup() — setup() installs its own
+// navigator.clipboard stub, which would otherwise clobber this mock.
+function mockClipboard(writeText: ReturnType<typeof vi.fn>) {
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+}
+
 function manyHomebrewCharacters(count: number): Character[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `custom-${i}`,
@@ -48,10 +57,7 @@ describe("ShareScriptButton", () => {
   it("copies the shareable link to the clipboard without ever displaying it as raw text", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
+    mockClipboard(writeText);
     render(<ShareScriptButton meta={{}} characters={[washerwoman]} />);
 
     await user.click(screen.getByRole("button", { name: /share via qr/i }));
@@ -85,6 +91,30 @@ describe("ShareScriptButton", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("traps Tab within the dialog so it never reaches a control hidden behind the backdrop", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button>Background control</button>
+        <ShareScriptButton meta={{}} characters={[washerwoman]} />
+      </>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    const closeButton = screen.getByRole("button", { name: /close/i });
+    const copyButton = screen.getByRole("button", { name: /copy link/i });
+    // Opening moves focus inside the dialog rather than leaving it on the
+    // trigger.
+    expect(document.activeElement).toBe(closeButton);
+
+    await user.tab();
+    expect(document.activeElement).toBe(copyButton);
+    await user.tab();
+    expect(document.activeElement).toBe(closeButton);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(copyButton);
   });
 
   it("closes on a backdrop tap, without swallowing the tap that follows", async () => {
@@ -157,10 +187,7 @@ describe("ShareScriptButton", () => {
   it("shows a friendly message if copying to the clipboard fails, and reveals the link as a manual fallback", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
+    mockClipboard(writeText);
     render(<ShareScriptButton meta={{}} characters={[washerwoman]} />);
 
     await user.click(screen.getByRole("button", { name: /share via qr/i }));
@@ -177,13 +204,27 @@ describe("ShareScriptButton", () => {
     expect(dialog).toHaveTextContent(/\/share\/#/);
   });
 
+  it("still reveals the link as a fallback when the Clipboard API is entirely unavailable (e.g. a non-secure origin), not just when writeText rejects", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
+    render(<ShareScriptButton meta={{}} characters={[washerwoman]} />);
+
+    await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    await user.click(screen.getByRole("button", { name: /copy link/i }));
+
+    expect(
+      await screen.findByText(/couldn't copy/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent(/\/share\/#/);
+  });
+
   it("clears the 'Copied!' state if a later copy attempt fails, so the button and warning never disagree", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("denied"));
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
+    mockClipboard(writeText);
     render(<ShareScriptButton meta={{}} characters={[washerwoman]} />);
 
     await user.click(screen.getByRole("button", { name: /share via qr/i }));

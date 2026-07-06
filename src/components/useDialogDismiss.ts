@@ -1,0 +1,63 @@
+import { useEffect, type RefObject } from "react";
+
+// A dialog's body can carry more than plain text (e.g. ConfirmDialog's
+// `children`, issue #73 follow-up: BagBuilder's count-mismatch list), so the
+// Tab trap must catch every tabbable element inside, not just a fixed set of
+// known buttons.
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+// Shared accessible-dialog behavior for every overlay in the app
+// (ConfirmDialog, the Share-via-QR modal): focus moves into the dialog on
+// open, Tab is trapped within `containerRef` so it can never reach content
+// hidden behind the backdrop, Escape calls `onDismiss`, and focus returns to
+// whatever was focused before the dialog opened once it closes.
+export function useDialogDismiss(
+  containerRef: RefObject<HTMLElement | null>,
+  initialFocusRef: RefObject<HTMLElement | null>,
+  onDismiss: () => void,
+) {
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    initialFocusRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDismiss();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable =
+        containerRef.current?.querySelectorAll<HTMLElement>(
+          FOCUSABLE_SELECTOR,
+        ) ?? [];
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      // The trigger can be gone by the time this runs — e.g. confirming
+      // "Delete game" or "Remove player" removes the very row/token that
+      // hosted it in the same commit that unmounts this dialog. Focusing a
+      // detached node is a silent no-op, so only do it when there's
+      // somewhere real to return to.
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
+    };
+    // Runs once per mount — every caller only ever mounts this while its
+    // dialog is open, so there's nothing to re-sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
