@@ -62,9 +62,14 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
       <CollapsibleSection
         title="Demon bluffs"
         collapsed={game.demonBluffsCollapsed}
-        onToggleCollapsed={(collapsed) =>
-          onChange({ ...game, demonBluffsCollapsed: collapsed })
-        }
+        onToggleCollapsed={(collapsed) => {
+          // Otherwise collapsing merely unmounts the overlay without
+          // resetting the flag that opened it, so re-expanding later
+          // re-shows the Demon's identity on screen with no further tap
+          // (Copilot review finding).
+          if (collapsed) setShowingToDemon(false);
+          onChange({ ...game, demonBluffsCollapsed: collapsed });
+        }}
       >
         <label className={styles.showAll}>
           <input

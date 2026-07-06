@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
@@ -173,5 +174,22 @@ describe("EndGamePanel", () => {
     await user.click(screen.getByRole("button", { name: "Game" }));
 
     expect(onChange).toHaveBeenCalledWith({ ...game, endGamePanelCollapsed: true });
+  });
+
+  it("doesn't reopen the declare-winner confirmation on its own after collapsing and re-expanding the section (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    function Wrapper() {
+      const [game, setGame] = useState(() => makeGame());
+      return <EndGamePanel game={game} onChange={setGame} />;
+    }
+    render(<Wrapper />);
+
+    await user.click(screen.getByRole("button", { name: /good wins/i }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Game" })); // collapse
+    await user.click(screen.getByRole("button", { name: "Game" })); // expand
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });

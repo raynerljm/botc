@@ -48,7 +48,13 @@ export function EndGamePanel({
       <CollapsibleSection
         title="Game"
         collapsed={collapsed}
-        onToggleCollapsed={(collapsed) => onChange({ ...game, endGamePanelCollapsed: collapsed })}
+        onToggleCollapsed={(collapsed) => {
+          // Otherwise collapsing merely unmounts the confirm dialog without
+          // clearing the staged winner, so re-expanding later re-shows the
+          // dialog with no further tap (Copilot review finding).
+          if (collapsed) setPendingWinner(null);
+          onChange({ ...game, endGamePanelCollapsed: collapsed });
+        }}
       >
         {ended && (
           <p className={styles.result} role="status">
