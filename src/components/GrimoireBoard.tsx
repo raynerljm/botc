@@ -78,7 +78,10 @@ export interface GrimoireBoardProps {
   onOpenSetupWalkthrough?: () => void;
 }
 
-const MIN_TOKEN_REM = 1.9;
+// The floor is 2.75rem (44px) — below that, the token (the primary tap
+// target for opening a seat's menu) would miss the touch-target guideline at
+// the maximum player count, however busy the board gets (issue #82).
+const MIN_TOKEN_REM = 2.75;
 const MAX_TOKEN_REM = 3.4;
 const MIN_TOKEN_COUNT = 5;
 const MAX_TOKEN_COUNT = 20;
@@ -781,7 +784,11 @@ export function GrimoireBoard({
                       />
                     </label>
 
-                    <button type="button" onClick={() => onToggleDead(player.id)}>
+                    <button
+                      type="button"
+                      className={styles.markDead}
+                      onClick={() => onToggleDead(player.id)}
+                    >
                       {player.dead ? "Mark alive" : "Mark dead"}
                     </button>
 
@@ -841,6 +848,7 @@ export function GrimoireBoard({
                       Claim
                       <select
                         id={`token-claim-${player.id}`}
+                        className={styles.claimSelect}
                         value={player.claim ?? ""}
                         onChange={(event) =>
                           onSetClaim(player.id, event.target.value || null)
@@ -903,7 +911,9 @@ export function GrimoireBoard({
 
                     {character && (
                       <details className={styles.detail}>
-                        <summary>Character detail</summary>
+                        <summary className={styles.detailSummary}>
+                          Character detail
+                        </summary>
                         <p>{character.ability}</p>
                         {official ? (
                           <a

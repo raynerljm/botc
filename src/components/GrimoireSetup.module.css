@@ -48,6 +48,7 @@
 }
 
 .seat input {
+  min-height: 2.75rem;
   padding: 0.5rem;
   font-size: 1rem;
   background: var(--surface-raised);
@@ -75,6 +76,7 @@
 }
 
 .startDraw {
+  min-height: 2.75rem;
   padding: 0.6rem 1.1rem;
   background: var(--accent);
   color: var(--background);
@@ -83,6 +85,34 @@
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 1.5rem;
+}
+
+/* "Hide & pass" and "Ready to draw" — one tap per seat every game, and
+   previously fully unstyled (browser-default button chrome). */
+.drawAction {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1.1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* "Add to the circle" — the traveller-add form's submit. */
+.formSubmit {
+  min-height: 2.75rem;
+  padding: 0.6rem 1.1rem;
+  background: var(--accent);
+  color: var(--background);
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .drawFlow {
