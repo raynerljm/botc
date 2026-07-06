@@ -300,6 +300,42 @@ describe("special flow: Drunk stand-in (AC4)", () => {
   });
 });
 
+describe("Drunk stand-in tallies count once, as an Outsider (issue #76)", () => {
+  it("doesn't inflate Townsfolk when a stand-in is picked", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    expect(screen.getByText("Townsfolk 0/3")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+
+    // The Drunk already counts once, as an Outsider — the stand-in is the
+    // same physical token, not a second, independent Townsfolk pick.
+    expect(screen.getByText("Townsfolk 0/3")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
+  });
+
+  it("marks the stand-in's own card as standing in for the Drunk, not a normal pick", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.selectOptions(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+
+    const washerwoman = screen.getByRole("button", { name: /^Washerwoman/ });
+    expect(washerwoman).toHaveAttribute("aria-pressed", "false");
+    expect(washerwoman).toHaveTextContent(/drunk's stand-in/i);
+  });
+});
+
 describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
   it("selects the Damsel automatically once the Huntsman is selected", async () => {
     const user = userEvent.setup();
@@ -569,7 +605,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
 
-    const dialog = screen.getByRole("dialog", { name: /count/i });
+    const dialog = screen.getByRole("alertdialog", { name: /count/i });
     expect(dialog).toHaveTextContent(/Townsfolk.*3 under/i);
     expect(dialog).toHaveTextContent(/Minions.*1 under/i);
     // No navigation has happened yet — the mismatch is only a warning so far.
@@ -588,7 +624,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     );
     await user.click(screen.getByRole("button", { name: /Go back/i }));
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
@@ -609,7 +645,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
   });
@@ -631,7 +667,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
   });
@@ -648,7 +684,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     });
     await user.click(continueButton);
 
-    const dialog = screen.getByRole("dialog", { name: /count/i });
+    const dialog = screen.getByRole("alertdialog", { name: /count/i });
     const goBack = within(dialog).getByRole("button", { name: /Go back/i });
     const continueAnyway = within(dialog).getByRole("button", {
       name: /Continue anyway/i,
@@ -667,7 +703,7 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
 
     await user.click(goBack);
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(document.activeElement).toBe(continueButton);
   });
 });
@@ -742,7 +778,6 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
         extraCopies: {},
       }),
     );
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     render(
       <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
@@ -756,17 +791,25 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
       screen.getByRole("button", { name: /Continue anyway/i }),
     );
 
+    const warning = screen.getByRole("alertdialog", {
+      name: /already in progress/i,
+    });
+    await user.click(
+      within(warning).getByRole("button", { name: /cancel/i }),
+    );
+
     // Cancelled: no new game, no navigation, the existing game is untouched.
-    expect(confirm).toHaveBeenCalled();
     expect(loadGame()?.scriptName).toBe("Existing game");
     expect(push).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
     );
     await user.click(
       screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Start new game/i }),
     );
 
     expect(loadGame()?.scriptName).toBe("Trouble Brewing");

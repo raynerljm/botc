@@ -9,11 +9,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // `claim`, GameDocument gained `demonBluffs` and `scriptCharacters`), again
 // for issue #20 (GameDocument gained `nominations`), again for issue #26
 // (GameDocument gained the required `setupWalkthroughOffered`/
-// `setupWalkthroughSteps` fields), and again for issue #17 (Player gained
-// `actsAs`/`actsAsSetOnNight`) — a document saved under an older shape must
-// be rejected by gameStorage's version check rather than loaded with any of
-// these fields silently undefined.
-export const GAME_SCHEMA_VERSION = 9;
+// `setupWalkthroughSteps` fields), again for issue #17 (Player gained
+// `actsAs`/`actsAsSetOnNight`), and again for issue #71 (ReminderToken
+// gained the required `anchorPlayerId` field) — a document saved under an
+// older shape must be rejected by gameStorage's version check rather than
+// loaded with any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 10;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -54,7 +55,18 @@ export interface ReminderToken {
   // reminder that isn't tied to any character.
   characterId: string | null;
   label: string;
+  // Last concrete point this reminder sat at — the source of truth once it
+  // isn't anchored (anchorPlayerId null), and the fallback if its anchor
+  // player is later removed from the game.
   position: PlayerPosition;
+  // The seat this reminder is parked beside, kept in sync with that seat's
+  // position every render (issue #71: "chips visually anchor to their
+  // owning seat ... attribution is unambiguous at 14+ players") — null for
+  // a reminder placed generically from the pad-level button, or one the
+  // storyteller has since dragged to a free-standing spot (a manual drag
+  // always detaches it, the same way dragging a player token overrides its
+  // computed circle position).
+  anchorPlayerId: string | null;
 }
 
 // Progress bookkeeping for the post-draw setup walkthrough (issue #26). The
@@ -208,12 +220,96 @@ export function clampPct(value: number): number {
   return Math.min(96, Math.max(4, value));
 }
 
+// A player's current live position — their explicit dragged position if
+// set, otherwise their computed circle slot. Shared by every place outside
+// the main board render loop that needs one seat's position (attaching or
+// detaching a reminder, the setup walkthrough's reminder placement) so the
+// "circle index needs seats sorted by seat number" rule lives in one place
+// instead of being re-derived at each call site (code review finding).
+export function livePlayerPosition(
+  playerId: string,
+  players: Player[],
+): PlayerPosition {
+  const player = players.find((p) => p.id === playerId);
+  const sorted = [...players].sort((a, b) => a.seat - b.seat);
+  return (
+    player?.position ??
+    circlePosition(
+      sorted.findIndex((p) => p.id === playerId),
+      sorted.length,
+    )
+  );
+}
+
 // A reminder parked beside a player (rather than dragged to an exact spot)
 // lands a little to the right of them — the convention for "the storyteller
 // parks it next to players" (issue #14 AC), reused wherever a reminder is
 // placed programmatically rather than dropped by hand.
 export function parkBeside(position: PlayerPosition): PlayerPosition {
   return { x: clampPct(position.x + 5), y: clampPct(position.y) };
+}
+
+// Spread of new unanchored reminders added from the pad-level "Add
+// reminder" button (issue #71 AC: adding several never stacks them fully on
+// top of each other) — a golden-angle spiral out from the pad's centre, so
+// the first reminder still lands dead centre (matching every prior
+// behaviour/test) but each one after it lands at a distinct, increasingly
+// spread-out point instead of piling on the same spot. Takes the *actual*
+// positions still on the pad (not a count) and walks the spiral until it
+// finds a point clear of all of them — indexing by a plain count of
+// currently-unanchored reminders would replay an earlier spiral point once
+// attaching, detaching, or removing one shrinks that count back down,
+// landing a new reminder squarely on an existing one (code review finding).
+const PAD_SPIRAL_RADIUS_STEP = 8;
+const PAD_SPIRAL_GOLDEN_ANGLE_DEG = 137.5;
+const PAD_SPIRAL_MIN_SEPARATION_PCT = 6;
+
+function padSpiralPoint(index: number): PlayerPosition {
+  if (index <= 0) return { x: 50, y: 50 };
+  const angle = (index * PAD_SPIRAL_GOLDEN_ANGLE_DEG * Math.PI) / 180;
+  const radius = PAD_SPIRAL_RADIUS_STEP * Math.sqrt(index);
+  return {
+    x: clampPct(50 + radius * Math.cos(angle)),
+    y: clampPct(50 + radius * Math.sin(angle)),
+  };
+}
+
+export function nextPadReminderPosition(
+  existingPositions: PlayerPosition[],
+): PlayerPosition {
+  for (let index = 0; index < 1000; index++) {
+    const candidate = padSpiralPoint(index);
+    const collides = existingPositions.some(
+      (p) =>
+        Math.hypot(p.x - candidate.x, p.y - candidate.y) <
+        PAD_SPIRAL_MIN_SEPARATION_PCT,
+    );
+    if (!collides) return candidate;
+  }
+  return padSpiralPoint(existingPositions.length);
+}
+
+// Where a reminder anchored to a seat renders (issue #71): stacked straight
+// below that seat's own token+name block rather than beside it, so it never
+// covers the name label or intercepts a tap meant for the seat (AC), and a
+// second/third reminder on the same seat stacks further down instead of
+// overlapping the first. A small per-sibling horizontal fan rides along with
+// the vertical stacking so seats near the bottom of the circle — where the
+// vertical offset clamps to the pad's edge for every sibling alike — still
+// separate them instead of collapsing onto the same clamped point (code
+// review finding).
+const ANCHOR_OFFSET_Y = 12;
+const ANCHOR_STACK_STEP_Y = 6;
+const ANCHOR_STACK_STEP_X = 3;
+
+export function anchoredReminderPosition(
+  anchorPosition: PlayerPosition,
+  siblingIndex: number,
+): PlayerPosition {
+  return {
+    x: clampPct(anchorPosition.x + siblingIndex * ANCHOR_STACK_STEP_X),
+    y: clampPct(anchorPosition.y + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y),
+  };
 }
 
 // The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so

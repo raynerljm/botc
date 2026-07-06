@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,21 @@ const routerBack = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: routerBack }),
 }));
+
+// jsdom has no real PointerEvent constructor, so a plain MouseEvent stands in
+// with pointerId grafted on (same helper as GrimoireBoard.test.tsx's own).
+function pointerEvent(
+  type: string,
+  init: { pointerId: number; clientX: number; clientY: number },
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    clientX: init.clientX,
+    clientY: init.clientY,
+  });
+  Object.defineProperty(event, "pointerId", { value: init.pointerId });
+  return event;
+}
 
 beforeEach(() => {
   routerBack.mockClear();
@@ -69,6 +84,19 @@ async function completeSetup(
 
   const circle = screen.getByRole("region", { name: "Grimoire circle" });
   return { user, circle };
+}
+
+// Clicks a seat's "Remove player" button and confirms the in-app dialog
+// (issue #73 — replaces the old window.confirm() for this flow).
+async function removePlayerAndConfirm(
+  user: ReturnType<typeof userEvent.setup>,
+  wrap: HTMLElement,
+) {
+  await user.click(
+    within(wrap).getByRole("button", { name: /remove player/i }),
+  );
+  const dialog = screen.getByRole("alertdialog", { name: /remove player/i });
+  await user.click(within(dialog).getByRole("button", { name: /^remove$/i }));
 }
 
 afterEach(() => {
@@ -796,17 +824,13 @@ describe("bag-draw setup page polish (issue #49)", () => {
     await user.click(screen.getByRole("button", { name: "Add character" }));
     expect(screen.getByLabelText("Character")).toBeInTheDocument();
 
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     for (const name of ["Player 1", "Player 2"]) {
       const wrap = within(circle)
         .getByText(name)
         .closest("[data-player-id]") as HTMLElement;
       await user.click(within(wrap).getByText(name));
-      await user.click(
-        within(wrap).getByRole("button", { name: /remove player/i }),
-      );
+      await removePlayerAndConfirm(user, wrap);
     }
-    confirmSpy.mockRestore();
 
     // Roster is empty — setupComplete is false, so the token form is
     // gone (not just visually swapped for the button).
@@ -862,24 +886,18 @@ describe("mid-game token management (issue #15)", () => {
   });
 
   it("removes a player after confirmation", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { user, circle } = await completeSetup();
 
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.click(
-      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
-    );
+    await removePlayerAndConfirm(user, seat1Wrap);
 
-    expect(confirmSpy).toHaveBeenCalled();
     const reloaded = loadGame()!;
     expect(reloaded.players).toHaveLength(1);
     expect(reloaded.players.map((p) => p.name)).toEqual(["Player 2"]);
-    confirmSpy.mockRestore();
   });
 
   it("keeps every player when the storyteller declines the removal confirmation", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     const { user, circle } = await completeSetup();
 
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
@@ -887,13 +905,13 @@ describe("mid-game token management (issue #15)", () => {
     await user.click(
       within(seat1Wrap).getByRole("button", { name: /remove player/i }),
     );
+    const dialog = screen.getByRole("alertdialog", { name: /remove player/i });
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
 
     expect(loadGame()!.players).toHaveLength(2);
-    confirmSpy.mockRestore();
   });
 
   it("scrubs a removed player's votes from every nomination, so they stop counting toward the tally (issue #20)", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     const game = makeGame({
       playerCount: 2,
@@ -927,12 +945,9 @@ describe("mid-game token management (issue #15)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.click(
-      within(seat1Wrap).getByRole("button", { name: /remove player/i }),
-    );
+    await removePlayerAndConfirm(user, seat1Wrap);
 
     expect(loadGame()!.nominations[0].votes).toEqual([game.players[1].id]);
-    confirmSpy.mockRestore();
   });
 
   it("reveals the Drunk, showing the real character openly from then on", async () => {
@@ -1057,7 +1072,6 @@ describe("mid-game token management (issue #15)", () => {
   });
 
   it("computes 'At the end' from the highest seat number, not the player count, once a removal has left a gap", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { user, circle } = await completeSetup(3, [
       getCharacter("washerwoman")!,
       getCharacter("imp")!,
@@ -1068,10 +1082,7 @@ describe("mid-game token management (issue #15)", () => {
     // highest seat number in play is still 3.
     const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
     await user.click(within(seat2Wrap).getByText("Player 2"));
-    await user.click(
-      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
-    );
-    confirmSpy.mockRestore();
+    await removePlayerAndConfirm(user, seat2Wrap);
 
     await user.click(screen.getByRole("button", { name: "Add character" }));
     await user.selectOptions(screen.getByLabelText("Character"), "baron");
@@ -1093,7 +1104,6 @@ describe("mid-game token management (issue #15)", () => {
   });
 
   async function removeMiddleSeat(extraCharacters: NonNullable<ReturnType<typeof getCharacter>>[] = []) {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const { user, circle } = await completeSetup(3, [
       getCharacter("washerwoman")!,
       getCharacter("imp")!,
@@ -1103,10 +1113,7 @@ describe("mid-game token management (issue #15)", () => {
 
     const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
     await user.click(within(seat2Wrap).getByText("Player 2"));
-    await user.click(
-      within(seat2Wrap).getByRole("button", { name: /remove player/i }),
-    );
-    confirmSpy.mockRestore();
+    await removePlayerAndConfirm(user, seat2Wrap);
     return user;
   }
 
@@ -1354,6 +1361,142 @@ describe("reminder tokens (issue #14)", () => {
     await user.click(within(circle).getByRole("button", { name: /undo/i }));
     expect((loadGame() as GameDocument).reminders).toHaveLength(1);
   });
+
+  it("detaches a restored reminder whose anchor seat was removed during the undo window (code review finding)", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+    expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).not.toBeNull();
+
+    // Remove the reminder (parked in the undo buffer, still carrying its
+    // original anchorPlayerId), then separately remove the seat it was
+    // anchored to — that seat is gone from game.reminders/players by the
+    // time Undo runs, so restoring the raw snapshot would bring back a
+    // dangling reference were it not for the fix.
+    await user.click(within(circle).getByText("Townsfolk"));
+    await user.click(within(circle).getByRole("button", { name: "Remove reminder" }));
+    expect((loadGame() as GameDocument).reminders).toHaveLength(0);
+
+    await user.click(within(wrap).getByText("Player 1"));
+    await removePlayerAndConfirm(user, wrap);
+    expect((loadGame() as GameDocument).players).toHaveLength(1);
+
+    await user.click(within(circle).getByRole("button", { name: /undo/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
+  });
+
+  it("persists a reminder added from a seat's own menu as anchored to that seat (issue #71)", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const seatPlayerId = wrap.dataset.playerId!;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0].anchorPlayerId).toBe(seatPlayerId);
+  });
+
+  it("attaches a pad-added reminder to a seat by tapping it, without dragging (issue #71)", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const padControls = circle.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+    expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).toBeNull();
+
+    await user.click(within(circle).getByText("Townsfolk"));
+    await user.click(within(circle).getByRole("button", { name: "Attach to seat" }));
+
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const seatPlayerId = wrap.dataset.playerId!;
+    fireEvent.click(wrap.querySelector("summary")!);
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders[0].anchorPlayerId).toBe(seatPlayerId);
+  });
+
+  it("detaches a reminder from its anchor seat once it's dragged to a free-standing spot (issue #71)", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+    expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).not.toBeNull();
+
+    const board = circle.querySelector("[data-board]") as HTMLElement;
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0,
+      toJSON() {},
+    });
+    const reminderSummary = circle.querySelector(
+      "[data-reminder-id] summary",
+    ) as HTMLElement;
+    fireEvent(reminderSummary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(reminderSummary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(reminderSummary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
+  });
+
+  it("detaches a reminder whose anchor seat is removed, instead of leaving it pointing at a player id that no longer exists (code review finding)", async () => {
+    const user = userEvent.setup();
+    const circle = await completedBoard(user);
+
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const anchorPlayerId = wrap.dataset.playerId!;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+    expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).toBe(anchorPlayerId);
+
+    await user.click(within(wrap).getByText("Player 1"));
+    await removePlayerAndConfirm(user, wrap);
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.players.some((p) => p.id === anchorPlayerId)).toBe(false);
+    expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
+    // Detaching resolves to the seat's actual last-seen position rather
+    // than silently keeping whatever stale position the reminder happened
+    // to store while anchored (which never updated as the seat moved).
+    expect(reloaded.reminders[0].position).toBeDefined();
+  });
+});
+
+describe("board layout order (issue #58)", () => {
+  it("keeps the grimoire circle before the night list in DOM/tab order, even though CSS visually reorders them on mobile", async () => {
+    const { circle } = await completeSetup();
+
+    const nightListHeading = screen.getByRole("heading", { name: /night list|first night/i });
+    // Node.DOCUMENT_POSITION_FOLLOWING means `circle` comes *before*
+    // nightListHeading in the document — CSS grid areas move the visual
+    // position per breakpoint, but the actual DOM/tab order this asserts
+    // never changes.
+    expect(
+      circle.compareDocumentPosition(nightListHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });
 
 describe("post-draw setup walkthrough (issue #26)", () => {
@@ -1432,6 +1575,35 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       screen.queryByRole("region", { name: "Setup walkthrough offer" }),
     ).not.toBeInTheDocument();
     expect((loadGame() as GameDocument).setupWalkthroughOffered).toBe(true);
+  });
+
+  it("drops the \"before the first night\" framing once the first night has ended, but stays actionable (issue #68)", () => {
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    const imp = getCharacter("imp")!;
+    const chef = getCharacter("chef")!;
+    const empath = getCharacter("empath")!;
+    const game = makeGame({
+      playerCount: 4,
+      selectedCharacters: [fortuneTeller, imp, chef, empath],
+    });
+    const seated: GameDocument = {
+      ...game,
+      night: 1,
+      players: game.players.map((player, index) => {
+        const characterId = [fortuneTeller.id, imp.id, chef.id, empath.id][index];
+        return { ...player, characterId, startingCharacterId: characterId };
+      }),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const offer = screen.getByRole("region", { name: "Setup walkthrough offer" });
+    expect(within(offer).getByText(/pending/i)).toBeInTheDocument();
+    expect(within(offer).queryByText(/before the first night/i)).not.toBeInTheDocument();
+
+    // Reachable from the board toolbar regardless of the banner's own state.
+    expect(
+      screen.getByRole("button", { name: "Setup walkthrough" }),
+    ).toBeInTheDocument();
   });
 
   it("starting the walkthrough replaces the grimoire view with it", async () => {

@@ -10,8 +10,11 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
+  anchoredReminderPosition,
   DRUNK_ID,
   insertAtSeat,
+  livePlayerPosition,
+  parkBeside,
   shuffleTokens,
   withRestoredReminder,
   type Alignment,
@@ -28,6 +31,7 @@ import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
 import { ClaimsList } from "./ClaimsList";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { DayPhase } from "./DayPhase";
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
 import { EndGamePanel } from "./EndGamePanel";
@@ -98,6 +102,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const [tokenFormOpen, setTokenFormOpen] = useState(false);
   const [tokenCharacterId, setTokenCharacterId] = useState("");
   const [tokenSeat, setTokenSeat] = useState(1);
+  const [pendingRemovePlayer, setPendingRemovePlayer] =
+    useState<Player | null>(null);
 
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
@@ -114,6 +120,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       }),
     [game.players, game.characterPool],
   );
+  // `night` is nights fully completed (gameDocument.ts) — 0 until the first
+  // night has actually ended, so >= 1 is exactly "past the first night".
+  const firstNightEnded = game.night >= 1;
 
   // Claims (and Demon bluffs) aren't limited to in-play characters, so they
   // resolve names from the script's full pool rather than characterById.
@@ -252,6 +261,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     characterId: string | null;
     label: string;
     position: PlayerPosition;
+    anchorPlayerId: string | null;
   }) {
     const reminder: ReminderToken = { id: crypto.randomUUID(), ...input };
     update({
@@ -260,11 +270,37 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // A manual drag always detaches a reminder from whatever seat it was
+  // anchored to — the same way dragging a player token overrides its
+  // computed circle position — since the storyteller just moved it
+  // somewhere of their own choosing, not "beside" any particular seat
+  // anymore (issue #71).
   function moveReminder(reminderId: string, position: PlayerPosition) {
     update({
       ...game,
       reminders: game.reminders.map((r) =>
-        r.id === reminderId ? { ...r, position } : r,
+        r.id === reminderId ? { ...r, position, anchorPlayerId: null } : r,
+      ),
+    });
+  }
+
+  // Tap-to-place (issue #71 AC: "a reminder can be attached to a seat
+  // without a drag gesture") — parks the reminder beside the chosen seat's
+  // current position and remembers the seat so it keeps tracking it. Builds
+  // off gameRef.current (not the `game` this render closed over), the same
+  // defensive precedent addReminder set — a tap-to-place click always
+  // follows some other gesture (opening the reminder's menu, at minimum),
+  // so this must never risk reading a stale pre-update snapshot (code
+  // review finding).
+  function attachReminder(reminderId: string, playerId: string) {
+    if (!gameRef.current.players.some((p) => p.id === playerId)) return;
+    const base = livePlayerPosition(playerId, gameRef.current.players);
+    update({
+      ...gameRef.current,
+      reminders: gameRef.current.reminders.map((r) =>
+        r.id === reminderId
+          ? { ...r, position: parkBeside(base), anchorPlayerId: playerId }
+          : r,
       ),
     });
   }
@@ -281,8 +317,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // how it was, even though the token lands at the end of the array if other
   // reminders were added or removed in the meantime. withRestoredReminder is
   // idempotent by id, so a rapid double-tap on Undo can't duplicate it.
+  // If the seat it was anchored to was itself removed during the undo
+  // window, restoring the raw snapshot would bring back a dangling
+  // anchorPlayerId — permanently invisible to the pad-spiral's unanchored
+  // count and stuck at a stale never-updated position (code review
+  // finding), so drop the anchor the same way removePlayer does for every
+  // reminder still anchored to a live seat at removal time.
   function restoreReminder(reminder: ReminderToken) {
-    update({ ...game, reminders: withRestoredReminder(game.reminders, reminder) });
+    const anchorStillLive =
+      reminder.anchorPlayerId === null ||
+      game.players.some((p) => p.id === reminder.anchorPlayerId);
+    const restored = anchorStillLive
+      ? reminder
+      : { ...reminder, anchorPlayerId: null };
+    update({ ...game, reminders: withRestoredReminder(game.reminders, restored) });
   }
 
   // The auto-offer is shown once (Start or Skip both count as "handled") —
@@ -385,16 +433,43 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   function removePlayer(playerId: string) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
-    if (!window.confirm(`Remove ${player.name} from the grimoire?`)) return;
+    setPendingRemovePlayer(player);
+  }
+
+  function confirmRemovePlayer() {
+    const player = pendingRemovePlayer;
+    setPendingRemovePlayer(null);
+    if (!player) return;
+    const playerId = player.id;
     const remainingPlayers = game.players.filter((p) => p.id !== playerId);
     // Emptying the roster flips setupComplete back to false, which hides
     // the "Add character" form — close it here too, or it would silently
     // reappear pre-filled the moment a new player (e.g. a traveller)
     // brings setupComplete back to true, with no click to explain it.
     if (remainingPlayers.length === 0) setTokenFormOpen(false);
+
+    // A reminder anchored to the removed seat would otherwise keep pointing
+    // at a player id that no longer exists — forever excluded from the
+    // pad-spiral spread's "unanchored" count, and falling back to a stale
+    // attach-time position instead of where the seat was actually last seen
+    // (code review finding). Resolve it to that live position and detach it,
+    // the same way a manual drag detaches a reminder from its anchor.
+    const removedPosition = livePlayerPosition(playerId, game.players);
+    const anchoredHere = game.reminders.filter((r) => r.anchorPlayerId === playerId);
+    const reminders = game.reminders.map((r) => {
+      if (r.anchorPlayerId !== playerId) return r;
+      const siblingIndex = anchoredHere.findIndex((sibling) => sibling.id === r.id);
+      return {
+        ...r,
+        anchorPlayerId: null,
+        position: anchoredReminderPosition(removedPosition, siblingIndex),
+      };
+    });
+
     update({
       ...game,
       players: remainingPlayers,
+      reminders,
       // A removed player's recorded vote must not go on counting toward a
       // nomination's tally forever (issue #20).
       nominations: game.nominations.map((n) => ({
@@ -836,8 +911,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               >
                 <p>
                   {walkthroughSteps.length} setup decision
-                  {walkthroughSteps.length === 1 ? "" : "s"} to make before the
-                  first night.
+                  {walkthroughSteps.length === 1 ? "" : "s"}{" "}
+                  {/* Once the first night has ended, "before the first
+                      night" reads as if a night is still ahead rather than
+                      past — drop that framing but keep the offer itself
+                      actionable (issue #68). */}
+                  {firstNightEnded ? "pending." : "to make before the first night."}
                 </p>
                 <button type="button" onClick={openWalkthrough}>
                   Start walkthrough
@@ -862,7 +941,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             className={styles.circleLayout}
             hidden={showWalkthrough || screenObscured}
           >
-            <div role="region" aria-label="Grimoire circle">
+            <div
+              role="region"
+              aria-label="Grimoire circle"
+              className={styles.circleArea}
+            >
               <GrimoireBoard
                 players={game.players}
                 characterById={characterById}
@@ -880,6 +963,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onToggleGhostVote={toggleGhostVote}
                 onAddReminder={addReminder}
                 onMoveReminder={moveReminder}
+                onAttachReminder={attachReminder}
                 onRemoveReminder={removeReminder}
                 onRestoreReminder={restoreReminder}
                 onSwapCharacter={swapCharacter}
@@ -893,8 +977,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 }
               />
             </div>
-            <div className={styles.sidePanels}>
+            <div className={styles.nightListArea}>
               <NightList game={game} characterById={characterById} onChange={update} />
+            </div>
+            <div className={styles.dayPhaseArea}>
               <DayPhase game={game} onChange={update} />
             </div>
           </div>
@@ -1011,6 +1097,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           />
           <EndGamePanel game={game} onChange={update} />
         </>
+      )}
+      {pendingRemovePlayer && (
+        <ConfirmDialog
+          title="Remove player"
+          message={`Remove ${pendingRemovePlayer.name} from the grimoire?`}
+          confirmLabel="Remove"
+          destructive
+          onConfirm={confirmRemovePlayer}
+          onCancel={() => setPendingRemovePlayer(null)}
+        />
       )}
     </div>
   );

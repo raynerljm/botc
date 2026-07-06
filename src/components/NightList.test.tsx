@@ -126,6 +126,22 @@ describe("Night list: entries", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a long player name in full, without truncating the text content (issue #58)", () => {
+    const longName = "Bartholomew Winterbourne-Featherstonhaugh the Third";
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const withLongName: GameDocument = {
+      ...game,
+      players: [{ ...game.players[0], name: longName }, game.players[1]],
+    };
+    renderNightList(withLongName);
+
+    // Overflow is fixed via CSS wrapping (min-width: 0, overflow-wrap), not
+    // by shortening the actual string — jsdom has no layout engine to
+    // assert the visual wrap, but the full text staying in the DOM is what
+    // would break if a future fix truncated it in JS instead.
+    expect(screen.getByText(new RegExp(longName))).toBeInTheDocument();
+  });
+
   it("checking an entry persists into the game document, and shows a progress count", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });

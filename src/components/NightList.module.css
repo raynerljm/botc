@@ -93,6 +93,12 @@
   align-items: center;
   gap: 0.6rem;
   flex: 1;
+  /* Flex items default to min-width: auto, which lets a long acting-as
+     string (playerName — characterName as label) refuse to shrink below
+     its own content width and push past .entry's edge — the actual
+     overflow (issue #58), not just a missing wrap rule on the text
+     itself. */
+  min-width: 0;
   cursor: pointer;
 }
 
@@ -118,6 +124,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  min-width: 0;
+  /* break-word (not anywhere) only breaks mid-word as a last resort, when
+     a single word genuinely can't fit the line — normal-length titles and
+     reminders still wrap at their existing spaces exactly as before.
+     Inherited by .entryTitle/.entryReminder rather than repeated on both. */
+  overflow-wrap: break-word;
 }
 
 .entryTitle {

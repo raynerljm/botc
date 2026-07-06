@@ -276,10 +276,58 @@ describe("Day phase: ghost votes", () => {
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (vote free)` }));
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
     expect(latest.nominations[0].votes).toContain(ghost.id);
+  });
+
+  it("labels a dead voter's row on an exile as a free vote, never as a ghost vote", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse"], {
+      players: (() => {
+        const base = gameWith(["washerwoman", "imp", "recluse"]).players.map(
+          (p, i) => (i === 2 ? { ...p, dead: true, ghostVoteSpent: true } : p),
+        );
+        return [
+          ...base,
+          {
+            id: "traveller-1",
+            seat: 4,
+            name: "Traveller",
+            characterId: "scapegoat",
+            startingCharacterId: "scapegoat",
+            isDrunk: false,
+            isTraveller: true,
+            travellerAlignment: "good" as const,
+            dead: false,
+            ghostVoteSpent: false,
+            position: null,
+            claim: null,
+            actsAs: null,
+            actsAsSetOnNight: null,
+          },
+        ];
+      })(),
+    });
+    let latest = game;
+    const ghost = game.players[2];
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.selectOptions(screen.getByLabelText("Nominator"), game.players[0].id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), "traveller-1");
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    expect(
+      screen.getByRole("checkbox", { name: `${ghost.name} (vote free)` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/ghost vote/)).not.toBeInTheDocument();
   });
 
   it("advisory-labels (but never disables) a dead player's checkbox once their ghost vote is already spent, for an execution", async () => {

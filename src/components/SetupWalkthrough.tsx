@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
-  circlePosition,
   DRUNK_ID,
   heldCharacterIds,
+  livePlayerPosition,
   parkBeside,
   type Player,
   type PlayerPosition,
@@ -24,6 +24,7 @@ export interface SetupWalkthroughReminderInput {
   characterId: string | null;
   label: string;
   position: PlayerPosition;
+  anchorPlayerId: string | null;
 }
 
 export interface SetupWalkthroughProps {
@@ -53,15 +54,7 @@ export interface SetupWalkthroughProps {
 // "parked beside them" convention GrimoireBoard uses when a reminder is
 // added from a player's own token menu.
 function anchorPosition(playerId: string, players: Player[]): PlayerPosition {
-  const player = players.find((p) => p.id === playerId);
-  const sorted = [...players].sort((a, b) => a.seat - b.seat);
-  const base =
-    player?.position ??
-    circlePosition(
-      sorted.findIndex((p) => p.id === playerId),
-      sorted.length,
-    );
-  return parkBeside(base);
+  return parkBeside(livePlayerPosition(playerId, players));
 }
 
 function characterOf(
@@ -197,6 +190,7 @@ function StepPanel({
                     characterId: step.characterId,
                     label: step.reminderLabel,
                     position: anchorPosition(playerId, players),
+                    anchorPlayerId: playerId,
                   },
                 ])
               }
@@ -219,11 +213,13 @@ function StepPanel({
                     // with nothing recording it (code review finding).
                     label: `${step.trueLabel} (${character.name})`,
                     position: anchorPosition(truePlayerId, players),
+                    anchorPlayerId: truePlayerId,
                   },
                   {
                     characterId: step.characterId,
                     label: `${step.falseLabel} (${character.name})`,
                     position: anchorPosition(falsePlayerId, players),
+                    anchorPlayerId: falsePlayerId,
                   },
                 ])
               }
@@ -247,6 +243,7 @@ function StepPanel({
                           characterId: step.characterId,
                           label: step.reminderLabel,
                           position: anchorPosition(step.playerId, players),
+                          anchorPlayerId: step.playerId,
                         },
                       ]
                     : [],
@@ -264,6 +261,7 @@ function StepPanel({
                     characterId: null,
                     label: `Thinks: ${demon.name}`,
                     position: anchorPosition(step.playerId, players),
+                    anchorPlayerId: step.playerId,
                   },
                 ])
               }
@@ -295,6 +293,7 @@ function StepPanel({
                           characterId: "drunk",
                           label: step.reminderLabel,
                           position: anchorPosition(step.playerId, players),
+                          anchorPlayerId: step.playerId,
                         },
                       ]
                     : [],
@@ -313,6 +312,7 @@ function StepPanel({
                     characterId: step.characterId,
                     label,
                     position: anchorPosition(step.playerId, players),
+                    anchorPlayerId: step.playerId,
                   })),
                 )
               }
@@ -668,36 +668,83 @@ export function SetupWalkthrough({
   onClose,
 }: SetupWalkthroughProps) {
   const resolvedCount = steps.filter((s) => stepStatuses[s.id]).length;
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // The opaque backdrop reads as a true modal, but nothing outside this
+  // component makes the rest of the page inert — GrimoireSetup keeps
+  // ShareScriptButton/EndGamePanel mounted and focusable underneath it
+  // (deliberately, so they stay reachable while the device is obscured
+  // mid-draw; see its "always reachable" comment) — so without this, Tab
+  // could silently reach "Good wins"/"Evil wins" behind the backdrop (code
+  // review finding). Focusable elements are re-queried on every Tab rather
+  // than captured once, since a step's own controls change as it's
+  // answered/skipped/redone while the dialog stays open.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    function focusableElements(): HTMLElement[] {
+      return Array.from(
+        dialog!.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+    }
+
+    focusableElements()[0]?.focus();
+
+    function trapTab(event: KeyboardEvent) {
+      if (event.key !== "Tab") return;
+      const items = focusableElements();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", trapTab);
+    return () => document.removeEventListener("keydown", trapTab);
+  }, []);
 
   return (
-    <div
-      className={styles.walkthrough}
-      role="dialog"
-      aria-label="Setup walkthrough"
-    >
-      <header className={styles.header}>
-        <h2>Setup walkthrough</h2>
-        <p>
-          {resolvedCount}/{steps.length} handled
-        </p>
-        <button type="button" onClick={onClose}>
-          Close
-        </button>
-      </header>
-      <ol className={styles.steps}>
-        {steps.map((step) => (
-          <li key={step.id}>
-            <StepPanel
-              step={step}
-              status={stepStatuses[step.id]}
-              players={players}
-              characterPool={characterPool}
-              onResolveStep={onResolveStep}
-              onReassignStandIn={onReassignStandIn}
-            />
-          </li>
-        ))}
-      </ol>
+    <div className={styles.overlay}>
+      <div
+        ref={dialogRef}
+        className={styles.walkthrough}
+        role="dialog"
+        aria-label="Setup walkthrough"
+        aria-modal="true"
+      >
+        <header className={styles.header}>
+          <h2>Setup walkthrough</h2>
+          <p>
+            {resolvedCount}/{steps.length} handled
+          </p>
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </header>
+        <ol className={styles.steps}>
+          {steps.map((step) => (
+            <li key={step.id}>
+              <StepPanel
+                step={step}
+                status={stepStatuses[step.id]}
+                players={players}
+                characterPool={characterPool}
+                onResolveStep={onResolveStep}
+                onReassignStandIn={onReassignStandIn}
+              />
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
