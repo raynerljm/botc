@@ -7,6 +7,7 @@
   justify-content: center;
   padding: 1.5rem;
   background: rgb(0 0 0 / 60%);
+  animation: overlay-in 150ms ease;
 }
 
 .dialog {
@@ -16,6 +17,30 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
+  animation: dialog-in 150ms ease;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Confirming/cancelling unmounts this immediately (no exit animation) so a
+   dismissal never delays the storyteller's next tap — only the open gets
+   the entrance. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .title {

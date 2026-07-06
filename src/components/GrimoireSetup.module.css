@@ -119,7 +119,11 @@
 
 /* Full-screen private reveal (issue #53): fixed over the whole viewport so
    no other setup-page element (seat list, other tokens, buttons) can show
-   above or behind it while a character is on screen. */
+   above or behind it while a character is on screen. Deliberately NOT
+   animated itself — this backdrop must be fully opaque and full-bleed the
+   instant it mounts, or a scale/fade on it would expose the setup page
+   behind its shrinking/thinning edges for the animation's duration. Only
+   .revealContent (the actual token/name/ability) gets the entrance motion. */
 .reveal {
   position: fixed;
   inset: 0;
@@ -132,6 +136,27 @@
   padding: 2rem;
   background: var(--background);
   text-align: center;
+}
+
+.revealContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  animation: reveal-in 200ms ease;
+}
+
+/* The physical beat this mirrors is flipping a drawn token face-up, not a
+   generic fade — a quick scale-up reads closer to that than opacity alone. */
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .addTraveller {

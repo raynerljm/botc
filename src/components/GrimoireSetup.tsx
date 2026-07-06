@@ -765,15 +765,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               aria-label={revealedCharacter.name}
               aria-modal="true"
             >
-              <CharacterToken character={revealedCharacter} />
-              <h2>{revealedCharacter.name}</h2>
-              <p>{revealedCharacter.ability}</p>
-              <PlayerNamePicker
-                onSelect={(name) => renamePlayer(draw.seatId, name)}
-              />
-              <button type="button" onClick={hideAndPass}>
-                Hide &amp; pass
-              </button>
+              {/* The animation lives on this inner wrapper, not .reveal
+                  itself: .reveal is the opaque full-viewport privacy
+                  backdrop (issue #53), and scaling *that* down leaves its
+                  shrunken edges exposing the setup page behind it for the
+                  animation's duration — exactly what it exists to hide. */}
+              <div className={styles.revealContent}>
+                <CharacterToken character={revealedCharacter} />
+                <h2>{revealedCharacter.name}</h2>
+                <p>{revealedCharacter.ability}</p>
+                <PlayerNamePicker
+                  onSelect={(name) => renamePlayer(draw.seatId, name)}
+                />
+                <button type="button" onClick={hideAndPass}>
+                  Hide &amp; pass
+                </button>
+              </div>
             </div>
           )}
 
