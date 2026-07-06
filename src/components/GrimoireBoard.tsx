@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -169,28 +170,41 @@ export function GrimoireBoard({
   // Every player's menu offers the identical grouped list — computed once
   // per board render rather than once per token.
   const claimGroups = useMemo(() => groupByTeam(claimOptions), [claimOptions]);
-  const boardRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const boardMeasureCleanupRef = useRef<(() => void) | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
-  // Null until the first client-side measurement lands; the CSS module's
-  // own width/height rule (a width-only fallback) covers that brief gap.
-  const [boardSizePx, setBoardSizePx] = useState<number | null>(null);
 
-  useEffect(() => {
-    const board = boardRef.current;
-    const wrapper = board?.parentElement;
-    if (!board || !wrapper) return;
+  // A plain `useEffect(() => {...}, [])` would only ever attach to the very
+  // first `.board` node — this component's "Info tokens" show mode (below)
+  // swaps in a whole different subtree, unmounting and later remounting a
+  // *new* `.board` div, and a mount-only effect keeps measuring the old,
+  // detached one forever after (getBoundingClientRect on a detached node
+  // reads all zeros, locking the circle at MIN_BOARD_PX). A ref callback
+  // fires on every attach/detach, so it naturally re-runs against whichever
+  // node is actually current.
+  const setBoardRef = useCallback((node: HTMLDivElement | null) => {
+    boardRef.current = node;
+    boardMeasureCleanupRef.current?.();
+    boardMeasureCleanupRef.current = null;
+    if (!node) return;
+    const wrapper = node.parentElement;
+    if (!wrapper) return;
+
+    // Root font-size doesn't change over a mount's lifetime (short of a
+    // browser zoom/text-size change), so it's read once here rather than on
+    // every measurement.
+    const rootFontSizePx =
+      parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
     function measure() {
-      const rect = board!.getBoundingClientRect();
-      const rootFontSizePx =
-        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const rect = node!.getBoundingClientRect();
       const availableHeightPx =
         window.innerHeight - rect.top - BOARD_BOTTOM_RESERVE_PX;
-      setBoardSizePx(
-        fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx),
-      );
+      const size = fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx);
+      node!.style.width = `${size}px`;
+      node!.style.height = `${size}px`;
     }
 
     measure();
@@ -206,7 +220,7 @@ export function GrimoireBoard({
       observer = new ResizeObserver(measure);
       observer.observe(document.body);
     }
-    return () => {
+    boardMeasureCleanupRef.current = () => {
       window.removeEventListener("resize", measure);
       observer?.disconnect();
     };
@@ -651,18 +665,11 @@ export function GrimoireBoard({
       )}
 
       <div
-        ref={boardRef}
+        ref={setBoardRef}
         className={styles.board}
         data-board
         data-hidden={hidden}
-        style={
-          {
-            "--token-size": `${tokenSize}rem`,
-            ...(boardSizePx !== null
-              ? { width: `${boardSizePx}px`, height: `${boardSizePx}px` }
-              : {}),
-          } as React.CSSProperties
-        }
+        style={{ "--token-size": `${tokenSize}rem` } as React.CSSProperties}
       >
         {!hidden &&
           sorted.map((player, index) => {

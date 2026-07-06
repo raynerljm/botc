@@ -1635,4 +1635,44 @@ describe("board sizing (issue #78)", () => {
     expect(board.style.width).toBe("640px");
     expect(board.style.height).toBe("640px");
   });
+
+  it("keeps measuring the current board after it's unmounted and remounted", async () => {
+    // Info tokens show mode (issue #19) replaces the whole board with a
+    // different subtree, then swaps the original board back in on "Done" —
+    // a *new* `.board` DOM node, not the same one re-shown. A stale
+    // mount-only listener still pointed at the old, now-detached node would
+    // read all-zero geometry and lock the circle at the legibility floor
+    // forever after, regardless of the real, current layout.
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer({ characterId: "imp" })]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    const group = within(dialog).getByRole("group", { name: "Demons" });
+    await user.click(within(group).getByRole("button", { name: "Imp" }));
+    await user.click(screen.getByRole("button", { name: "Show" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    const wrapper = board.parentElement as HTMLElement;
+    Object.defineProperty(window, "innerHeight", { value: 820, configurable: true });
+    Object.defineProperty(wrapper, "clientWidth", { value: 1000, configurable: true });
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 200,
+      width: 0,
+      height: 0,
+      right: 0,
+      bottom: 0,
+      x: 0,
+      y: 200,
+      toJSON() {},
+    });
+    fireEvent(window, new Event("resize"));
+
+    expect(board.style.width).toBe("604px");
+    expect(board.style.height).toBe("604px");
+  });
 });
