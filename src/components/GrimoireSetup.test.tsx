@@ -544,6 +544,12 @@ describe("manual assignment mode (mixable with draw)", () => {
       "washerwoman",
     ]);
   });
+
+  it("themes the 'assign seat manually' select instead of leaving it browser-default (issue #74)", () => {
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+
+    expect(screen.getByLabelText("Assign seat 1 manually").className).not.toBe("");
+  });
 });
 
 describe("travellers addable at setup with alignment", () => {
@@ -629,6 +635,15 @@ describe("travellers addable at setup with alignment", () => {
     expect(traveller.characterId).toBe("scapegoat");
     expect(traveller.travellerAlignment).toBe("evil");
     expect(reloaded.travellerBag).toHaveLength(0);
+  });
+
+  it("themes the traveller form's 'Seat position' select instead of leaving it browser-default (issue #74)", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+
+    expect(screen.getByLabelText("Seat position").className).not.toBe("");
   });
 });
 
@@ -1074,6 +1089,14 @@ describe("mid-game token management (issue #15)", () => {
       reloaded.players.filter((p) => p.characterId !== "baron").map((p) => p.seat).sort(),
     ).toEqual([2, 3]);
     expect(reloaded.characterPool.map((c) => c.id)).toContain("baron");
+  });
+
+  it("themes the 'Add character' form's 'Seat position' select instead of leaving it browser-default (issue #74)", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+
+    expect(screen.getByLabelText("Seat position").className).not.toBe("");
   });
 
   it("cancels the 'Add character' form without adding a player or reopening it (issue #83)", async () => {
@@ -1594,6 +1617,17 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     expect(
       screen.queryByRole("region", { name: "Setup walkthrough offer" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("themes the walkthrough offer's buttons instead of leaving them bare (issue #74)", async () => {
+    const user = userEvent.setup();
+    await completedFortuneTellerBoard(user);
+
+    const offer = screen.getByRole("region", { name: "Setup walkthrough offer" });
+    expect(
+      within(offer).getByRole("button", { name: "Start walkthrough" }).className,
+    ).not.toBe("");
+    expect(within(offer).getByRole("button", { name: "Skip" }).className).not.toBe("");
   });
 
   it("declining the offer is one tap and doesn't show it again", async () => {

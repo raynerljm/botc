@@ -138,7 +138,11 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
                 </li>
               ))}
             </ul>
-            <button type="button" onClick={() => setShowingToDemon(false)}>
+            <button
+              type="button"
+              className={styles.closeButton}
+              onClick={() => setShowingToDemon(false)}
+            >
               Close
             </button>
           </div>

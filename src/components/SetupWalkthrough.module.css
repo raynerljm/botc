@@ -92,6 +92,17 @@
   gap: 0.5rem;
 }
 
+.skip {
+  padding: 0.6rem 1rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
 .reminderOptions {
   display: flex;
   flex-wrap: wrap;

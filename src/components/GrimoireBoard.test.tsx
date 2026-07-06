@@ -270,6 +270,15 @@ describe("token menu", () => {
     expect(handlers.onToggleDead).toHaveBeenCalledWith("p1");
   });
 
+  it("themes the 'Swap character' select instead of leaving it browser-default (issue #74)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+
+    expect(screen.getByLabelText("Swap character").className).not.toBe("");
+  });
+
   it("shows a shroud and offers to mark alive once dead", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer({ dead: true })]);

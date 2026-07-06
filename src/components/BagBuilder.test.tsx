@@ -207,6 +207,15 @@ describe("special flow: Godfather asks +1 or -1 Outsider (AC4)", () => {
     expect(screen.getByText("Outsiders 0/1")).toBeInTheDocument();
     expect(screen.getByText("Townsfolk 0/2")).toBeInTheDocument();
   });
+
+  it("themes the setup-choice select instead of leaving it browser-default (issue #74)", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("godfather", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Godfather/ }));
+
+    expect(screen.getByLabelText("Godfather setup choice").className).not.toBe("");
+  });
 });
 
 describe("special flow: Drunk stand-in (AC4)", () => {

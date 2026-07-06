@@ -203,6 +203,38 @@
   border-radius: 0.5rem;
 }
 
+.walkthroughStart {
+  padding: 0.6rem 1.1rem;
+  background: var(--accent);
+  color: var(--background);
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+.walkthroughSkip {
+  padding: 0.6rem 1.1rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+.select {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  min-height: 2.75rem;
+}
+
 /* Grid (not flex) so the night list can sit *before* the circle in visual
    order on mobile — where it's genuinely reachable without a long scroll
    past every seat token (issue #58) — while DOM/tab order stays circle,

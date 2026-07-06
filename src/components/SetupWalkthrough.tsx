@@ -319,7 +319,11 @@ function StepPanel({
             />
           )}
 
-          <button type="button" onClick={() => resolve("skipped")}>
+          <button
+            type="button"
+            className={styles.skip}
+            onClick={() => resolve("skipped")}
+          >
             Skip
           </button>
         </>
