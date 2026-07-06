@@ -1,14 +1,9 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import styles from "./ConfirmDialog.module.css";
-
-// `children` can carry more than plain text (issue #73 follow-up: BagBuilder's
-// count-mismatch list), so the Tab trap must catch every tabbable element
-// inside, not just the dialog's own two buttons.
-const FOCUSABLE_SELECTOR =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+import { useDialogDismiss } from "./useDialogDismiss";
 
 export interface ConfirmDialogProps {
   title: string;
@@ -52,49 +47,7 @@ export function ConfirmDialog({
     action();
   }
 
-  useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    cancelButtonRef.current?.focus();
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        respond(onCancel);
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable =
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          FOCUSABLE_SELECTOR,
-        ) ?? [];
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      // The trigger can be gone by the time this runs — e.g. confirming
-      // "Delete game" or "Remove player" removes the very row/token that
-      // hosted it in the same commit that unmounts this dialog. Focusing a
-      // detached node is a silent no-op, so only do it when there's
-      // somewhere real to return to.
-      if (previouslyFocused && document.contains(previouslyFocused)) {
-        previouslyFocused.focus();
-      }
-    };
-    // Runs once per mount — this component is only ever mounted while the
-    // confirmation it represents is open, so there's nothing to re-sync.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useDialogDismiss(dialogRef, cancelButtonRef, () => respond(onCancel));
 
   return (
     <div

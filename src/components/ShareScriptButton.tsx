@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 import type { Character } from "@/lib/characters";
@@ -13,6 +13,7 @@ import {
 import type { ScriptMeta } from "@/lib/scriptParser";
 
 import styles from "./ShareScriptButton.module.css";
+import { useDialogDismiss } from "./useDialogDismiss";
 
 export interface ShareScriptButtonProps {
   meta: ScriptMeta;
@@ -49,6 +50,8 @@ function ShareScriptModal({
 }: ShareScriptButtonProps & { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   const url = useMemo(() => {
     const encoded = encodeScriptForShare(meta, characters);
@@ -62,6 +65,13 @@ function ShareScriptModal({
   // QRCodeSVG, not just used to decide whether to show a warning.
   const tooLargeForQr = exceedsQrCapacity(url);
   const tooLargeToScanReliably = !tooLargeForQr && isTooLargeForReliableQr(url);
+
+  // Same shared dialog semantics as ConfirmDialog: focus moves in on open,
+  // Tab is trapped within the dialog so it can't reach GrimoireSetup's other
+  // controls (EndGamePanel, player rows) hidden behind the backdrop, Escape
+  // closes, and focus returns to the trigger so the next tap/keypress lands
+  // on its intended target instead of a lingering overlay.
+  useDialogDismiss(dialogRef, closeButtonRef, onClose);
 
   async function copyUrl() {
     try {
@@ -77,6 +87,7 @@ function ShareScriptModal({
   return (
     <div className={styles.overlay} onClick={onClose}>
       <dialog
+        ref={dialogRef}
         open
         aria-label="Share script via QR code"
         className={styles.dialog}
@@ -84,6 +95,7 @@ function ShareScriptModal({
       >
         <button
           type="button"
+          ref={closeButtonRef}
           className={styles.close}
           onClick={onClose}
           aria-label="Close"
@@ -92,27 +104,29 @@ function ShareScriptModal({
         </button>
         {tooLargeForQr ? (
           <p role="alert" className={styles.warning}>
-            This script is too large to encode as a QR code. Share the link
-            below instead.
+            This script is too large to encode as a QR code. Use Copy link
+            instead.
           </p>
         ) : (
           <QRCodeSVG value={url} size={220} />
         )}
         {tooLargeToScanReliably && (
           <p role="alert" className={styles.warning}>
-            This script is large — the QR code may not scan reliably. Share
-            the link below instead if scanning fails.
+            This script is large — the QR code may not scan reliably. Use
+            Copy link if scanning fails.
           </p>
         )}
-        <p className={styles.url}>{url}</p>
         <button type="button" className={styles.copy} onClick={copyUrl}>
           {copied ? "Copied!" : "Copy link"}
         </button>
         {copyFailed && (
-          <p className={styles.warning}>
-            Couldn&apos;t copy automatically — select and copy the link above
-            instead.
-          </p>
+          <>
+            <p className={styles.warning}>
+              Couldn&apos;t copy automatically — select and copy the link
+              below instead.
+            </p>
+            <p className={styles.url}>{url}</p>
+          </>
         )}
       </dialog>
     </div>
