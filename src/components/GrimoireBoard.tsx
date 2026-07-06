@@ -762,7 +762,7 @@ export function GrimoireBoard({
                       </span>
                     )}
                     {nominatorTodayIds?.has(player.id) && (
-                      <span className={styles.note}>Nominated</span>
+                      <span className={styles.note}>Nominator</span>
                     )}
                     {nomineeTodayIds?.has(player.id) && (
                       <span className={styles.note}>Nominee</span>
