@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -90,6 +91,32 @@ function tokenSizeRem(total: number): number {
   return MAX_TOKEN_REM - t * (MAX_TOKEN_REM - MIN_TOKEN_REM);
 }
 
+// A circle any smaller than this stops reading as "the board" regardless of
+// how little viewport is left — better to require a small scroll in that
+// extreme case than to shrink the circle into illegibility.
+const MIN_BOARD_PX = 320;
+// Previous width-only cap (`min(90vw, 40rem)`), kept as a sane ceiling so the
+// circle doesn't balloon on a large desktop display once it's no longer
+// bottlenecked by viewport height.
+const MAX_BOARD_REM = 40;
+// Breathing room between the circle's bottom edge and the viewport edge.
+const BOARD_BOTTOM_RESERVE_PX = 16;
+
+// The circle previously sized itself from viewport *width* alone
+// (`min(90vw, 40rem)`), so on a short landscape viewport it overflowed
+// vertically and clipped seats below the fold (issue #78). Fitting it to
+// whatever space is actually available in both dimensions keeps the whole
+// circle on screen without scrolling, using genuinely spare width instead of
+// capping early.
+function fitBoardSizePx(
+  availableWidthPx: number,
+  availableHeightPx: number,
+  rootFontSizePx: number,
+): number {
+  const maxPx = MAX_BOARD_REM * rootFontSizePx;
+  return Math.max(MIN_BOARD_PX, Math.min(availableWidthPx, availableHeightPx, maxPx));
+}
+
 // A real finger drag always moves a few pixels before settling — without a
 // threshold, every tap-to-open-the-menu would also fire a (near-zero) move.
 const DRAG_THRESHOLD_PX = 6;
@@ -143,10 +170,72 @@ export function GrimoireBoard({
   // Every player's menu offers the identical grouped list — computed once
   // per board render rather than once per token.
   const claimGroups = useMemo(() => groupByTeam(claimOptions), [claimOptions]);
-  const boardRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const boardMeasureCleanupRef = useRef<(() => void) | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
+
+  // A plain `useEffect(() => {...}, [])` would only ever attach to the very
+  // first `.board` node — this component's "Info tokens" show mode (below)
+  // swaps in a whole different subtree, unmounting and later remounting a
+  // *new* `.board` div, and a mount-only effect keeps measuring the old,
+  // detached one forever after (getBoundingClientRect on a detached node
+  // reads all zeros, locking the circle at MIN_BOARD_PX). A ref callback
+  // fires on every attach/detach, so it naturally re-runs against whichever
+  // node is actually current.
+  const setBoardRef = useCallback((node: HTMLDivElement | null) => {
+    boardRef.current = node;
+    boardMeasureCleanupRef.current?.();
+    boardMeasureCleanupRef.current = null;
+    if (!node) return;
+    const wrapper = node.parentElement;
+    if (!wrapper) return;
+
+    // Root font-size doesn't change over a mount's lifetime (short of a
+    // browser zoom/text-size change), so it's read once here rather than on
+    // every measurement.
+    const rootFontSizePx =
+      parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    // The last size actually written to the DOM — skipping a no-op write
+    // avoids forcing more layout than necessary and avoids feeding a
+    // same-value change back into the ResizeObserver below on every tick.
+    let lastSize: number | null = null;
+
+    function measure() {
+      const rect = node!.getBoundingClientRect();
+      // A mid-scroll resize (iOS Safari's chrome collapsing, iOS overscroll)
+      // can read a negative `rect.top`, which would otherwise overstate how
+      // much height is left below the board.
+      const topPx = Math.max(0, rect.top);
+      const availableHeightPx = window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX;
+      const size = fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx);
+      if (size === lastSize) return;
+      lastSize = size;
+      node!.style.width = `${size}px`;
+      node!.style.height = `${size}px`;
+    }
+
+    measure();
+    window.addEventListener("resize", measure);
+    // `wrapper` alone catches its own box changing size (the containing
+    // column narrowing/widening) but not the board's top offset shifting
+    // because something rendered *above* it grew without resizing wrapper
+    // itself (the toolbar wrapping to a second row, a banner appearing) —
+    // and document.body alone catches top-offset shifts but can miss a
+    // column-width-only change that doesn't alter body's own box. Observing
+    // both covers each other's blind spot.
+    let observer: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(measure);
+      observer.observe(wrapper);
+      observer.observe(document.body);
+    }
+    boardMeasureCleanupRef.current = () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, []);
 
   // "Script's characters first, then everything in the dataset" (issue #15
   // AC) — the script pool is whatever's already resolvable on this board.
@@ -587,7 +676,7 @@ export function GrimoireBoard({
       )}
 
       <div
-        ref={boardRef}
+        ref={setBoardRef}
         className={styles.board}
         data-board
         data-hidden={hidden}
