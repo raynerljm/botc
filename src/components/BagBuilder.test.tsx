@@ -933,3 +933,45 @@ describe("in-progress builder state survives reload / browser-back (issue #118)"
     ).toHaveAttribute("aria-pressed", "false");
   });
 });
+
+describe("Teensyville player-count advisory (issue #120)", () => {
+  it("warns when a Teensyville script is configured above 6 players", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "15");
+
+    expect(screen.getByText(/teensyville/i)).toBeInTheDocument();
+    expect(screen.getByText(/up to 6 players/i)).toBeInTheDocument();
+    // Advisory, never blocking (ADR 0003): still not disabled.
+    expect(
+      screen.getByRole("button", { name: /^Randomize/ }),
+    ).not.toBeDisabled();
+  });
+
+  it("stays silent for a Teensyville script at exactly 6 players", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "6");
+
+    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
+  });
+
+  it("stays silent for a non-Teensyville script at any player count", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "15");
+
+    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
+  });
+});

@@ -3,6 +3,10 @@ import type { Character } from "./characters";
 export const MIN_PLAYERS = 5;
 export const MAX_PLAYERS = 15;
 export const MAX_TRAVELLERS = 5;
+// Teensyville scripts (BotC wiki "Behind the Curtain") are designed for 5-6
+// players — their small character pools can't fill the standard distribution
+// table above this.
+export const TEENSYVILLE_MAX_PLAYERS = 6;
 
 export interface TeamCounts {
   townsfolk: number;
