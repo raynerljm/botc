@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 
 import {
   characterPickerPool,
@@ -534,10 +534,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     if (!draw) return;
     const currentGame = gameRef.current;
     const token = currentGame.bag.find((t) => t.id === tokenId);
-    // The tapped token can already be gone from the bag if it was manually
-    // assigned to a different seat while still shown face-down here —
-    // reshuffle the grid from what's actually left rather than leaving a
-    // dead, stale button on screen.
+    // The tapped token can already be gone from the bag if two different
+    // face-down tokens were tapped in true rapid succession (each its own
+    // fresh detail: 1 click, since they land at different screen positions —
+    // manual assignment can no longer race this, since it's unavailable
+    // while a draw is active, issue #111) — reshuffle the grid from what's
+    // actually left rather than leaving a dead, stale button on screen.
     if (!token) {
       setDraw({ ...draw, tokenOrder: shuffleTokens(currentGame.bag) });
       return;
@@ -553,6 +555,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ),
     });
     setDraw({ ...draw, stage: "revealed" });
+  }
+
+  // A double-click on "Start bag draw" (or "Ready to draw") lands its
+  // second click right where this token grid just replaced the button —
+  // event.detail (the browser's own click count, tracked by screen position
+  // and timing regardless of which element ends up under the pointer) is 2
+  // for that click, so it's ignored instead of instantly drawing the token
+  // (issue #111). A deliberate, separate tap is always its own fresh
+  // detail: 1 click.
+  function chooseTokenOnClick(
+    event: MouseEvent<HTMLButtonElement>,
+    tokenId: string,
+  ) {
+    if (event.detail > 1) return;
+    chooseToken(tokenId);
   }
 
   // Every seat's reveal — including the last — goes through the same
@@ -580,7 +597,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     setDraw(null);
   }
 
-  // Shares the draw's own bag, so a token taken here can't also be drawn.
+  // Only reachable while `draw` is null — its one call site (the manual-
+  // assign select) doesn't render during an active draw (issue #111) — so,
+  // unlike chooseToken, there's no in-flight draw session to reconcile here.
   function assignManually(playerId: string, tokenId: string) {
     const token = game.bag.find((t) => t.id === tokenId);
     if (!token) return;
@@ -590,7 +609,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       bag: game.bag.filter((t) => t.id !== token.id),
       players: updatePlayer(playerId, tokenAssignmentPatch(token)),
     });
-    if (draw?.seatId === playerId) setDraw(null);
   }
 
   function openTravellerForm() {
@@ -748,20 +766,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       type="button"
                       className={styles.faceDownToken}
                       aria-label={`Face-down token ${index + 1}`}
-                      onClick={(event) => {
-                        // A double-click on "Start bag draw" (or "Ready to
-                        // draw") lands its second click right here, at the
-                        // same screen position the button just occupied —
-                        // event.detail (the browser's own click count,
-                        // tracked by screen position and timing regardless
-                        // of which element ends up under the pointer) is 2
-                        // for that click, so it's ignored instead of
-                        // instantly drawing this token (issue #111). A
-                        // deliberate, separate tap is always its own fresh
-                        // detail: 1 click.
-                        if (event.detail > 1) return;
-                        chooseToken(token.id);
-                      }}
+                      onClick={(event) => chooseTokenOnClick(event, token.id)}
                     />
                   </li>
                 ))}
@@ -818,7 +823,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </div>
       )}
 
-      {!screenObscured && game.travellerBag.length > 0 && !travellerFormOpen && (
+      {/* Gated on `!draw`, not just `!screenObscured` — screenObscured
+          deliberately treats the 'choosing' stage as safe for most controls,
+          but the traveller select below lists travellerBag by name, which
+          is exactly the kind of bag-composition leak issue #111 closed for
+          the official bag's manual-assign selects. */}
+      {!draw && game.travellerBag.length > 0 && !travellerFormOpen && (
         <button
           type="button"
           className={styles.addTraveller}
@@ -828,7 +838,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </button>
       )}
 
-      {!screenObscured && travellerFormOpen && (
+      {!draw && travellerFormOpen && (
         <form className={styles.travellerForm} onSubmit={addTraveller}>
           <label>
             Traveller character

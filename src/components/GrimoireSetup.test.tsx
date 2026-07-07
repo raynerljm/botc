@@ -152,10 +152,9 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
 
-    // Seat 1's turn: two face-down tokens, no identity visible anywhere on
-    // screen — including the *other* unassigned seat's manual-assign
-    // dropdown, which would otherwise list the remaining bag by name to
-    // whoever's holding the device mid-draw (issue #111).
+    // Seat 1's turn: two face-down tokens, no identity visible in the draw
+    // itself. (The other unassigned seat's manual-assign dropdown is hidden
+    // too while any draw is active — see the dedicated issue #111 test.)
     const drawRegion = screen.getByRole("region", { name: "Bag draw" });
     expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
     let faceDownTokens = screen.getAllByRole("button", {
@@ -164,9 +163,6 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     expect(faceDownTokens).toHaveLength(2);
     expect(within(drawRegion).queryByText(washerwoman.name)).not.toBeInTheDocument();
     expect(within(drawRegion).queryByText(imp.name)).not.toBeInTheDocument();
-    expect(
-      screen.queryByLabelText(/Assign seat \d manually/),
-    ).not.toBeInTheDocument();
 
     await user.click(faceDownTokens[0]);
 
@@ -226,11 +222,9 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Start bag draw" }));
-    // The second click of a real double-click lands at the same screen
-    // position — now the first face-down token — a fraction of a second
-    // later, in the same click sequence: the browser stamps its event
-    // detail as 2, regardless of which element ends up under the pointer.
-    // A deliberate, separate tap is always its own fresh detail: 1 click.
+    // The second click of a double-click gesture — mirrors chooseTokenOnClick's
+    // event.detail guard (see its comment for why detail: 2 means "not a
+    // fresh tap").
     fireEvent.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
       { detail: 2 },
@@ -657,6 +651,17 @@ describe("travellers addable at setup with alignment", () => {
   it("hides the action once every traveller token has been added", () => {
     const game = makeGame({ playerCount: 2 });
     render(<GrimoireSetup game={game} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Add traveller" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides 'Add traveller' while a draw session is active, so its select can't leak the traveller bag mid-draw (issue #111)", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
 
     expect(
       screen.queryByRole("button", { name: "Add traveller" }),
