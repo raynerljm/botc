@@ -214,8 +214,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     };
   }
 
+  // The one non-draw handler reachable while a draw transition may have
+  // just landed in the same tick (the seat-name inputs during "choosing",
+  // the reveal's name picker) — builds off gameRef.current so a rename can
+  // never revert a newer drawSession/bag/assignment write with a stale
+  // spread (Cursor review finding). Handlers only reachable from the board
+  // (hidden throughout the draw) keep the plain render-closure pattern.
   function renamePlayer(playerId: string, name: string) {
-    update({ ...game, players: updatePlayer(playerId, { name }) });
+    const currentGame = gameRef.current;
+    update({
+      ...currentGame,
+      players: currentGame.players.map((player) =>
+        player.id === playerId ? { ...player, name } : player,
+      ),
+    });
   }
 
   function movePlayer(playerId: string, position: PlayerPosition) {
