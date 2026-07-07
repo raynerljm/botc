@@ -185,7 +185,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                     // is already spent so the storyteller can see it before
                     // choosing to record (or not record) the vote anyway.
                     const alreadySpent =
-                      player.dead && !voted && !canRecordVote(player, nominee);
+                      player.dead && !voted && !canRecordVote(player, nomination.isExile);
                     return (
                       <label key={player.id} className={styles.voter}>
                         <input

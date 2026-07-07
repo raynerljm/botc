@@ -318,36 +318,58 @@ describe("computeBlock", () => {
     const executionWithFifthVote = { ...execution, votes: [...execution.votes, "p6"] };
     expect(computeBlock([exile, executionWithFifthVote], eightPlusTraveller)).toBe("p8");
   });
+
+  it("keeps excluding an exile from the fold by its own snapshotted isExile even after its Traveller nominee is removed from the roster entirely", () => {
+    const withTraveller = [
+      ...players,
+      makePlayer({ id: "p6", name: "Traveller", isTraveller: true, travellerAlignment: "good" }),
+    ];
+    // 6 players total -> exile threshold 3.
+    const exile = makeNomination({
+      id: "exile",
+      nomineeId: "p6",
+      votes: ["p1", "p2", "p3"],
+      threshold: 3,
+      isExile: true,
+    });
+    const execution = makeNomination({
+      id: "exec",
+      nomineeId: "p2",
+      votes: ["p1", "p3", "p4"],
+      threshold: 3,
+    });
+
+    // The Traveller is removed from the roster entirely (distinct from
+    // dying) — a live `nominee.isTraveller` lookup would find nothing and
+    // could misclassify the exile as an execution, corrupting the fold. The
+    // snapshotted isExile must keep excluding it regardless.
+    const rosterWithoutTraveller = withTraveller.filter((player) => player.id !== "p6");
+
+    expect(computeBlock([exile, execution], rosterWithoutTraveller)).toBe("p2");
+  });
 });
 
 describe("canRecordVote", () => {
-  const execution = makePlayer({ id: "nominee", isTraveller: false });
-  const exile = makePlayer({
-    id: "traveller",
-    isTraveller: true,
-    travellerAlignment: "good",
-  });
-
   it("always lets a living player vote", () => {
     const voter = makePlayer({ id: "voter", dead: false });
-    expect(canRecordVote(voter, execution)).toBe(true);
-    expect(canRecordVote(voter, exile)).toBe(true);
+    expect(canRecordVote(voter, false)).toBe(true);
+    expect(canRecordVote(voter, true)).toBe(true);
   });
 
   it("lets a dead player vote on an execution only while their ghost vote is unspent", () => {
     const unspent = makePlayer({ id: "ghost", dead: true, ghostVoteSpent: false });
     const spent = makePlayer({ id: "ghost", dead: true, ghostVoteSpent: true });
 
-    expect(canRecordVote(unspent, execution)).toBe(true);
-    expect(canRecordVote(spent, execution)).toBe(false);
+    expect(canRecordVote(unspent, false)).toBe(true);
+    expect(canRecordVote(spent, false)).toBe(false);
   });
 
   it("always lets a dead player vote on an exile, spent or not (exile never touches the ghost vote)", () => {
     const unspent = makePlayer({ id: "ghost", dead: true, ghostVoteSpent: false });
     const spent = makePlayer({ id: "ghost", dead: true, ghostVoteSpent: true });
 
-    expect(canRecordVote(unspent, exile)).toBe(true);
-    expect(canRecordVote(spent, exile)).toBe(true);
+    expect(canRecordVote(unspent, true)).toBe(true);
+    expect(canRecordVote(spent, true)).toBe(true);
   });
 });
 

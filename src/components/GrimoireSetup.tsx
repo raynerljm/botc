@@ -9,6 +9,7 @@ import {
   SEAT_HOLDING_TEAMS,
   type Character,
 } from "@/lib/characters";
+import { executionNominations } from "@/lib/dayPhase";
 import {
   anchoredReminderPosition,
   DRUNK_ID,
@@ -131,22 +132,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   // "used/available state visible ... as token badges" (issue #20 AC) —
   // computed once per render rather than per-token, since every token needs
-  // the same two sets. Exile calls are excluded: they're unlimited per day
-  // and never mark either party as "already nominated" (CONTEXT.md: Exile,
-  // issue #114).
-  const nominatorTodayIds = useMemo(
-    () =>
-      new Set(
-        game.nominations.filter((n) => !n.isExile).map((n) => n.nominatorId),
-      ),
+  // the same two sets. Shares dayPhase.ts's executionNominations so this
+  // agrees with the day panel's "already nominated" labels by construction
+  // — exile calls are excluded from both (CONTEXT.md: Exile, issue #114).
+  const todaysExecutionNominations = useMemo(
+    () => executionNominations(game.nominations),
     [game.nominations],
   );
+  const nominatorTodayIds = useMemo(
+    () => new Set(todaysExecutionNominations.map((n) => n.nominatorId)),
+    [todaysExecutionNominations],
+  );
   const nomineeTodayIds = useMemo(
-    () =>
-      new Set(
-        game.nominations.filter((n) => !n.isExile).map((n) => n.nomineeId),
-      ),
-    [game.nominations],
+    () => new Set(todaysExecutionNominations.map((n) => n.nomineeId)),
+    [todaysExecutionNominations],
   );
 
   // Referentially stable meta for ShareScriptButton, so opening the dialog
