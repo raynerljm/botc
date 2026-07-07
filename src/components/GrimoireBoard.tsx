@@ -303,6 +303,14 @@ export function GrimoireBoard({
     null,
   );
   const openMenuElRef = useRef<HTMLDetailsElement | null>(null);
+  // Shared by every site that needs to know whether a specific token's menu
+  // is the open one — the <details>'s own `open` prop and the wrap's
+  // `data-menu-open` (issue #117: lets CSS stack the open menu above
+  // neighbours) must never drift apart, so both read this instead of each
+  // re-deriving the same comparison (code review finding).
+  function isMenuOpenFor(kind: TokenKind, id: string): boolean {
+    return openMenu?.kind === kind && openMenu.id === id;
+  }
 
   useEffect(() => {
     if (!openMenu) return;
@@ -703,17 +711,19 @@ export function GrimoireBoard({
             // identity — once swapped to any other character (including a
             // reveal to "drunk" itself), there's nothing left to disguise.
             const isHiddenDrunk = player.isDrunk && character?.id !== DRUNK_ID;
+            const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
               <div
                 key={player.id}
                 className={styles.tokenWrap}
                 data-player-id={player.id}
+                data-menu-open={menuOpen ? "true" : undefined}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details
                   className={styles.menu}
-                  open={openMenu?.kind === "player" && openMenu.id === player.id}
+                  open={menuOpen}
                   onToggle={(event) => handleMenuToggle("player", player.id, event)}
                 >
                   <summary
@@ -985,16 +995,19 @@ export function GrimoireBoard({
                 ? liveDrag.position
                 : restingPosition;
 
+            const menuOpen = isMenuOpenFor("reminder", reminder.id);
+
             return (
               <div
                 key={reminder.id}
                 className={styles.reminderWrap}
                 data-reminder-id={reminder.id}
+                data-menu-open={menuOpen ? "true" : undefined}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details
                   className={styles.menu}
-                  open={openMenu?.kind === "reminder" && openMenu.id === reminder.id}
+                  open={menuOpen}
                   onToggle={(event) => handleMenuToggle("reminder", reminder.id, event)}
                 >
                   <summary

@@ -57,6 +57,20 @@
   animation: chip-in 200ms ease;
 }
 
+/* `transform` gives every .tokenWrap/.reminderWrap its own stacking
+   context, so a menuBody's own z-index (below) only ever wins against its
+   own siblings, never against a neighbouring seat's tokenWrap or the
+   sticky Day/Night panels beside the board — those paint later in the DOM
+   and so paint on top regardless (issue #117). Raising the *wrap itself*
+   above the ambient z-index:auto level, only while its menu is open, is
+   what actually wins that comparison. `data-menu-open` is written from the
+   same `openMenu` state that already drives each menu's `open` attribute,
+   so at most one wrap carries this at a time. */
+.tokenWrap[data-menu-open],
+.reminderWrap[data-menu-open] {
+  z-index: 20;
+}
+
 @keyframes chip-in {
   from {
     opacity: 0;

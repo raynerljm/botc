@@ -319,11 +319,7 @@ export function nextPadReminderPosition(
 // below that seat's own token+name block rather than beside it, so it never
 // covers the name label or intercepts a tap meant for the seat (AC), and a
 // second/third reminder on the same seat stacks further down instead of
-// overlapping the first. A small per-sibling horizontal fan rides along with
-// the vertical stacking so seats near the bottom of the circle — where the
-// vertical offset clamps to the pad's edge for every sibling alike — still
-// separate them instead of collapsing onto the same clamped point (code
-// review finding).
+// overlapping the first.
 const ANCHOR_OFFSET_Y = 12;
 const ANCHOR_STACK_STEP_Y = 6;
 const ANCHOR_STACK_STEP_X = 3;
@@ -332,10 +328,38 @@ export function anchoredReminderPosition(
   anchorPosition: PlayerPosition,
   siblingIndex: number,
 ): PlayerPosition {
-  return {
-    x: clampPct(anchorPosition.x + siblingIndex * ANCHOR_STACK_STEP_X),
-    y: clampPct(anchorPosition.y + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y),
-  };
+  // Defensive: every position this function is actually handed today
+  // (circlePosition, a drag drop) is already within clampPct's range, but a
+  // hand-edited or pre-#117 exported game document isn't guaranteed to be —
+  // an anchor outside [4,96] would otherwise make verticalClearance exceed
+  // ANCHOR_OFFSET_Y and silently zero the recovery below (code review
+  // finding), reproducing the exact bug this function exists to fix.
+  const anchorX = clampPct(anchorPosition.x);
+  const anchorY = clampPct(anchorPosition.y);
+  const y = clampPct(anchorY + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y);
+  const verticalClearance = y - anchorY;
+  // A seat near the bottom of the circle clamps y before it reaches its full
+  // offset, which used to park the chip directly on the token instead of
+  // below it (issue #117). Recover the clearance the clamp ate as a
+  // horizontal push instead, so the chip ends up exactly as far from the
+  // token as an unclamped seat's chip would. Recovered against the *base*
+  // offset, not the growing per-sibling one — otherwise every sibling
+  // recomputes its own full recovery on top of the per-sibling fan below,
+  // and a handful of reminders on one clamped seat collapse back onto a
+  // single point far sooner than an unclamped seat would need before its
+  // own fan saturates (code review finding).
+  const recoveredX = Math.sqrt(
+    Math.max(ANCHOR_OFFSET_Y ** 2 - verticalClearance ** 2, 0),
+  );
+  // Fan toward the pad's horizontal centre, not off the nearer edge — scales
+  // the per-sibling step too, so later siblings keep receding from the edge
+  // instead of the unscaled step undoing part of the recovery above (code
+  // review finding).
+  const direction = anchorX > 50 ? -1 : 1;
+  const x = clampPct(
+    anchorX + direction * (recoveredX + siblingIndex * ANCHOR_STACK_STEP_X),
+  );
+  return { x, y };
 }
 
 // The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so
