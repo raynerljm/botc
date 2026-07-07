@@ -221,7 +221,10 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     const imp = getCharacter("imp")!;
     render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Start bag draw" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start bag draw" }),
+      { detail: 1 },
+    );
     // The second click of a double-click gesture — mirrors chooseTokenOnClick's
     // event.detail guard (see its comment for why detail: 2 means "not a
     // fresh tap").
@@ -238,7 +241,10 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     // Seat 1 still gets its own choose-your-own-token ritual — a real,
     // separate tap actually draws.
-    fireEvent.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+      { detail: 1 },
+    );
 
     const drawnName = [washerwoman.name, imp.name].find((name) =>
       screen.queryByRole("heading", { name }),

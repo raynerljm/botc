@@ -534,12 +534,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     if (!draw) return;
     const currentGame = gameRef.current;
     const token = currentGame.bag.find((t) => t.id === tokenId);
-    // The tapped token can already be gone from the bag if two different
-    // face-down tokens were tapped in true rapid succession (each its own
-    // fresh detail: 1 click, since they land at different screen positions —
-    // manual assignment can no longer race this, since it's unavailable
-    // while a draw is active, issue #111) — reshuffle the grid from what's
-    // actually left rather than leaving a dead, stale button on screen.
+    // Defensive: the tapped token isn't necessarily still in the bag by the
+    // time this runs (e.g. a future change reintroduces a way to mutate the
+    // bag mid-draw, the way manual assignment used to before issue #111) —
+    // reshuffle the grid from what's actually left rather than leaving a
+    // dead, stale button on screen.
     if (!token) {
       setDraw({ ...draw, tokenOrder: shuffleTokens(currentGame.bag) });
       return;
