@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 
 import { ScriptSheet } from "@/components/ScriptSheet";
 import { saveCustomScript } from "@/lib/customScripts";
@@ -32,13 +32,20 @@ export default function SharedScriptPage() {
   const router = useRouter();
   const hash = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const result = hash ? decodeScriptForShare(hash) : undefined;
+  const scriptName =
+    result?.ok ? result.script.meta.name ?? "Shared script" : "Shared script";
+  // A double tap can fire two clicks before router.push unmounts this page —
+  // same non-idempotent-action hazard ConfirmDialog's respondedRef guards
+  // against, since each call would otherwise mint a separate saved script.
+  const savedRef = useRef(false);
 
   function handleSave() {
-    if (!result?.ok) return;
+    if (!result?.ok || savedRef.current) return;
+    savedRef.current = true;
     const rawText = scriptToRawJson(result.script.meta, result.script.characters);
     const saved = saveCustomScript({
       rawText,
-      name: result.script.meta.name ?? "Shared script",
+      name: scriptName,
       author: result.script.meta.author,
     });
     router.push(`/scripts/custom?id=${saved.id}`);
@@ -47,9 +54,7 @@ export default function SharedScriptPage() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <h1 className={styles.title}>
-          {result?.ok ? result.script.meta.name ?? "Shared script" : "Shared script"}
-        </h1>
+        <h1 className={styles.title}>{scriptName}</h1>
         <Link href="/" className={styles.home}>
           Home
         </Link>

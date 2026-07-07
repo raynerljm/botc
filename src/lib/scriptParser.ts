@@ -69,7 +69,7 @@ export function describeScriptParseError(error: ScriptParseError): string {
     case "invalid-homebrew":
       return `Entry ${error.index + 1} is missing required fields: ${error.missingFields.join(", ")}.`;
     case "empty-script":
-      return "That script has no characters — nothing to add.";
+      return "This script has no characters.";
   }
 }
 

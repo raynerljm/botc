@@ -32,10 +32,11 @@
   line-height: 1.5;
   display: grid;
   gap: 0.35rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .save {
-  justify-self: start;
   margin-bottom: 1.5rem;
   padding: 0.5rem 1.25rem;
   background: var(--accent);

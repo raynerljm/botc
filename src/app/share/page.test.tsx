@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { compressToEncodedURIComponent } from "lz-string";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listCustomScripts } from "@/lib/customScripts";
@@ -62,6 +63,29 @@ describe("shared script page", () => {
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ name: "My Script", author: "Me" });
     expect(push).toHaveBeenCalledWith(`/scripts/custom?id=${stored[0].id}`);
+  });
+
+  it("saves only once when the save button is double-tapped before navigation unmounts the page", async () => {
+    const encoded = encodeScriptForShare({ name: "My Script" }, [
+      resolveCharacterId("washerwoman")!,
+    ]);
+    await renderSharePage(encoded);
+
+    const button = screen.getByRole("button", { name: /add to your scripts/i });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(listCustomScripts()).toHaveLength(1);
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a long unknown-character error id in full, without truncating the text content (overflow is fixed via CSS wrapping)", async () => {
+    const longId = "x".repeat(200);
+    await renderSharePage(compressToEncodedURIComponent(JSON.stringify([longId])));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      new RegExp(longId),
+    );
   });
 
   it("shows a friendly error for a broken share link, with a link home", async () => {
