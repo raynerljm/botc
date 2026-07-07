@@ -1039,6 +1039,7 @@ describe("mid-game token management (issue #15)", () => {
           nomineeId: game.players[1].id,
           votes: [game.players[0].id, game.players[1].id],
           threshold: 1,
+          isExile: false,
         },
       ],
     };
@@ -1062,6 +1063,46 @@ describe("mid-game token management (issue #15)", () => {
     await removePlayerAndConfirm(user, seat1Wrap);
 
     expect(loadGame()!.nominations[0].votes).toEqual([game.players[1].id]);
+  });
+
+  it("doesn't badge a seat for an exile call — exile calls don't count as nominations for the board's badges (issue #114)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("washerwoman")!, getCharacter("imp")!],
+    });
+    const withExileCall = {
+      ...game,
+      nominations: [
+        {
+          id: "n1",
+          nominatorId: game.players[0].id,
+          nomineeId: game.players[1].id,
+          votes: [],
+          threshold: 1,
+          isExile: true,
+        },
+      ],
+    };
+    render(<GrimoireSetup game={withExileCall} />);
+
+    for (let seat = 1; seat <= 2; seat++) {
+      const remainingOption = within(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+      )
+        .getAllByRole("option")
+        .find((option) => option.textContent !== "Choose a character…")!;
+      await user.selectOptions(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+        remainingOption.textContent!,
+      );
+    }
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
+    expect(within(seat1Wrap).queryByText("Nominator")).not.toBeInTheDocument();
+    expect(within(seat2Wrap).queryByText("Nominee")).not.toBeInTheDocument();
   });
 
   it("reveals the Drunk, showing the real character openly from then on", async () => {

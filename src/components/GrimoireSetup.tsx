@@ -131,13 +131,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   // "used/available state visible ... as token badges" (issue #20 AC) —
   // computed once per render rather than per-token, since every token needs
-  // the same two sets.
+  // the same two sets. Exile calls are excluded: they're unlimited per day
+  // and never mark either party as "already nominated" (CONTEXT.md: Exile,
+  // issue #114).
   const nominatorTodayIds = useMemo(
-    () => new Set(game.nominations.map((n) => n.nominatorId)),
+    () =>
+      new Set(
+        game.nominations.filter((n) => !n.isExile).map((n) => n.nominatorId),
+      ),
     [game.nominations],
   );
   const nomineeTodayIds = useMemo(
-    () => new Set(game.nominations.map((n) => n.nomineeId)),
+    () =>
+      new Set(
+        game.nominations.filter((n) => !n.isExile).map((n) => n.nomineeId),
+      ),
     [game.nominations],
   );
 

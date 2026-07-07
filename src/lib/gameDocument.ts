@@ -13,11 +13,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // `actsAs`/`actsAsSetOnNight`), again for issue #71 (ReminderToken gained the
 // required `anchorPlayerId` field), again for issue #79 (GameDocument
 // gained `demonBluffsCollapsed`/`claimsCollapsed`/`endGamePanelCollapsed`),
-// and again for issue #113 (Nomination gained the required `threshold`
-// field) — a document saved under an older shape must be rejected by
-// gameStorage's version check rather than loaded with any of these fields
-// silently undefined.
-export const GAME_SCHEMA_VERSION = 12;
+// again for issue #113 (Nomination gained the required `threshold` field),
+// and again for issue #114 (Nomination gained the required `isExile` field)
+// — a document saved under an older shape must be rejected by gameStorage's
+// version check rather than loaded with any of these fields silently
+// undefined.
+export const GAME_SCHEMA_VERSION = 13;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -93,6 +94,12 @@ export interface Nomination {
   // recomputed against the current player list, so a later death mid-day
   // can't rewrite a past tally's threshold or move the block (issue #113).
   threshold: number;
+  // Whether this was an exile call (the nominee was a Traveller) rather
+  // than an execution nomination, snapshotted at record time for the same
+  // reason as threshold: an exile never competes for the block, spends a
+  // nomination, or spends a ghost vote (CONTEXT.md: Exile), and that must
+  // hold even if the nominee later leaves the roster entirely (issue #114).
+  isExile: boolean;
 }
 
 export interface Player {

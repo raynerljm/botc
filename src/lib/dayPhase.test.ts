@@ -40,6 +40,7 @@ function makeNomination(overrides: Partial<Nomination> = {}): Nomination {
     nomineeId: "p2",
     votes: [],
     threshold: 3,
+    isExile: false,
     ...overrides,
   };
 }
@@ -268,6 +269,55 @@ describe("computeBlock", () => {
     const rosterWithoutP2 = sevenLiving.filter((player) => player.id !== "p2");
     expect(computeBlock(nominations, rosterWithoutP2)).toBeNull();
   });
+
+  it("never lets an exile tally enter the block fold — it can't take the block, and doesn't stop a later execution from taking it", () => {
+    const withTraveller = [
+      ...players,
+      makePlayer({ id: "p6", name: "Traveller", isTraveller: true, travellerAlignment: "good" }),
+    ];
+    // 6 players total -> exile threshold 3; 5 living -> execution threshold 3.
+    const nominations = [
+      makeNomination({
+        id: "n1",
+        nomineeId: "p6",
+        votes: ["p1", "p2", "p3"],
+        threshold: 3,
+        isExile: true,
+      }),
+      makeNomination({ id: "n2", nomineeId: "p2", votes: ["p1", "p3", "p4"], threshold: 3 }),
+    ];
+
+    expect(computeBlock(nominations, withTraveller)).toBe("p2");
+  });
+
+  it("matches the issue #114 repro: an exile at its own threshold doesn't outrank a lower-tallied execution, and a tying vote on the exile doesn't clear the block either", () => {
+    const eightPlusTraveller = [
+      ...players,
+      makePlayer({ id: "p6", name: "Frankie" }),
+      makePlayer({ id: "p7", name: "Gray" }),
+      makePlayer({ id: "p8", name: "Harper" }),
+      makePlayer({ id: "p9", name: "Tessa", isTraveller: true, travellerAlignment: "good" }),
+    ];
+    // 9 players total -> exile threshold 5; 8 living -> execution threshold 4.
+    const exile = makeNomination({
+      id: "exile",
+      nomineeId: "p9",
+      votes: ["p1", "p2", "p3", "p4", "p5"],
+      threshold: 5,
+      isExile: true,
+    });
+    const execution = makeNomination({
+      id: "exec",
+      nomineeId: "p8",
+      votes: ["p1", "p2", "p3", "p4"],
+      threshold: 4,
+    });
+
+    expect(computeBlock([exile, execution], eightPlusTraveller)).toBe("p8");
+
+    const executionWithFifthVote = { ...execution, votes: [...execution.votes, "p6"] };
+    expect(computeBlock([exile, executionWithFifthVote], eightPlusTraveller)).toBe("p8");
+  });
 });
 
 describe("canRecordVote", () => {
@@ -306,11 +356,8 @@ describe("hasSpentGhostVoteElsewhereToday", () => {
     const nominations = [
       makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"] }),
     ];
-    const players = [makePlayer({ id: "execution-nominee" })];
 
-    expect(
-      hasSpentGhostVoteElsewhereToday(nominations, players, "ghost", "n1"),
-    ).toBe(false);
+    expect(hasSpentGhostVoteElsewhereToday(nominations, "ghost", "n1")).toBe(false);
   });
 
   it("is true when a different, earlier execution nomination already recorded their vote", () => {
@@ -318,11 +365,8 @@ describe("hasSpentGhostVoteElsewhereToday", () => {
       makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"] }),
       makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
     ];
-    const players = [makePlayer({ id: "execution-nominee" })];
 
-    expect(
-      hasSpentGhostVoteElsewhereToday(nominations, players, "ghost", "n2"),
-    ).toBe(true);
+    expect(hasSpentGhostVoteElsewhereToday(nominations, "ghost", "n2")).toBe(true);
   });
 
   it("ignores an exile nomination — voting on an exile never spends the ghost vote", () => {
@@ -331,17 +375,12 @@ describe("hasSpentGhostVoteElsewhereToday", () => {
         id: "n1",
         nomineeId: "traveller",
         votes: ["ghost"],
+        isExile: true,
       }),
       makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
     ];
-    const players = [
-      makePlayer({ id: "execution-nominee" }),
-      makePlayer({ id: "traveller", isTraveller: true, travellerAlignment: "good" }),
-    ];
 
-    expect(
-      hasSpentGhostVoteElsewhereToday(nominations, players, "ghost", "n2"),
-    ).toBe(false);
+    expect(hasSpentGhostVoteElsewhereToday(nominations, "ghost", "n2")).toBe(false);
   });
 });
 
@@ -353,5 +392,14 @@ describe("hasNominatedToday / wasNominatedToday", () => {
     expect(hasNominatedToday(nominations, "p2")).toBe(false);
     expect(wasNominatedToday(nominations, "p2")).toBe(true);
     expect(wasNominatedToday(nominations, "p1")).toBe(false);
+  });
+
+  it("ignores exile calls — an exile is unlimited per day for both the caller and the Traveller target (issue #114)", () => {
+    const nominations = [
+      makeNomination({ nominatorId: "p1", nomineeId: "traveller", isExile: true }),
+    ];
+
+    expect(hasNominatedToday(nominations, "p1")).toBe(false);
+    expect(wasNominatedToday(nominations, "traveller")).toBe(false);
   });
 });

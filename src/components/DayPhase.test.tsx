@@ -100,7 +100,7 @@ describe("Day phase: recording a nomination", () => {
     const withNomination = {
       ...game,
       nominations: [
-        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2 },
+        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2, isExile: false },
       ],
     };
     renderDayPhase(withNomination);
@@ -298,6 +298,88 @@ describe("Day phase: the block", () => {
 
     expect(screen.getByText("3/4 votes")).toBeInTheDocument();
     expect(screen.queryByText(/3\/3 votes/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Day phase: exile calls never compete with the execution block (issue #114)", () => {
+  function gameWithTraveller(): GameDocument {
+    const base = gameWith([
+      "washerwoman",
+      "librarian",
+      "investigator",
+      "chef",
+      "empath",
+      "monk",
+      "imp",
+      "baron",
+    ]);
+    const traveller: Player = {
+      id: "traveller-1",
+      seat: base.players.length + 1,
+      name: "Tessa",
+      characterId: "scapegoat",
+      startingCharacterId: "scapegoat",
+      isDrunk: false,
+      isTraveller: true,
+      travellerAlignment: "good",
+      dead: false,
+      ghostVoteSpent: false,
+      position: null,
+      claim: null,
+      actsAs: null,
+      actsAsSetOnNight: null,
+    };
+    return { ...base, players: [...base.players, traveller] };
+  }
+
+  it("matches the issue #114 repro: an exile at its own threshold doesn't outrank a lower-tallied execution, and doesn't consume either party's nomination", async () => {
+    const user = userEvent.setup();
+    const game = gameWithTraveller();
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [alex, , , , , , , harper] = game.players;
+    const tessa = game.players.find((p) => p.id === "traveller-1")!;
+
+    // 1. Alex calls exile on Tessa; 9 players total -> exile threshold 5.
+    await user.selectOptions(screen.getByLabelText("Nominator"), alex.id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), tessa.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    for (const voter of game.players.slice(0, 5)) {
+      await user.click(screen.getByRole("checkbox", { name: voter.name }));
+      rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    }
+    expect(screen.getByText("5/5 votes — meets threshold")).toBeInTheDocument();
+    expect(screen.queryByText(/On the block/)).not.toBeInTheDocument();
+
+    // 2. Neither Alex's nomination nor Tessa's exile is "already nominated"
+    // — exile calls are unlimited per day and don't spend the execution
+    // once-per-day nomination gate.
+    const nominatorSelect = screen.getByLabelText("Nominator") as HTMLSelectElement;
+    const nomineeSelect = screen.getByLabelText("Nominee") as HTMLSelectElement;
+    expect(
+      Array.from(nominatorSelect.options).find((o) => o.value === alex.id)?.text,
+    ).not.toContain("already nominated");
+    expect(
+      Array.from(nomineeSelect.options).find((o) => o.value === tessa.id)?.text,
+    ).not.toContain("already nominated");
+
+    // 3. Alex (still eligible) nominates Harper for execution; 9 living
+    // (traveller included) -> execution threshold 5, same tally as the
+    // exile's. Under the old bug, an equal-tallied nomination already in
+    // the fold cleared the block on a tie — here Harper must still take
+    // the block outright, since the exile never entered the fold at all.
+    await user.selectOptions(screen.getByLabelText("Nominator"), alex.id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), harper.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    for (const voter of game.players.slice(0, 5)) {
+      await user.click(screen.getByRole("checkbox", { name: voter.name }));
+      rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    }
+    expect(screen.getByText(`On the block: ${harper.name}`)).toBeInTheDocument();
   });
 });
 

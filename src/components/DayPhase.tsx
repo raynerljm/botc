@@ -60,12 +60,12 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       nomineeId,
       votes: [],
       threshold: nominationThreshold(nominee, game.players),
+      isExile: nominee.isTraveller,
     };
     onChange({ ...game, nominations: [...game.nominations, nomination] });
   }
 
   function toggleVote(nomination: Nomination, player: Player) {
-    const nominee = playerById.get(nomination.nomineeId);
     const alreadyVoted = nomination.votes.includes(player.id);
     const votes = alreadyVoted
       ? nomination.votes.filter((id) => id !== player.id)
@@ -73,7 +73,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     const nominations = game.nominations.map((n) =>
       n.id === nomination.id ? { ...n, votes } : n,
     );
-    const isExecution = !!nominee && !nominee.isTraveller;
+    const isExecution = !nomination.isExile;
 
     // Recording a dead player's vote on an execution spends their ghost
     // vote; un-recording it restores the vote, but only when no *other*
@@ -85,12 +85,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     if (player.dead && isExecution) {
       const ghostVoteSpent = !alreadyVoted
         ? true
-        : hasSpentGhostVoteElsewhereToday(
-            game.nominations,
-            game.players,
-            player.id,
-            nomination.id,
-          );
+        : hasSpentGhostVoteElsewhereToday(game.nominations, player.id, nomination.id);
       onChange({
         ...game,
         nominations,
@@ -169,7 +164,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
             <li key={nomination.id} className={styles.nomination}>
               <p className={styles.nominationHeading}>
                 {nominator?.name ?? "Unknown"} → {nominee.name}
-                {nominee.isTraveller && " (exile)"}
+                {nomination.isExile && " (exile)"}
               </p>
               <p
                 className={styles.tally}
@@ -203,7 +198,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                           <span className={styles.note}>
                             {" "}
                             (
-                            {nominee.isTraveller
+                            {nomination.isExile
                               ? "vote free"
                               : `ghost vote${alreadySpent ? " — already spent" : ""}`}
                             )

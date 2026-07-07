@@ -43,7 +43,9 @@ export function nominationTally(nomination: Nomination): number {
 // distinct from merely dying) — only the block-holder itself has to still
 // exist to be creditable, or a later nomination could retake the block by
 // merely matching a tally that only seems forgotten because its holder is
-// gone (still the same bug this fold exists to prevent).
+// gone (still the same bug this fold exists to prevent). An exile call
+// never enters this fold at all — it isn't an execution, doesn't compete
+// for the block, and is unlimited per day (CONTEXT.md: Exile, issue #114).
 export function computeBlock(
   nominations: Nomination[],
   players: Player[],
@@ -52,6 +54,8 @@ export function computeBlock(
   let highWater = -1;
 
   for (const nomination of nominations) {
+    if (nomination.isExile) continue;
+
     const tally = nominationTally(nomination);
     if (tally < nomination.threshold) continue;
 
@@ -84,31 +88,39 @@ export function canRecordVote(voter: Player, nominee: Player): boolean {
 // *other* execution nomination recorded today. Un-checking a vote restores
 // `ghostVoteSpent` only when this really was the nomination that spent it —
 // not when an earlier (now-closed) nomination still holds their one vote
-// for the day, which would otherwise wrongly refund it.
+// for the day, which would otherwise wrongly refund it. An exile vote never
+// counts here either way (CONTEXT.md: Exile "ghost votes are not spent on
+// it").
 export function hasSpentGhostVoteElsewhereToday(
   nominations: Nomination[],
-  players: Player[],
   playerId: string,
   currentNominationId: string,
 ): boolean {
   return nominations.some((nomination) => {
     if (nomination.id === currentNominationId) return false;
-    if (!nomination.votes.includes(playerId)) return false;
-    const nominee = players.find((player) => player.id === nomination.nomineeId);
-    return !!nominee && !nominee.isTraveller;
+    if (nomination.isExile) return false;
+    return nomination.votes.includes(playerId);
   });
 }
 
+// An exile call never consumes the caller's once-per-day nomination —
+// exile calls are unlimited per day (CONTEXT.md: Exile, issue #114).
 export function hasNominatedToday(
   nominations: Nomination[],
   playerId: string,
 ): boolean {
-  return nominations.some((nomination) => nomination.nominatorId === playerId);
+  return nominations.some(
+    (nomination) => nomination.nominatorId === playerId && !nomination.isExile,
+  );
 }
 
+// An exile call never marks its Traveller target as "already nominated" —
+// exile calls are unlimited per day (CONTEXT.md: Exile, issue #114).
 export function wasNominatedToday(
   nominations: Nomination[],
   playerId: string,
 ): boolean {
-  return nominations.some((nomination) => nomination.nomineeId === playerId);
+  return nominations.some(
+    (nomination) => nomination.nomineeId === playerId && !nomination.isExile,
+  );
 }
