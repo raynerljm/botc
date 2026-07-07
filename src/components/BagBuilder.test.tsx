@@ -89,6 +89,35 @@ describe("player count and official target counts", () => {
   });
 });
 
+describe("Teensyville player count cap", () => {
+  it("caps the player count input at 6 for a Teensyville script", () => {
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
+
+  it("clamps a typed-in count above 6 back down to 6 on blur", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "15");
+    await user.tab();
+
+    expect(playerCountInput).toHaveValue(6);
+  });
+
+  it("leaves a regular script's player count uncapped at 6", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute(
+      "max",
+      "15",
+    );
+  });
+});
+
 describe("character grid select/deselect with live counters", () => {
   it("groups the pool by team, in team order", () => {
     render(<BagBuilder characters={tb} />);

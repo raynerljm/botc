@@ -2,6 +2,10 @@ import type { Character } from "./characters";
 
 export const MIN_PLAYERS = 5;
 export const MAX_PLAYERS = 15;
+// Teensyville scripts' small pools (per the BotC wiki's "Behind the
+// Curtain") only ever cater to five or six players — the same distribution
+// table's 5/6-player rows already cover both.
+export const TEENSYVILLE_MAX_PLAYERS = 6;
 export const MAX_TRAVELLERS = 5;
 
 export interface TeamCounts {

@@ -23,6 +23,7 @@ import {
   MAX_PLAYERS,
   MAX_TRAVELLERS,
   MIN_PLAYERS,
+  TEENSYVILLE_MAX_PLAYERS,
   applySetupDeltas,
   parseSetupModifier,
   randomizeBagSelection,
@@ -122,6 +123,7 @@ export interface BagBuilderProps {
   almanacUrl?: string;
   firstNightOrder?: string[];
   otherNightOrder?: string[];
+  isTeensyville?: boolean;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -145,8 +147,10 @@ export function BagBuilder({
   almanacUrl,
   firstNightOrder,
   otherNightOrder,
+  isTeensyville = false,
 }: BagBuilderProps) {
   const router = useRouter();
+  const maxPlayers = isTeensyville ? TEENSYVILLE_MAX_PLAYERS : MAX_PLAYERS;
   // Loaded once on mount (not re-read on every render) — a reload or a
   // browser-back from `/game/` remounts this component fresh, so the lazy
   // initializers below are exactly when this needs to run (issue #118).
@@ -252,7 +256,7 @@ export function BagBuilder({
   const effectivePlayerCount = clamp(
     playerCount === "" ? NaN : playerCount,
     MIN_PLAYERS,
-    MAX_PLAYERS,
+    maxPlayers,
   );
   const effectiveTravellerCount = clamp(
     travellerCount === "" ? NaN : travellerCount,
@@ -457,7 +461,7 @@ export function BagBuilder({
           <input
             type="number"
             min={MIN_PLAYERS}
-            max={MAX_PLAYERS}
+            max={maxPlayers}
             value={playerCount}
             // Clamping is deferred to blur: clamping on every keystroke
             // fights the browser's in-progress digit-by-digit typing (e.g.
@@ -470,7 +474,7 @@ export function BagBuilder({
             }}
             onBlur={() =>
               setPlayerCount((value) =>
-                clamp(value === "" ? NaN : value, MIN_PLAYERS, MAX_PLAYERS),
+                clamp(value === "" ? NaN : value, MIN_PLAYERS, maxPlayers),
               )
             }
           />

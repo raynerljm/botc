@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CustomScriptsSection } from "@/components/CustomScriptsSection";
 import { GamesList } from "@/components/GamesList";
+import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
 import { listScriptSummaries } from "@/lib/scripts";
 
 import styles from "./page.module.css";
@@ -52,11 +53,7 @@ export default function Home() {
                 >
                   <span className={styles.scriptName}>
                     {script.name}
-                    {script.isTeensyville && (
-                      <span className={styles.teensyvilleBadge}>
-                        Teensyville
-                      </span>
-                    )}
+                    {script.isTeensyville && <TeensyvilleBadge />}
                   </span>
                   <span className={styles.scriptMeta}>
                     {script.author && `By ${script.author} — `}

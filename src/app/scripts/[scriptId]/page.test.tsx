@@ -143,4 +143,14 @@ describe("script sheet", () => {
   it("404s for an unknown script id", async () => {
     await expect(renderSheet("does-not-exist")).rejects.toThrow();
   });
+
+  it("marks a Teensyville script's designation", async () => {
+    await renderSheet("no-greater-joy");
+    expect(screen.getByText("Teensyville")).toBeInTheDocument();
+  });
+
+  it("does not mark a regular script as Teensyville", async () => {
+    await renderSheet("tb");
+    expect(screen.queryByText("Teensyville")).not.toBeInTheDocument();
+  });
 });
