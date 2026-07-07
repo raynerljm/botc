@@ -75,6 +75,20 @@
   margin-bottom: 0.75rem;
 }
 
+.bagShortfall {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--team-minion);
+  border-radius: 0.5rem;
+  color: var(--team-minion);
+}
+
+.bagLeftover {
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
 .startDraw {
   min-height: 2.75rem;
   padding: 0.6rem 1.1rem;
