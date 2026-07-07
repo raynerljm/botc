@@ -34,8 +34,12 @@ export function EndGamePanel({
   // actually ends the game.
   const [pendingWinner, setPendingWinner] = useState<Alignment | null>(null);
 
+  // Ending the game ends any in-flight bag draw with it — the panel stays
+  // reachable during the draw's choosing stage, and now that the draw
+  // session is persisted (issue #108) a dangling one would otherwise reopen
+  // the ended game into the ritual on every resume, forever.
   function declareWinner(winner: Alignment) {
-    onChange({ ...game, winner, endedAt: now() });
+    onChange({ ...game, winner, endedAt: now(), drawSession: null });
     setPendingWinner(null);
   }
 

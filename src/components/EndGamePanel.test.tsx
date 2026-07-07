@@ -70,6 +70,27 @@ describe("EndGamePanel", () => {
     );
   });
 
+  it("ends an in-flight bag draw along with the game, so an ended game can't keep resuming into the ritual (issue #108)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <EndGamePanel
+        game={makeGame({
+          drawSession: { seatId: "seat-1", stage: "choosing" },
+        })}
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /good wins/i }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /declare/i }));
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ winner: "good", drawSession: null }),
+    );
+  });
+
   it("cancels a pending winner declaration without changing the game", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

@@ -424,9 +424,6 @@ describe("draw session survives a reload (issue #108)", () => {
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
-    const seat1Character = candidates.find((c) =>
-      screen.queryByRole("heading", { name: c.name }),
-    )!;
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
     expect(
       screen.getByText(/Card hidden\. Pass the device to/),
@@ -443,9 +440,9 @@ describe("draw session survives a reload (issue #108)", () => {
       screen.queryByRole("button", { name: "Start bag draw" }),
     ).not.toBeInTheDocument();
 
-    // Seat 1's identity stays behind the mask: no token art, no character
-    // name, and no manual-assign dropdowns listing the remaining bag.
-    expect(screen.queryByText(seat1Character.name)).not.toBeInTheDocument();
+    // Seat 1's identity (one of the candidates) stays behind the mask: no
+    // token art, no character name, and no manual-assign dropdowns listing
+    // the remaining bag.
     candidates.forEach((c) => {
       expect(screen.queryByText(c.name)).not.toBeInTheDocument();
     });
@@ -507,27 +504,31 @@ describe("draw session survives a reload (issue #108)", () => {
 
   it("never shows the '(actually the Drunk)' note after a mid-ritual reload", async () => {
     const user = userEvent.setup();
-    // A Drunk bag: the stand-in Townsfolk token is the only official token,
-    // so seat 1's draw is guaranteed to be the disguised Drunk.
+    // Only the Drunk is selected, so its Librarian stand-in is the bag's
+    // sole token — seat 1's draw is guaranteed to be the disguised Drunk,
+    // deterministically, with seat 2 still unassigned to keep the ritual
+    // (and its privacy guard) alive across the reload.
     const game = makeGame({
       playerCount: 2,
-      selectedCharacters: [getCharacter("drunk")!, getCharacter("imp")!],
+      selectedCharacters: [getCharacter("drunk")!],
       standIn: getCharacter("librarian")!,
     });
     const { unmount } = render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
-    // Two tokens: the Librarian stand-in and the Imp — find the stand-in by
-    // tapping until the Librarian heading shows (first tap may be the Imp).
-    const tokens = screen.getAllByRole("button", { name: /Face-down token/ });
-    await user.click(tokens[0]);
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    expect(
+      screen.getByRole("heading", { name: "Librarian" }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
     reload(unmount);
 
+    expect(loadGame()!.players[0].isDrunk).toBe(true);
     expect(screen.queryByText("(actually the Drunk)")).not.toBeInTheDocument();
     expect(screen.queryByText("Librarian")).not.toBeInTheDocument();
-    expect(screen.queryByText("Imp")).not.toBeInTheDocument();
   });
 
   it("resumes a mid-choosing reload with the face-down grid for the same seat", async () => {

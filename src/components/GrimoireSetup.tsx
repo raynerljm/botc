@@ -48,6 +48,15 @@ export interface GrimoireSetupProps {
   game: GameDocument;
 }
 
+// The seat whose turn the next draw is — official seats only (travellers
+// never come from this bag). A plain function of a document (rather than
+// only a render-time const) so the draw-stage handlers can re-derive it
+// from gameRef.current, the same stale-snapshot defense the rest of this
+// file's multi-update handlers use.
+function nextUnassignedSeatOf(game: GameDocument): Player | undefined {
+  return game.players.find((p) => !p.isTraveller && p.characterId === null);
+}
+
 // Seat numbers aren't necessarily contiguous — removing a player (issue #15)
 // leaves a gap — so "the end" is the highest seat number in play, not the
 // player count, everywhere that needs it (the picker below and each add
@@ -90,12 +99,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // would fire while React is still rendering (React warns and can tear).
   const gameRef = useRef(game);
   // The face-down grid's display order, reshuffled at the start of each
-  // seat's turn (and freshly on a remount) — tokens are face-down either
-  // way, but this keeps faith with the physical bag-draw ritual (issue #12
-  // AC). Session-only on purpose: the order is presentation, not game
-  // state, so the document's drawSession doesn't carry it.
+  // seat's turn (and freshly on a remount resuming mid-choosing — the only
+  // time the mount-time value is ever rendered) — tokens are face-down
+  // either way, but this keeps faith with the physical bag-draw ritual
+  // (issue #12 AC). Session-only on purpose: the order is presentation, not
+  // game state, so the document's drawSession doesn't carry it.
   const [tokenOrder, setTokenOrder] = useState<BagToken[]>(() =>
-    shuffleTokens(initialGame.bag),
+    initialGame.drawSession?.stage === "choosing"
+      ? shuffleTokens(initialGame.bag)
+      : [],
   );
   const [travellerFormOpen, setTravellerFormOpen] = useState(false);
   const [travellerTokenId, setTravellerTokenId] = useState("");
@@ -174,9 +186,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const assignedCount = officialSeats.filter(
     (p) => p.characterId !== null,
   ).length;
-  const nextUnassignedSeat = officialSeats.find(
-    (p) => p.characterId === null,
-  );
+  const nextUnassignedSeat = nextUnassignedSeatOf(game);
 
   function update(next: GameDocument) {
     gameRef.current = next;
@@ -526,12 +536,19 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // Begins the next seat's turn. Like every draw-stage transition below,
+  // builds off gameRef.current rather than the `game` this render closed
+  // over, so an update that landed in the same tick (a rename from the
+  // reveal's name picker, another handler's write) can never be reverted by
+  // spreading a stale snapshot (the same defense chooseToken documents).
   function startDraw() {
-    if (!nextUnassignedSeat) return;
-    setTokenOrder(shuffleTokens(game.bag));
+    const currentGame = gameRef.current;
+    const seat = nextUnassignedSeatOf(currentGame);
+    if (!seat) return;
+    setTokenOrder(shuffleTokens(currentGame.bag));
     update({
-      ...game,
-      drawSession: { seatId: nextUnassignedSeat.id, stage: "choosing" },
+      ...currentGame,
+      drawSession: { seatId: seat.id, stage: "choosing" },
     });
   }
 
@@ -572,22 +589,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // The privacy guard only matters when someone else still needs to draw —
   // the last seat's reveal simply ends the session once hidden.
   function hideAndPass() {
-    if (!draw) return;
+    const currentGame = gameRef.current;
+    const session = currentGame.drawSession;
+    if (!session) return;
     update({
-      ...game,
-      drawSession: nextUnassignedSeat ? { ...draw, stage: "hidden" } : null,
+      ...currentGame,
+      drawSession: nextUnassignedSeatOf(currentGame)
+        ? { ...session, stage: "hidden" }
+        : null,
     });
   }
 
   function readyForNextDraw() {
-    if (nextUnassignedSeat) {
-      setTokenOrder(shuffleTokens(game.bag));
-      update({
-        ...game,
-        drawSession: { seatId: nextUnassignedSeat.id, stage: "choosing" },
-      });
+    if (nextUnassignedSeatOf(gameRef.current)) {
+      startDraw();
     } else {
-      update({ ...game, drawSession: null });
+      update({ ...gameRef.current, drawSession: null });
     }
   }
 

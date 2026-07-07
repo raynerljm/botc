@@ -689,16 +689,21 @@ describe("resumeDrawSession (issue #108)", () => {
     stage,
   });
 
-  it("resumes a mid-reveal session at the hidden privacy guard, never re-rendering the identity", () => {
-    expect(resumeDrawSession(session("revealed"))).toEqual(session("hidden"));
-  });
-
   it("resumes the safe choosing stage as-is", () => {
     expect(resumeDrawSession(session("choosing"))).toEqual(session("choosing"));
   });
 
-  it("resumes the privacy guard as-is", () => {
-    expect(resumeDrawSession(session("hidden"))).toEqual(session("hidden"));
+  it("resumes every other stage at the hidden privacy guard, failing closed — a mid-reveal reload never re-renders the identity", () => {
+    const unsafeStages = [
+      "revealed",
+      "hidden",
+      // A stage this code has never heard of (schema-version skew, or a
+      // future privacy-sensitive stage) must also land on the guard.
+      "someFutureStage" as DrawSession["stage"],
+    ] as const;
+    for (const stage of unsafeStages) {
+      expect(resumeDrawSession(session(stage))).toEqual(session("hidden"));
+    }
   });
 
   it("leaves 'no draw underway' alone", () => {

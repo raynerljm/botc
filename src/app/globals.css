@@ -21,6 +21,14 @@
   margin: 0;
 }
 
+/* The hidden attribute must always actually hide: any container that sets
+   its own display (e.g. the grimoire's circle-layout grid) otherwise beats
+   the UA's [hidden] { display: none } — which rendered the fully open
+   board beneath the bag draw's privacy guard (issue #108). */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   max-width: 100vw;

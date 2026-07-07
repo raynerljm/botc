@@ -55,11 +55,17 @@ export interface DrawSession {
 // know who is holding the device, so a session saved mid-reveal resumes at
 // the "hidden" privacy guard instead of re-rendering the identity — the
 // drawn character was already committed to the seat when the reveal opened,
-// so nothing is lost but the on-screen card.
+// so nothing is lost but the on-screen card. Written as an allowlist
+// ("choosing" is the only stage safe to re-render) rather than coercing the
+// one known-dangerous stage, so a future privacy-sensitive stage resumes at
+// the guard by default instead of needing this line remembered — the same
+// fail-closed reasoning as GrimoireSetup's screenObscured.
 export function resumeDrawSession(
   drawSession: DrawSession | null,
 ): DrawSession | null {
-  if (drawSession?.stage !== "revealed") return drawSession;
+  if (drawSession === null || drawSession.stage === "choosing") {
+    return drawSession;
+  }
   return { ...drawSession, stage: "hidden" };
 }
 
