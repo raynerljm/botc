@@ -371,10 +371,68 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
-    // Draw session is over — the board is back.
+    // Issue #110: the last seat's "Hide & pass" must not open the board
+    // directly — the drawer is still holding the device. The hand-off
+    // guard stays up until the storyteller explicitly takes over.
+    expect(
+      screen.queryByRole("region", { name: "Grimoire circle" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Card hidden. Return the device to the storyteller."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Export game" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open the grimoire" }),
+    );
+
+    // Only the explicit take-over opens the board.
     expect(
       screen.getByRole("region", { name: "Grimoire circle" }),
     ).toBeInTheDocument();
+  });
+
+  it("matches every other seat's hand-off on the last seat: no identity visible until the storyteller explicitly takes over (issue #110)", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    const lastDrawnName = [washerwoman.name, imp.name].find((name) =>
+      screen.queryByRole("heading", { name }),
+    )!;
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    // Same privacy contract as every other seat's "Card hidden" guard: no
+    // player name, character name, or seat control leaks through — the
+    // board stays mounted (its own session-only state is worth keeping)
+    // but hidden from the accessibility tree, so query it the same way the
+    // "Grimoire circle" checks above do rather than by raw text.
+    expect(
+      screen.queryByRole("heading", { name: lastDrawnName }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start bag draw" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open the grimoire" }),
+    );
+    expect(loadGame()!.bag).toHaveLength(0);
   });
 
   it("keeps export and end-game controls reachable through a private reveal (issue #21 AC), hiding them only during the pass-around itself", async () => {
