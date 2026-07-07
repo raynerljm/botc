@@ -99,7 +99,9 @@ describe("Day phase: recording a nomination", () => {
     const [p1, p2] = game.players;
     const withNomination = {
       ...game,
-      nominations: [{ id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [] }],
+      nominations: [
+        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2 },
+      ],
     };
     renderDayPhase(withNomination);
 
@@ -202,6 +204,99 @@ describe("Day phase: the block", () => {
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     expect(screen.getByText(`On the block: ${nominee.name}`)).toBeInTheDocument();
+  });
+
+  it("doesn't let a third nomination retake the block by matching a tied high-water mark (issue #113 repro)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith([
+      "washerwoman",
+      "librarian",
+      "investigator",
+      "chef",
+      "empath",
+      "monk",
+      "imp",
+    ]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const players = game.players;
+
+    async function nominateAndVote(nomineeIndex: number, voterIndices: number[]) {
+      await user.selectOptions(screen.getByLabelText("Nominator"), players[0].id);
+      await user.selectOptions(
+        screen.getByLabelText("Nominee"),
+        players[nomineeIndex].id,
+      );
+      await user.click(screen.getByRole("button", { name: "Record nomination" }));
+      rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+      for (const voterIndex of voterIndices) {
+        await user.click(
+          screen.getByRole("checkbox", { name: players[voterIndex].name }),
+        );
+        rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+      }
+    }
+
+    // 7 living -> threshold 4. Three nominations in a row each get exactly
+    // 4 votes: the first takes the block, the second ties it (clearing it),
+    // and the third must not retake it — 4 only matches the tied high-water
+    // mark, it doesn't beat it.
+    await nominateAndVote(1, [0, 1, 2, 3]);
+    expect(screen.getByText(`On the block: ${players[1].name}`)).toBeInTheDocument();
+
+    await nominateAndVote(2, [0, 1, 2, 3]);
+    expect(screen.queryByText(/On the block/)).not.toBeInTheDocument();
+
+    await nominateAndVote(3, [0, 1, 2, 3]);
+    expect(screen.queryByText(/On the block/)).not.toBeInTheDocument();
+  });
+
+  it("keeps a closed nomination's snapshotted threshold after a mid-day death (issue #113 repro)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith([
+      "washerwoman",
+      "librarian",
+      "investigator",
+      "chef",
+      "empath",
+      "monk",
+      "imp",
+    ]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const players = game.players;
+
+    // A nomination recorded at 7 living (threshold 4) falls short at 3/4.
+    await user.selectOptions(screen.getByLabelText("Nominator"), players[0].id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), players[1].id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    for (const voterIndex of [0, 1, 2]) {
+      await user.click(
+        screen.getByRole("checkbox", { name: players[voterIndex].name }),
+      );
+      rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    }
+    expect(screen.getByText("3/4 votes")).toBeInTheDocument();
+
+    // A different player dies mid-day (dropping living count to 6, which
+    // would recompute the threshold to 3 if it weren't snapshotted).
+    const afterMiddayDeath: GameDocument = {
+      ...latest,
+      players: latest.players.map((player) =>
+        player.id === players[3].id ? { ...player, dead: true } : player,
+      ),
+    };
+    rerender(
+      <DayPhase game={afterMiddayDeath} onChange={(next) => (latest = next)} />,
+    );
+
+    expect(screen.getByText("3/4 votes")).toBeInTheDocument();
+    expect(screen.queryByText(/3\/3 votes/)).not.toBeInTheDocument();
   });
 });
 

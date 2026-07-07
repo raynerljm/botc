@@ -27,28 +27,36 @@ export function nominationTally(nomination: Nomination): number {
   return nomination.votes.length;
 }
 
-// Folds today's nominations in the order they were recorded: a nomination
-// only takes the block once its own tally meets its threshold, and only
-// unseats the current block-holder by strictly beating their tally — an
-// exact tie clears the block instead of leaving it be (CONTEXT.md: On the
-// block). A nomination short of its own threshold never touches the block,
-// even if its tally happens to match the current holder's.
+// Folds today's nominations in the order they were recorded, tracking the
+// high-water tally among nominations that met their own threshold — not
+// just the current block-holder's tally. A nomination only takes the block
+// by strictly beating the high-water mark; an exact tie clears the block
+// but leaves the high-water mark standing, so a later nomination matching
+// that same tied tally still doesn't take it — only a strictly higher tally
+// ever does (CONTEXT.md: On the block). A nomination short of its own
+// threshold never touches the block or the high-water mark, even if its
+// tally happens to match either. Each nomination's threshold is the one
+// snapshotted on it at vote time (issue #113) — never recomputed against
+// the current player list, so a mid-day death can't rewrite a past tally
+// or move the block.
 export function computeBlock(
   nominations: Nomination[],
   players: Player[],
 ): string | null {
   let block: { nomineeId: string; tally: number } | null = null;
+  let highWater = 0;
 
   for (const nomination of nominations) {
-    const nominee = players.find((player) => player.id === nomination.nomineeId);
-    if (!nominee) continue;
+    const stillInPlay = players.some((player) => player.id === nomination.nomineeId);
+    if (!stillInPlay) continue;
 
     const tally = nominationTally(nomination);
-    if (tally < nominationThreshold(nominee, players)) continue;
+    if (tally < nomination.threshold) continue;
 
-    if (block === null || tally > block.tally) {
+    if (tally > highWater) {
       block = { nomineeId: nomination.nomineeId, tally };
-    } else if (tally === block.tally) {
+      highWater = tally;
+    } else if (tally === highWater) {
       block = null;
     }
   }

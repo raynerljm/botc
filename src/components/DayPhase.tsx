@@ -52,11 +52,14 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
 
   function recordNomination(event: FormEvent) {
     event.preventDefault();
+    const nominee = playerById.get(nomineeId);
+    if (!nominee) return;
     const nomination: Nomination = {
       id: crypto.randomUUID(),
       nominatorId,
       nomineeId,
       votes: [],
+      threshold: nominationThreshold(nominee, game.players),
     };
     onChange({ ...game, nominations: [...game.nominations, nomination] });
   }
@@ -157,7 +160,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
           const nominee = playerById.get(nomination.nomineeId);
           if (!nominee) return null;
 
-          const threshold = nominationThreshold(nominee, game.players);
+          const threshold = nomination.threshold;
           const tally = nomination.votes.length;
           const meetsThreshold = tally >= threshold;
           const isOpen = nomination.id === openNomination?.id;

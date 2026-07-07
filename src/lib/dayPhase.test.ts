@@ -39,6 +39,7 @@ function makeNomination(overrides: Partial<Nomination> = {}): Nomination {
     nominatorId: "p1",
     nomineeId: "p2",
     votes: [],
+    threshold: 3,
     ...overrides,
   };
 }
@@ -169,7 +170,7 @@ describe("computeBlock", () => {
     expect(computeBlock(nominations, players)).toBe("p2");
   });
 
-  it("uses the exile threshold for a Traveller nominee, dead players included", () => {
+  it("honours a Traveller nominee's own (higher, exile) snapshotted threshold instead of the execution one", () => {
     const withTraveller = [
       ...players,
       makePlayer({
@@ -182,16 +183,65 @@ describe("computeBlock", () => {
     ];
     // 7 players total -> exile threshold 4; 6 living -> execution threshold 3.
     const nominations = [
-      makeNomination({ nomineeId: "p6", votes: ["p1", "p2", "p3"] }),
+      makeNomination({ nomineeId: "p6", votes: ["p1", "p2", "p3"], threshold: 4 }),
     ];
 
     // 3 votes meets the (wrong) execution threshold but not the exile one.
     expect(computeBlock(nominations, withTraveller)).toBeNull();
 
     const withFourthVote = [
-      makeNomination({ nomineeId: "p6", votes: ["p1", "p2", "p3", "p4"] }),
+      makeNomination({
+        nomineeId: "p6",
+        votes: ["p1", "p2", "p3", "p4"],
+        threshold: 4,
+      }),
     ];
     expect(computeBlock(withFourthVote, withTraveller)).toBe("p6");
+  });
+
+  it("doesn't let a nomination take the block by matching a tied high-water mark — only a strictly higher tally does", () => {
+    // 7 living -> threshold 4 (matches issue #113's repro).
+    const sevenLiving = [
+      ...players,
+      makePlayer({ id: "p6", name: "Frankie" }),
+      makePlayer({ id: "p7", name: "Gray" }),
+    ];
+    const nominations = [
+      makeNomination({ id: "n1", nomineeId: "p2", votes: ["p1", "p3", "p4", "p5"], threshold: 4 }),
+      makeNomination({ id: "n2", nomineeId: "p3", votes: ["p1", "p2", "p4", "p5"], threshold: 4 }),
+      makeNomination({ id: "n3", nomineeId: "p6", votes: ["p1", "p2", "p4", "p5"], threshold: 4 }),
+    ];
+
+    // n1 takes the block at 4; n2 ties it at 4, clearing the block; n3 also
+    // lands exactly on the tied high-water mark of 4, so it doesn't take it
+    // either — the third nomination must still not resurrect the block.
+    expect(computeBlock(nominations, sevenLiving)).toBeNull();
+
+    const withFifthVote = [
+      ...nominations,
+      makeNomination({
+        id: "n4",
+        nomineeId: "p7",
+        votes: ["p1", "p2", "p3", "p4", "p5"],
+        threshold: 4,
+      }),
+    ];
+    expect(computeBlock(withFifthVote, sevenLiving)).toBe("p7");
+  });
+
+  it("keeps each nomination's own snapshotted threshold — a mid-day death never re-qualifies or re-disqualifies a past tally", () => {
+    // Recorded earlier in the day at 7 living (threshold 4): 3 votes fell
+    // short. The block-holder is later executed mid-day, dropping to 6
+    // living (threshold 3) — but this nomination's snapshot stays 4, so it
+    // must not suddenly "meet threshold" or take the block.
+    const nominations = [
+      makeNomination({ nomineeId: "p2", votes: ["p1", "p3", "p4"], threshold: 4 }),
+    ];
+    const afterMiddayDeath = players.map((player) =>
+      player.id === "p5" ? { ...player, dead: true } : player,
+    );
+
+    expect(computeBlock(nominations, afterMiddayDeath)).toBeNull();
   });
 });
 
