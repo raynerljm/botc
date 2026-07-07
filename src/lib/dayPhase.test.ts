@@ -230,10 +230,11 @@ describe("computeBlock", () => {
   });
 
   it("keeps each nomination's own snapshotted threshold — a mid-day death never re-qualifies or re-disqualifies a past tally", () => {
-    // Recorded earlier in the day at 7 living (threshold 4): 3 votes fell
-    // short. The block-holder is later executed mid-day, dropping to 6
-    // living (threshold 3) — but this nomination's snapshot stays 4, so it
-    // must not suddenly "meet threshold" or take the block.
+    // Recorded earlier in the day against a threshold of 4 (e.g. 7 living):
+    // 3 votes fell short. A different player is executed mid-day, dropping
+    // the 5-player fixture above to 4 living (threshold 3 if recomputed) —
+    // but this nomination's snapshot stays 4, so it must not suddenly "meet
+    // threshold" or take the block.
     const nominations = [
       makeNomination({ nomineeId: "p2", votes: ["p1", "p3", "p4"], threshold: 4 }),
     ];

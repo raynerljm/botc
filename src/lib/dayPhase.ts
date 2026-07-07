@@ -43,7 +43,7 @@ export function computeBlock(
   nominations: Nomination[],
   players: Player[],
 ): string | null {
-  let block: { nomineeId: string; tally: number } | null = null;
+  let blockNomineeId: string | null = null;
   let highWater = 0;
 
   for (const nomination of nominations) {
@@ -54,14 +54,14 @@ export function computeBlock(
     if (tally < nomination.threshold) continue;
 
     if (tally > highWater) {
-      block = { nomineeId: nomination.nomineeId, tally };
+      blockNomineeId = nomination.nomineeId;
       highWater = tally;
     } else if (tally === highWater) {
-      block = null;
+      blockNomineeId = null;
     }
   }
 
-  return block?.nomineeId ?? null;
+  return blockNomineeId;
 }
 
 // A dead player's one ghost vote only ever gates an execution vote — an
