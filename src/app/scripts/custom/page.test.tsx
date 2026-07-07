@@ -45,6 +45,31 @@ describe("custom script page", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a Build the bag link to a valid stored custom script", async () => {
+    const saved = saveCustomScript({
+      rawText: JSON.stringify([
+        { id: "_meta", name: "My Script" },
+        "washerwoman",
+        "imp",
+      ]),
+      name: "My Script",
+    });
+
+    await renderCustomScriptPage(saved.id);
+
+    expect(
+      screen.getByRole("link", { name: /build the bag/i }),
+    ).toHaveAttribute("href", `/scripts/custom/bag?id=${saved.id}`);
+  });
+
+  it("offers no Build the bag link when the script isn't on this device", async () => {
+    await renderCustomScriptPage("unknown-id");
+
+    expect(
+      screen.queryByRole("link", { name: /build the bag/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shares the storyteller's locally-assigned name when the script's own JSON has no _meta.name", async () => {
     const saved = saveCustomScript({
       rawText: JSON.stringify(["washerwoman", "imp"]),
