@@ -141,11 +141,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     [game.nominations],
   );
 
-  // Sharing from the grimoire shares the script — the public reference
-  // document (scriptCharacters, captured at bag-build time because
-  // re-resolving the script file would require filesystem access this
-  // client component doesn't have) — never the bag: which characters made
-  // the pool is the storyteller's core secret (issue #109).
+  // Referentially stable meta for ShareScriptButton, so opening the dialog
+  // doesn't re-encode on unrelated game updates.
   const shareableScriptMeta = useMemo(
     () => ({ name: game.scriptName }),
     [game.scriptName],
@@ -1127,6 +1124,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           drawing player can't see it. */}
       {!passAroundHidden && (
         <>
+          {/* Share scriptCharacters — the script, the public reference
+              document — never characterPool: bag composition is the
+              storyteller's core secret (issue #109). */}
           <ShareScriptButton
             meta={shareableScriptMeta}
             characters={game.scriptCharacters}

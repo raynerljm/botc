@@ -8,6 +8,7 @@ import { clearGames, loadGame } from "@/lib/gameStorage";
 import { decodeScriptForShare } from "@/lib/scriptShare";
 
 import { GrimoireSetup } from "./GrimoireSetup";
+import { mockClipboard } from "./testHelpers";
 
 const routerBack = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -1368,13 +1369,8 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
 
   it("shares the script, not the bag — the payload is every script character, with no bag composition or Drunk stand-in (issue #109)", async () => {
     const user = userEvent.setup();
-    // Must be defined after userEvent.setup() — setup() installs its own
-    // navigator.clipboard stub, which would otherwise clobber this mock.
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
+    mockClipboard(writeText);
 
     // A 2-of-4 bag: the Drunk (masquerading as the Chef stand-in) and the
     // Imp are in play; Washerwoman and Empath are on the script but not in
