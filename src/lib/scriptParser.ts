@@ -51,7 +51,8 @@ export type ScriptParseError =
   | { type: "invalid-json" }
   | { type: "not-array" }
   | { type: "unknown-character"; raw: string }
-  | { type: "invalid-homebrew"; index: number; missingFields: string[] };
+  | { type: "invalid-homebrew"; index: number; missingFields: string[] }
+  | { type: "empty-script" };
 
 export type ScriptParseResult =
   | { ok: true; script: ParsedScript }
@@ -67,6 +68,8 @@ export function describeScriptParseError(error: ScriptParseError): string {
       return `Unknown character id: "${error.raw}".`;
     case "invalid-homebrew":
       return `Entry ${error.index + 1} is missing required fields: ${error.missingFields.join(", ")}.`;
+    case "empty-script":
+      return "That script has no characters — nothing to add.";
   }
 }
 
@@ -260,6 +263,10 @@ export function parseScript(jsonText: string): ScriptParseResult {
     characterIds.add(character.id);
     return true;
   });
+
+  if (deduped.length === 0) {
+    return { ok: false, errors: [{ type: "empty-script" }] };
+  }
 
   return {
     ok: true,
