@@ -49,7 +49,7 @@ The single vote a dead player retains for the rest of the game. Spent when used;
 A living player proposing another player for execution. One made per living player per day; each player may be nominated once per day. Tracked for the current day only — no history.
 
 **On the block**:
-The player currently due for execution today: their nomination tally met the execution threshold (`ceil(living players / 2)`) and strictly beat the previous block-holder's tally. An exact tie clears the block.
+The player currently due for execution today: their nomination tally met the execution threshold (`ceil(living players / 2)`) and strictly beat every other nomination's tally today, including ones since superseded. A tally that only matches — never beats — the highest tally recorded so far leaves the block clear, even after that high tally's own holder has since been superseded or cleared by a tie.
 
 **Exile**:
 The Traveller equivalent of an execution. Threshold is `ceil(all players / 2)` (dead included) and ghost votes are not spent on it.

@@ -1038,6 +1038,7 @@ describe("mid-game token management (issue #15)", () => {
           nominatorId: game.players[1].id,
           nomineeId: game.players[1].id,
           votes: [game.players[0].id, game.players[1].id],
+          threshold: 1,
         },
       ],
     };

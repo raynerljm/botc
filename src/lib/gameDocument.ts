@@ -11,12 +11,13 @@ import { normalizeCharacterId } from "./scriptParser";
 // (GameDocument gained the required `setupWalkthroughOffered`/
 // `setupWalkthroughSteps` fields), again for issue #17 (Player gained
 // `actsAs`/`actsAsSetOnNight`), again for issue #71 (ReminderToken gained the
-// required `anchorPlayerId` field), and again for issue #79 (GameDocument
-// gained `demonBluffsCollapsed`/`claimsCollapsed`/`endGamePanelCollapsed`) —
-// a document saved under an older shape must be rejected by gameStorage's
-// version check rather than loaded with any of these fields silently
-// undefined.
-export const GAME_SCHEMA_VERSION = 11;
+// required `anchorPlayerId` field), again for issue #79 (GameDocument
+// gained `demonBluffsCollapsed`/`claimsCollapsed`/`endGamePanelCollapsed`),
+// and again for issue #113 (Nomination gained the required `threshold`
+// field) — a document saved under an older shape must be rejected by
+// gameStorage's version check rather than loaded with any of these fields
+// silently undefined.
+export const GAME_SCHEMA_VERSION = 12;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -87,6 +88,11 @@ export interface Nomination {
   nomineeId: string;
   // Every player id who voted for this nomination, in the order recorded.
   votes: string[];
+  // The execution/exile threshold as it stood when this nomination was
+  // recorded (CONTEXT.md: On the block/Exile). Snapshotted rather than
+  // recomputed against the current player list, so a later death mid-day
+  // can't rewrite a past tally's threshold or move the block (issue #113).
+  threshold: number;
 }
 
 export interface Player {
