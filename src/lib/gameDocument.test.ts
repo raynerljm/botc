@@ -12,8 +12,10 @@ import {
   insertAtSeat,
   isEndGamePanelCollapsed,
   nextPadReminderPosition,
+  resumeDrawSession,
   shuffleTokens,
   withRestoredReminder,
+  type DrawSession,
   type GameDocument,
   type Player,
   type ReminderToken,
@@ -678,5 +680,40 @@ describe("isEndGamePanelCollapsed (issue #79)", () => {
     expect(
       isEndGamePanelCollapsed(gameWith({ night: 0, endGamePanelCollapsed: false })),
     ).toBe(false);
+  });
+});
+
+describe("resumeDrawSession (issue #108)", () => {
+  const session = (stage: DrawSession["stage"]): DrawSession => ({
+    seatId: "p1",
+    stage,
+  });
+
+  it("resumes a mid-reveal session at the hidden privacy guard, never re-rendering the identity", () => {
+    expect(resumeDrawSession(session("revealed"))).toEqual(session("hidden"));
+  });
+
+  it("resumes the safe choosing stage as-is", () => {
+    expect(resumeDrawSession(session("choosing"))).toEqual(session("choosing"));
+  });
+
+  it("resumes the privacy guard as-is", () => {
+    expect(resumeDrawSession(session("hidden"))).toEqual(session("hidden"));
+  });
+
+  it("leaves 'no draw underway' alone", () => {
+    expect(resumeDrawSession(null)).toBeNull();
+  });
+
+  it("starts a new game with no draw session", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman", "imp"),
+      standIn: null,
+      extraCopies: {},
+    });
+    expect(game.drawSession).toBeNull();
   });
 });
