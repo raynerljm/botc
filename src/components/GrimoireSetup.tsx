@@ -609,15 +609,27 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   // Shares the draw's own bag, so a token taken here can't also be drawn.
+  // Builds off gameRef.current like every other draw-stage transition —
+  // spreading the render-closed `game` here could write a stale drawSession
+  // (e.g. back to "choosing") over a token tap that landed in the same tick
+  // (Cursor review finding).
   function assignManually(playerId: string, tokenId: string) {
-    const token = game.bag.find((t) => t.id === tokenId);
+    const currentGame = gameRef.current;
+    const token = currentGame.bag.find((t) => t.id === tokenId);
     if (!token) return;
 
     update({
-      ...game,
-      bag: game.bag.filter((t) => t.id !== token.id),
-      players: updatePlayer(playerId, tokenAssignmentPatch(token)),
-      drawSession: draw?.seatId === playerId ? null : game.drawSession,
+      ...currentGame,
+      bag: currentGame.bag.filter((t) => t.id !== token.id),
+      players: currentGame.players.map((player) =>
+        player.id === playerId
+          ? { ...player, ...tokenAssignmentPatch(token) }
+          : player,
+      ),
+      drawSession:
+        currentGame.drawSession?.seatId === playerId
+          ? null
+          : currentGame.drawSession,
     });
   }
 
