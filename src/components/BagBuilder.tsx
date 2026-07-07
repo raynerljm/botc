@@ -11,6 +11,7 @@ import {
   type Team,
 } from "@/lib/characters";
 import {
+  clearBagBuilderDraft,
   loadBagBuilderDraft,
   saveBagBuilderDraft,
   type BagBuilderDraft,
@@ -387,6 +388,14 @@ export function BagBuilder({
       scriptCharacters: pool,
     });
     saveGame(game);
+    // The draft's job ends the moment it becomes a real game — otherwise a
+    // *later*, unrelated build for the same script would silently inherit
+    // this finished game's player count and selections instead of starting
+    // from the ordinary defaults (code review finding). A reload or
+    // browser-back *before* this point still restores the in-progress
+    // draft (issue #118 AC3); this only clears it once it's no longer "in
+    // progress" but an actual saved game.
+    clearBagBuilderDraft(scriptId);
     router.push("/game");
   }
 

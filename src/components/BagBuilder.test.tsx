@@ -899,4 +899,37 @@ describe("in-progress builder state survives reload / browser-back (issue #118)"
 
     expect(screen.getByLabelText("Player count")).toHaveValue(5);
   });
+
+  it("clears the draft once it becomes a real game, so a later build for the same script starts from defaults instead of the finished game's choices (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "12");
+    await user.tab();
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+    expect(push).toHaveBeenCalledWith("/game");
+
+    // The storyteller ends that game and comes back to build an unrelated
+    // new one for the same script — a fresh mount must not inherit the
+    // finished game's player count or selection.
+    unmount();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(5);
+    expect(
+      screen.getByRole("button", { name: /^Imp/ }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
 });

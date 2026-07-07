@@ -498,9 +498,14 @@ describe("recovering from a bag shorter than the seat count (issue #118 AC1)", (
       screen.getByText(/bag is short 1 token for 3 unassigned seats/i),
     ).toBeInTheDocument();
     // Still recoverable/playable for the two seats the bag *can* fill —
-    // never blocking (ADR 0003).
+    // never blocking (ADR 0003) — and a way back to bag-building is on
+    // screen from the moment the shortfall is knowable, not just once the
+    // bag actually runs dry mid-ritual.
     expect(
       screen.getByRole("button", { name: "Start bag draw" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Trouble Brewing/ }),
     ).toBeInTheDocument();
   });
 

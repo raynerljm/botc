@@ -37,9 +37,11 @@ function isStringRecord(value: unknown): value is Record<string, number> {
   );
 }
 
-// Defensive the same way gameStorage.ts's parseStore is: a hand-edited or
-// otherwise malformed draft must fall back to "no draft" rather than crash
-// the bag builder on mount.
+// A hand-edited or otherwise malformed draft must fall back to "no draft"
+// rather than crash the bag builder on mount — field-by-field, since
+// `selectedIds` in particular needs to be a real string array before it's
+// safe to hand to `new Set(...)` (a plain string would iterate as
+// characters instead of throwing).
 function isDraft(value: unknown): value is BagBuilderDraft {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;

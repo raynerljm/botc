@@ -111,6 +111,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
     [game.characterPool],
   );
+  // Shared by every place a bag token needs a display name (the traveller
+  // select, manual-assign selects, the leftover-bag summary) — a token
+  // whose character somehow isn't in characterPool falls back to the raw id
+  // rather than rendering blank.
+  function tokenCharacterName(token: BagToken): string {
+    return characterById.get(token.characterId)?.name ?? token.characterId;
+  }
   // Only players/characterPool feed buildSetupWalkthroughSteps — passing
   // just those (not the whole `game`) skips a rebuild on every unrelated
   // autosave (moving a token, editing notes, ...).
@@ -179,13 +186,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // player to draw from an empty bag (issue #118): surfaced as soon as it's
   // knowable, not just once the bag actually runs dry mid-ritual.
   const unassignedSeatCount = officialSeats.length - assignedCount;
+  const bagEmpty = game.bag.length === 0;
   const bagShortfall = Math.max(0, unassignedSeatCount - game.bag.length);
   // Every token still sitting in the bag once the draw has filled every
   // seat (an over-sized bag, ADR 0003's warned "Continue anyway") — the
   // storyteller can only otherwise find this by elimination (issue #118).
-  const leftoverBagCharacterNames = game.bag.map(
-    (token) => characterById.get(token.characterId)?.name ?? token.characterId,
-  );
+  const leftoverBagCharacterNames = game.bag.map(tokenCharacterName);
 
   function update(next: GameDocument) {
     gameRef.current = next;
@@ -536,7 +542,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   function startDraw() {
-    if (!nextUnassignedSeat || game.bag.length === 0) return;
+    if (!nextUnassignedSeat || bagEmpty) return;
     setDraw({
       seatId: nextUnassignedSeat.id,
       stage: "choosing",
@@ -606,7 +612,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // screen's own shortfall notice (bagShortfall below) takes it from there.
   function readyForNextDraw() {
     if (!nextUnassignedSeat) return;
-    if (game.bag.length === 0) {
+    if (bagEmpty) {
       setDraw(null);
       return;
     }
@@ -782,7 +788,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </p>
       )}
 
-      {!draw && nextUnassignedSeat && game.bag.length > 0 && (
+      {!draw && nextUnassignedSeat && !bagEmpty && (
         <button type="button" className={styles.startDraw} onClick={startDraw}>
           Start bag draw
         </button>
@@ -890,8 +896,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             >
               {game.travellerBag.map((token) => (
                 <option key={token.id} value={token.id}>
-                  {characterById.get(token.characterId)?.name ??
-                    token.characterId}
+                  {tokenCharacterName(token)}
                 </option>
               ))}
             </select>
@@ -1184,8 +1189,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                         <option value="">Choose a character…</option>
                         {game.bag.map((token) => (
                           <option key={token.id} value={token.id}>
-                            {characterById.get(token.characterId)?.name ??
-                              token.characterId}
+                            {tokenCharacterName(token)}
                           </option>
                         ))}
                       </select>
