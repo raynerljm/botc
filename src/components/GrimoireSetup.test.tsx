@@ -1393,7 +1393,7 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
     await user.click(screen.getByRole("button", { name: /copy link/i }));
 
     const url = writeText.mock.calls[0][0] as string;
-    const decoded = decodeScriptForShare(url.split("/share/#")[1]);
+    const decoded = decodeScriptForShare(new URL(url).hash.slice(1));
     if (!decoded.ok) throw new Error("shared payload failed to decode");
     expect(decoded.script.characters.map((c) => c.id)).toEqual([
       "washerwoman",
