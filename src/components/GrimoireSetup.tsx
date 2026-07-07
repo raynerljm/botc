@@ -555,27 +555,29 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     setDraw({ ...draw, stage: "revealed" });
   }
 
-  // The privacy guard only matters when someone else still needs to draw —
-  // the last seat's reveal simply ends the session once hidden.
+  // Every seat's reveal — including the last — goes through the same
+  // privacy guard before the device changes hands (issue #110): the last
+  // seat has no next seat to pass to, but the drawer must still lose sight
+  // of the card before the grimoire (everyone else's identity) can open.
   function hideAndPass() {
     if (!draw) return;
-    if (nextUnassignedSeat) {
-      setDraw({ ...draw, stage: "hidden" });
-    } else {
-      setDraw(null);
-    }
+    setDraw({ ...draw, stage: "hidden" });
   }
 
   function readyForNextDraw() {
-    if (nextUnassignedSeat) {
-      setDraw({
-        seatId: nextUnassignedSeat.id,
-        stage: "choosing",
-        tokenOrder: shuffleTokens(game.bag),
-      });
-    } else {
-      setDraw(null);
-    }
+    if (!nextUnassignedSeat) return;
+    setDraw({
+      seatId: nextUnassignedSeat.id,
+      stage: "choosing",
+      tokenOrder: shuffleTokens(game.bag),
+    });
+  }
+
+  // Ends the draw session once the storyteller has the device back — the
+  // last seat's hand-off has no next seat to pass to, so it can't reuse
+  // readyForNextDraw's "draw again" flow.
+  function openGrimoire() {
+    setDraw(null);
   }
 
   // Shares the draw's own bag, so a token taken here can't also be drawn.
@@ -787,14 +789,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           {draw.stage === "hidden" && (
             <div className={styles.privacyGuard}>
               <p>
-                Card hidden. Pass the device to {nextUnassignedSeat?.name}.
+                {nextUnassignedSeat
+                  ? `Card hidden. Pass the device to ${nextUnassignedSeat.name}.`
+                  : "Card hidden. Return the device to the storyteller."}
               </p>
               <button
                 type="button"
                 className={styles.drawAction}
-                onClick={readyForNextDraw}
+                onClick={nextUnassignedSeat ? readyForNextDraw : openGrimoire}
               >
-                Ready to draw
+                {nextUnassignedSeat ? "Ready to draw" : "Open the grimoire"}
               </button>
             </div>
           )}
