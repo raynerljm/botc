@@ -748,7 +748,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       type="button"
                       className={styles.faceDownToken}
                       aria-label={`Face-down token ${index + 1}`}
-                      onClick={() => chooseToken(token.id)}
+                      onClick={(event) => {
+                        // A double-click on "Start bag draw" (or "Ready to
+                        // draw") lands its second click right here, at the
+                        // same screen position the button just occupied —
+                        // event.detail (the browser's own click count,
+                        // tracked by screen position and timing regardless
+                        // of which element ends up under the pointer) is 2
+                        // for that click, so it's ignored instead of
+                        // instantly drawing this token (issue #111). A
+                        // deliberate, separate tap is always its own fresh
+                        // detail: 1 click.
+                        if (event.detail > 1) return;
+                        chooseToken(token.id);
+                      }}
                     />
                   </li>
                 ))}
@@ -1095,7 +1108,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       )}
                     </div>
                   )}
-                  {!character && (
+                  {!character && draw && (
+                    // A draw session is active — bag composition is the
+                    // storyteller's secret, and this select would list every
+                    // remaining character (including, for the last
+                    // unassigned seat, letting it read its own character
+                    // before the reveal) to whoever's holding the device
+                    // mid-draw (issue #111).
+                    <p className={styles.assignedPlaceholder}>
+                      Draw in progress
+                    </p>
+                  )}
+                  {!character && !draw && (
                     <label>
                       Assign seat {player.seat} manually
                       <select
