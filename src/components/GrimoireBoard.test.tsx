@@ -1469,6 +1469,47 @@ describe("token menu exclusivity and dismissal (issue #70)", () => {
 
     expect(details().open).toBe(false);
   });
+
+  it("marks a seat's wrap as having an open menu so CSS can stack it above neighbouring tokens and the sticky Day/Night panels (issue #117)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
+      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+    ]);
+    const aliceWrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
+    const bobWrap = container.querySelector(
+      "[data-player-id='p2']",
+    ) as HTMLElement;
+
+    expect(aliceWrap).not.toHaveAttribute("data-menu-open");
+
+    await user.click(screen.getByText("Alice"));
+    expect(aliceWrap).toHaveAttribute("data-menu-open", "true");
+    expect(bobWrap).not.toHaveAttribute("data-menu-open");
+
+    // Opening Bob's menu closes Alice's (issue #70) — the stacking marker
+    // must move with it, not linger on the now-closed seat.
+    await user.click(screen.getByText("Bob"));
+    expect(bobWrap).toHaveAttribute("data-menu-open", "true");
+    expect(aliceWrap).not.toHaveAttribute("data-menu-open");
+  });
+
+  it("marks an open reminder's wrap the same way a seat's is marked (issue #117)", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      reminders: [reminder],
+    });
+    const reminderWrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+
+    expect(reminderWrap).not.toHaveAttribute("data-menu-open");
+    await user.click(within(reminderWrap).getByText("Townsfolk"));
+    expect(reminderWrap).toHaveAttribute("data-menu-open", "true");
+  });
 });
 
 describe("remove player", () => {

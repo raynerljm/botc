@@ -709,6 +709,11 @@ export function GrimoireBoard({
                 key={player.id}
                 className={styles.tokenWrap}
                 data-player-id={player.id}
+                data-menu-open={
+                  openMenu?.kind === "player" && openMenu.id === player.id
+                    ? "true"
+                    : undefined
+                }
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details
@@ -990,6 +995,11 @@ export function GrimoireBoard({
                 key={reminder.id}
                 className={styles.reminderWrap}
                 data-reminder-id={reminder.id}
+                data-menu-open={
+                  openMenu?.kind === "reminder" && openMenu.id === reminder.id
+                    ? "true"
+                    : undefined
+                }
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details

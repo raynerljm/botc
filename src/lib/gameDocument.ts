@@ -319,11 +319,7 @@ export function nextPadReminderPosition(
 // below that seat's own token+name block rather than beside it, so it never
 // covers the name label or intercepts a tap meant for the seat (AC), and a
 // second/third reminder on the same seat stacks further down instead of
-// overlapping the first. A small per-sibling horizontal fan rides along with
-// the vertical stacking so seats near the bottom of the circle — where the
-// vertical offset clamps to the pad's edge for every sibling alike — still
-// separate them instead of collapsing onto the same clamped point (code
-// review finding).
+// overlapping the first.
 const ANCHOR_OFFSET_Y = 12;
 const ANCHOR_STACK_STEP_Y = 6;
 const ANCHOR_STACK_STEP_X = 3;
@@ -332,10 +328,26 @@ export function anchoredReminderPosition(
   anchorPosition: PlayerPosition,
   siblingIndex: number,
 ): PlayerPosition {
-  return {
-    x: clampPct(anchorPosition.x + siblingIndex * ANCHOR_STACK_STEP_X),
-    y: clampPct(anchorPosition.y + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y),
-  };
+  const desiredYOffset = ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y;
+  const y = clampPct(anchorPosition.y + desiredYOffset);
+  const verticalClearance = y - anchorPosition.y;
+  // A seat near the bottom of the circle clamps y before it reaches its full
+  // offset, which used to park the chip directly on the token instead of
+  // below it (issue #117). Recover the clearance the clamp ate as a
+  // horizontal push instead, so the chip ends up exactly as far from the
+  // token overall — just angled sideways rather than straight down — and
+  // fan it toward the pad's horizontal centre so it can't run off the
+  // opposite edge. Per-sibling horizontal stacking (ANCHOR_STACK_STEP_X)
+  // still separates siblings even where this recovery gives them all the
+  // same y (code review finding from #71, still true when clamped).
+  const recoveredX = Math.sqrt(
+    Math.max(desiredYOffset ** 2 - verticalClearance ** 2, 0),
+  );
+  const direction = anchorPosition.x > 50 ? -1 : 1;
+  const x = clampPct(
+    anchorPosition.x + direction * recoveredX + siblingIndex * ANCHOR_STACK_STEP_X,
+  );
+  return { x, y };
 }
 
 // The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so

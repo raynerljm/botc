@@ -207,6 +207,35 @@ describe("anchoredReminderPosition (issue #71)", () => {
     expect(second.y).toBe(96);
     expect(second.x).not.toBe(first.x);
   });
+
+  it("recovers the vertical clearance a bottom-of-circle seat's clamp ate by pushing the chip sideways instead, so it clears the token rather than landing on it (issue #117)", () => {
+    const anchor = { x: 50, y: 94 };
+    const position = anchoredReminderPosition(anchor, 0);
+    const distanceFromAnchor = Math.hypot(
+      position.x - anchor.x,
+      position.y - anchor.y,
+    );
+    // A non-edge seat gets 12pts of clearance below it (the first test
+    // above); an edge seat whose y clamps must still end up this far from
+    // the token overall, just angled sideways instead of straight down.
+    expect(distanceFromAnchor).toBeGreaterThanOrEqual(11.99);
+  });
+
+  it("fans a second sibling further sideways than the first once y has clamped, preserving the stacking order (issue #117)", () => {
+    const anchor = { x: 50, y: 94 };
+    const first = anchoredReminderPosition(anchor, 0);
+    const second = anchoredReminderPosition(anchor, 1);
+    const firstDistance = Math.hypot(first.x - anchor.x, first.y - anchor.y);
+    const secondDistance = Math.hypot(second.x - anchor.x, second.y - anchor.y);
+    expect(secondDistance).toBeGreaterThan(firstDistance);
+  });
+
+  it("pushes a clamped chip toward the pad's horizontal centre, not further off the edge, for a bottom-corner seat (issue #117)", () => {
+    const anchor = { x: 94, y: 94 };
+    const position = anchoredReminderPosition(anchor, 0);
+    expect(position.x).toBeLessThan(anchor.x);
+    expect(position.x).toBeGreaterThanOrEqual(4);
+  });
 });
 
 describe("buildBagTokens", () => {
