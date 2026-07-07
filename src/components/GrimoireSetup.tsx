@@ -174,6 +174,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const nextUnassignedSeat = officialSeats.find(
     (p) => p.characterId === null,
   );
+  // A bag built shorter than the seat count (ADR 0003 permits the warned
+  // "Continue anyway") must still be recoverable rather than instructing a
+  // player to draw from an empty bag (issue #118): surfaced as soon as it's
+  // knowable, not just once the bag actually runs dry mid-ritual.
+  const unassignedSeatCount = officialSeats.length - assignedCount;
+  const bagShortfall = Math.max(0, unassignedSeatCount - game.bag.length);
+  // Every token still sitting in the bag once the draw has filled every
+  // seat (an over-sized bag, ADR 0003's warned "Continue anyway") — the
+  // storyteller can only otherwise find this by elimination (issue #118).
+  const leftoverBagCharacterNames = game.bag.map(
+    (token) => characterById.get(token.characterId)?.name ?? token.characterId,
+  );
 
   function update(next: GameDocument) {
     gameRef.current = next;
@@ -524,7 +536,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   function startDraw() {
-    if (!nextUnassignedSeat) return;
+    if (!nextUnassignedSeat || game.bag.length === 0) return;
     setDraw({
       seatId: nextUnassignedSeat.id,
       stage: "choosing",
@@ -587,8 +599,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     setDraw({ ...draw, stage: "hidden" });
   }
 
+  // The bag can run dry between two seats' turns (a bag built shorter than
+  // the seat count, ADR 0003's warned "Continue anyway") — with no token
+  // left for the next seat, end the draw here instead of opening a
+  // "choosing" stage with an empty token grid (issue #118). The setup
+  // screen's own shortfall notice (bagShortfall below) takes it from there.
   function readyForNextDraw() {
     if (!nextUnassignedSeat) return;
+    if (game.bag.length === 0) {
+      setDraw(null);
+      return;
+    }
     setDraw({
       seatId: nextUnassignedSeat.id,
       stage: "choosing",
@@ -752,10 +773,25 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         {assignedCount}/{officialSeats.length} seats assigned
       </p>
 
+      {!draw && bagShortfall > 0 && (
+        <p className={styles.bagShortfall} role="alert">
+          The bag is short {bagShortfall} token{bagShortfall === 1 ? "" : "s"}{" "}
+          for {unassignedSeatCount} unassigned seat
+          {unassignedSeatCount === 1 ? "" : "s"}. Go back to bag-building to
+          add more characters.
+        </p>
+      )}
+
       {!draw && nextUnassignedSeat && game.bag.length > 0 && (
         <button type="button" className={styles.startDraw} onClick={startDraw}>
           Start bag draw
         </button>
+      )}
+
+      {setupComplete && !screenObscured && leftoverBagCharacterNames.length > 0 && (
+        <p className={styles.bagLeftover}>
+          Left in the bag: {leftoverBagCharacterNames.join(", ")}
+        </p>
       )}
 
       {draw && drawingSeat && (

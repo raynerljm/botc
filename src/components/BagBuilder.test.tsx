@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
@@ -18,6 +18,14 @@ const tb = getEditionCharacters("tb");
 function characters(...ids: string[]) {
   return ids.map((id) => getCharacter(id)!);
 }
+
+// Every scriptId="tb" test below would otherwise inherit whatever draft the
+// previous one persisted to localStorage (issue #118's own persistence
+// feature) — clear it the same way clearGames() already keeps games from
+// leaking between tests.
+afterEach(() => {
+  localStorage.clear();
+});
 
 describe("player count and official target counts", () => {
   it("shows the official targets for the default 5-player count before any selection", () => {
@@ -823,5 +831,72 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
 
     expect(loadGame()?.scriptName).toBe("Trouble Brewing");
     expect(push).toHaveBeenCalledWith("/game");
+  });
+});
+
+describe("in-progress builder state survives reload / browser-back (issue #118)", () => {
+  it("restores player count, traveller count, and selected characters on remount", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "12");
+    await user.tab(); // blur, so the typed count is committed/clamped
+
+    const travellerCountInput = screen.getByLabelText("Traveller count");
+    await user.clear(travellerCountInput);
+    await user.type(travellerCountInput, "2");
+    await user.tab();
+
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(screen.getByRole("button", { name: /^Baron/ }));
+
+    // A reload/browser-back remounts the component fresh — nothing here
+    // simulates the browser itself, just that this instance is gone and a
+    // brand-new one takes its place, the same as remounting after
+    // navigating away and back.
+    unmount();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(12);
+    expect(screen.getByLabelText("Traveller count")).toHaveValue(2);
+    expect(
+      screen.getByRole("button", { name: /^Imp/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: /^Baron/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps a script's draft separate from a different script's builder", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    unmount();
+
+    render(
+      <BagBuilder
+        characters={characters("imp", "baron")}
+        scriptId="other-script"
+        scriptName="Other Script"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /^Imp/ }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("starts fresh (no draft to restore) when the page hasn't identified a script", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(5);
   });
 });

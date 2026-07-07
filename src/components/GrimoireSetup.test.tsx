@@ -484,6 +484,103 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
   });
 });
 
+describe("recovering from a bag shorter than the seat count (issue #118 AC1)", () => {
+  it("surfaces the shortfall up front, before any draws happen", () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [washerwoman, imp],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    expect(
+      screen.getByText(/bag is short 1 token for 3 unassigned seats/i),
+    ).toBeInTheDocument();
+    // Still recoverable/playable for the two seats the bag *can* fill —
+    // never blocking (ADR 0003).
+    expect(
+      screen.getByRole("button", { name: "Start bag draw" }),
+    ).toBeInTheDocument();
+  });
+
+  it("never opens a draw with zero tokens once the bag runs dry mid-ritual — ends the draw and re-surfaces the shortfall instead", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [washerwoman, imp],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    // Seat 1 draws.
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Seat 2 draws — the bag is now empty, one seat still unassigned.
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    expect(
+      screen.getByText(/Pass the device to Player 3/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Never a "tap a token to draw" prompt with nothing to tap — the draw
+    // session ends and the shortfall (now for the one remaining seat) is
+    // surfaced on the ordinary setup screen instead, which still offers a
+    // way back to bag-building (the existing back button).
+    expect(screen.queryByText(/tap a token to draw/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Face-down token/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/bag is short 1 token for 1 unassigned seat\b/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Trouble Brewing/ }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("surfacing the leftover bag after an over-sized bag's draw (issue #118 AC2)", () => {
+  it("shows which token(s) stayed in the bag once every seat is filled", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const game = makeGame({
+      playerCount: 1,
+      selectedCharacters: [washerwoman, imp],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    expect(screen.queryByText(/left in the bag/i)).not.toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      washerwoman.name,
+    );
+
+    expect(screen.getByText("1/1 seats assigned")).toBeInTheDocument();
+    expect(
+      screen.getByText(`Left in the bag: ${imp.name}`),
+    ).toBeInTheDocument();
+  });
+
+  it("shows nothing extra once the bag empties out exactly", async () => {
+    await completeSetup(2, [getCharacter("washerwoman")!, getCharacter("imp")!]);
+
+    expect(screen.queryByText(/left in the bag/i)).not.toBeInTheDocument();
+  });
+});
+
 describe("naming the drawn seat's player (issue #54)", () => {
   it("saves a name picked from the regular players list as the drawn seat's player name", async () => {
     const user = userEvent.setup();

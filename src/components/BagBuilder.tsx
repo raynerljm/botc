@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   getCharacter,
@@ -10,6 +10,11 @@ import {
   type Character,
   type Team,
 } from "@/lib/characters";
+import {
+  loadBagBuilderDraft,
+  saveBagBuilderDraft,
+  type BagBuilderDraft,
+} from "@/lib/bagBuilderDraft";
 import { createGame, isGameEnded } from "@/lib/gameDocument";
 import { listGames, saveGame } from "@/lib/gameStorage";
 import { computeActiveJinxes, normalizeCharacterId } from "@/lib/scriptParser";
@@ -141,16 +146,56 @@ export function BagBuilder({
   otherNightOrder,
 }: BagBuilderProps) {
   const router = useRouter();
-  const [playerCount, setPlayerCount] = useState<number | "">(MIN_PLAYERS);
-  const [travellerCount, setTravellerCount] = useState<number | "">(0);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Loaded once on mount (not re-read on every render) — a reload or a
+  // browser-back from `/game/` remounts this component fresh, so the lazy
+  // initializers below are exactly when this needs to run (issue #118).
+  const [initialDraft] = useState<BagBuilderDraft | null>(() =>
+    scriptId ? loadBagBuilderDraft(scriptId) : null,
+  );
+  const [playerCount, setPlayerCount] = useState<number | "">(
+    initialDraft?.playerCount ?? MIN_PLAYERS,
+  );
+  const [travellerCount, setTravellerCount] = useState<number | "">(
+    initialDraft?.travellerCount ?? 0,
+  );
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    new Set(initialDraft?.selectedIds ?? []),
+  );
   const [modifierChoices, setModifierChoices] = useState<
     Record<string, number>
-  >({});
-  const [extraCopies, setExtraCopies] = useState<Record<string, number>>({});
-  const [standInId, setStandInId] = useState<string | null>(null);
+  >(initialDraft?.modifierChoices ?? {});
+  const [extraCopies, setExtraCopies] = useState<Record<string, number>>(
+    initialDraft?.extraCopies ?? {},
+  );
+  const [standInId, setStandInId] = useState<string | null>(
+    initialDraft?.standInId ?? null,
+  );
   const [showCountWarning, setShowCountWarning] = useState(false);
   const [showInProgressWarning, setShowInProgressWarning] = useState(false);
+
+  // Every field a storyteller can set while building the bag survives a
+  // reload or a browser-back from `/game/` (issue #118) — persisted as one
+  // draft per script rather than tied to any one GameDocument, since no
+  // game exists yet at this point.
+  useEffect(() => {
+    if (!scriptId) return;
+    saveBagBuilderDraft(scriptId, {
+      playerCount,
+      travellerCount,
+      selectedIds: Array.from(selectedIds),
+      modifierChoices,
+      extraCopies,
+      standInId,
+    });
+  }, [
+    scriptId,
+    playerCount,
+    travellerCount,
+    selectedIds,
+    modifierChoices,
+    extraCopies,
+    standInId,
+  ]);
 
   // The selectable pool is the script's characters plus anything a special
   // flow auto-adds (e.g. Huntsman pulling in the Damsel) that the script
