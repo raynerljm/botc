@@ -1,3 +1,5 @@
+import { parseScript, type ScriptParseResult } from "./scriptParser";
+
 const STORAGE_KEY = "botc:custom-scripts";
 const CHANGE_EVENT = "botc:custom-scripts-changed";
 
@@ -37,6 +39,19 @@ export function listCustomScripts(): StoredCustomScript[] {
 
 export function getCustomScript(id: string): StoredCustomScript | undefined {
   return readAll().find((script) => script.id === id);
+}
+
+// Shared by every page that resolves a `?id=` query param to a stored
+// script (the sheet and the bag builder) — a single source of truth for the
+// "not on this device" vs. "found but fails to parse" vs. "ready" split, so
+// their headers and error states can't drift out of sync with each other.
+export function resolveStoredScript(id: string | null): {
+  stored: StoredCustomScript | undefined;
+  result: ScriptParseResult | undefined;
+} {
+  const stored = id ? getCustomScript(id) : undefined;
+  const result = stored ? parseScript(stored.rawText) : undefined;
+  return { stored, result };
 }
 
 export function saveCustomScript(input: {
