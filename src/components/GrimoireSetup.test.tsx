@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCharacter } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
 import { clearGames, loadGame } from "@/lib/gameStorage";
+import { decodeScriptForShare } from "@/lib/scriptShare";
 
 import { GrimoireSetup } from "./GrimoireSetup";
+import { mockClipboard } from "./testHelpers";
 
 const routerBack = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -1363,6 +1365,42 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
     expect(
       screen.getByRole("button", { name: /share via qr/i }),
     ).toBeInTheDocument();
+  });
+
+  it("shares the script, not the bag — the payload is every script character, with no bag composition or Drunk stand-in (issue #109)", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    mockClipboard(writeText);
+
+    // A 2-of-4 bag: the Drunk (masquerading as the Chef stand-in) and the
+    // Imp are in play; Washerwoman and Empath are on the script but not in
+    // the bag. The share must carry all four script characters — and never
+    // the Chef, which exists only as game state.
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("drunk")!, getCharacter("imp")!],
+      standIn: getCharacter("chef")!,
+      scriptCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("empath")!,
+        getCharacter("drunk")!,
+        getCharacter("imp")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    await user.click(screen.getByRole("button", { name: /copy link/i }));
+
+    const url = writeText.mock.calls[0][0] as string;
+    const decoded = decodeScriptForShare(new URL(url).hash.slice(1));
+    if (!decoded.ok) throw new Error("shared payload failed to decode");
+    expect(decoded.script.characters.map((c) => c.id)).toEqual([
+      "washerwoman",
+      "empath",
+      "drunk",
+      "imp",
+    ]);
   });
 });
 

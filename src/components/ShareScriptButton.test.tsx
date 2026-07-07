@@ -7,18 +7,10 @@ import { resolveCharacterId } from "@/lib/scriptParser";
 import { buildShareUrl, encodeScriptForShare, isTooLargeForReliableQr } from "@/lib/scriptShare";
 
 import { ShareScriptButton } from "./ShareScriptButton";
+import { mockClipboard } from "./testHelpers";
 
 const washerwoman = resolveCharacterId("washerwoman")!;
 const imp = resolveCharacterId("imp")!;
-
-// Must be called after userEvent.setup() — setup() installs its own
-// navigator.clipboard stub, which would otherwise clobber this mock.
-function mockClipboard(writeText: ReturnType<typeof vi.fn>) {
-  Object.defineProperty(navigator, "clipboard", {
-    value: { writeText },
-    configurable: true,
-  });
-}
 
 function manyHomebrewCharacters(count: number): Character[] {
   return Array.from({ length: count }, (_, i) => ({

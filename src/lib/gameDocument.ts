@@ -478,7 +478,10 @@ export interface CreateGameInput {
   // The script's full character list, selected or not (BagBuilder already
   // has this from its own `characters` prop). Defaults to just the selected
   // characters, so a caller that doesn't have the full script on hand still
-  // gets a valid document — it just can't offer any "not in play" options.
+  // gets a valid document — it just can't offer any "not in play" options,
+  // and the in-game "Share via QR" (which encodes this field, issue #109)
+  // would expose the bag composition. Pass the real script whenever you
+  // have it.
   scriptCharacters?: Character[];
 }
 
