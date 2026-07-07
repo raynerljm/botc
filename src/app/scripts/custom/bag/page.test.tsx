@@ -132,4 +132,20 @@ describe("custom script bag page", () => {
     expect(game!.otherNightOrder).toEqual(["dusk", "imp", "dawn"]);
     expect(push).toHaveBeenCalledWith("/game");
   });
+
+  it("marks a Teensyville custom script's designation and caps its player count at 6", async () => {
+    const saved = saveCustomScript({
+      rawText: JSON.stringify([
+        { id: "_meta", name: "My Tiny Script", teensyville: true },
+        "washerwoman",
+        "imp",
+      ]),
+      name: "My Tiny Script",
+    });
+
+    await renderCustomBagPage(saved.id);
+
+    expect(screen.getByText("Teensyville")).toBeInTheDocument();
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
 });

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BagBuilder } from "@/components/BagBuilder";
 import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
+import { isTeensyvilleScript } from "@/lib/scriptParser";
 import { getScriptById, listScriptSummaries } from "@/lib/scripts";
 
 import styles from "./page.module.css";
@@ -31,7 +32,7 @@ export default async function BagBuilderPage({ params }: Props) {
   const script = getScriptById(scriptId);
   if (!script) notFound();
 
-  const isTeensyville = script.meta.teensyville === true;
+  const isTeensyville = isTeensyvilleScript(script.meta);
 
   return (
     <main>

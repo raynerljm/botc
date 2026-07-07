@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveBagBuilderDraft } from "@/lib/bagBuilderDraft";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
@@ -115,6 +116,30 @@ describe("Teensyville player count cap", () => {
       "max",
       "15",
     );
+  });
+
+  it("clamps a draft's stale above-6 player count on mount, instead of showing an out-of-range value", () => {
+    // Simulates a draft saved before the script gained (or was recognized
+    // as) Teensyville status, or written back when isTeensyville was false.
+    saveBagBuilderDraft("no-greater-joy", {
+      playerCount: 10,
+      travellerCount: 0,
+      selectedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+    });
+
+    render(
+      <BagBuilder
+        characters={tb}
+        scriptId="no-greater-joy"
+        scriptName="No Greater Joy"
+        isTeensyville
+      />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(6);
   });
 });
 

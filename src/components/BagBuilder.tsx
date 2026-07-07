@@ -131,6 +131,19 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+// Blank stays blank (it's a deliberately-empty field mid-edit, not a real
+// count); a real count reclamps against the current bounds, since a draft
+// can predate this script being known/capped as Teensyville.
+function clampDraftCount(
+  value: number | "" | undefined,
+  min: number,
+  max: number,
+): number | "" {
+  if (value === undefined) return min;
+  if (value === "") return value;
+  return clamp(value, min, max);
+}
+
 function omitKey(
   record: Record<string, number>,
   key: string,
@@ -158,7 +171,7 @@ export function BagBuilder({
     scriptId ? loadBagBuilderDraft(scriptId) : null,
   );
   const [playerCount, setPlayerCount] = useState<number | "">(
-    initialDraft?.playerCount ?? MIN_PLAYERS,
+    clampDraftCount(initialDraft?.playerCount, MIN_PLAYERS, maxPlayers),
   );
   const [travellerCount, setTravellerCount] = useState<number | "">(
     initialDraft?.travellerCount ?? 0,
