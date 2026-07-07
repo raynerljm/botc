@@ -38,24 +38,27 @@ export function nominationTally(nomination: Nomination): number {
 // tally happens to match either. Each nomination's threshold is the one
 // snapshotted on it at vote time (issue #113) — never recomputed against
 // the current player list, so a mid-day death can't rewrite a past tally
-// or move the block.
+// or move the block. The high-water mark advances even for a nomination
+// whose nominee has since left the roster entirely (mid-game removal,
+// distinct from merely dying) — only the block-holder itself has to still
+// exist to be creditable, or a later nomination could retake the block by
+// merely matching a tally that only seems forgotten because its holder is
+// gone (still the same bug this fold exists to prevent).
 export function computeBlock(
   nominations: Nomination[],
   players: Player[],
 ): string | null {
   let blockNomineeId: string | null = null;
-  let highWater = 0;
+  let highWater = -1;
 
   for (const nomination of nominations) {
-    const stillInPlay = players.some((player) => player.id === nomination.nomineeId);
-    if (!stillInPlay) continue;
-
     const tally = nominationTally(nomination);
     if (tally < nomination.threshold) continue;
 
     if (tally > highWater) {
-      blockNomineeId = nomination.nomineeId;
       highWater = tally;
+      const stillInPlay = players.some((player) => player.id === nomination.nomineeId);
+      blockNomineeId = stillInPlay ? nomination.nomineeId : null;
     } else if (tally === highWater) {
       blockNomineeId = null;
     }

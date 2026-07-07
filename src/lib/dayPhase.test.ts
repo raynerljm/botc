@@ -244,6 +244,30 @@ describe("computeBlock", () => {
 
     expect(computeBlock(nominations, afterMiddayDeath)).toBeNull();
   });
+
+  it("keeps a tied high-water mark standing even after its nominee is removed from the roster entirely (code review finding)", () => {
+    // 7 living -> threshold 4. p2 takes the block at 4, then p3 ties it,
+    // clearing the block but leaving the high-water mark at 4.
+    const sevenLiving = [
+      ...players,
+      makePlayer({ id: "p6", name: "Frankie" }),
+      makePlayer({ id: "p7", name: "Gray" }),
+    ];
+    const nominations = [
+      makeNomination({ id: "n1", nomineeId: "p2", votes: ["p1", "p3", "p4", "p5"], threshold: 4 }),
+      makeNomination({ id: "n2", nomineeId: "p3", votes: ["p1", "p2", "p4", "p5"], threshold: 4 }),
+    ];
+    expect(computeBlock(nominations, sevenLiving)).toBeNull();
+
+    // p2 (the nominee whose nomination set the tied high-water mark) is
+    // later removed from the roster entirely — a real mid-game action,
+    // distinct from dying. p2's own nomination can no longer be credited,
+    // but it must still count toward the high-water mark: p3's matching
+    // tally of 4 must still not resurrect the block just because p2 is
+    // gone from the player list this fold checks against.
+    const rosterWithoutP2 = sevenLiving.filter((player) => player.id !== "p2");
+    expect(computeBlock(nominations, rosterWithoutP2)).toBeNull();
+  });
 });
 
 describe("canRecordVote", () => {

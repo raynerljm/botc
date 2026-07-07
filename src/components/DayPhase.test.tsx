@@ -178,8 +178,9 @@ describe("Day phase: vote tally and threshold", () => {
     await user.selectOptions(screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
 
-    // 5 players total -> exile threshold 3.
+    // 5 players total -> exile threshold 3, snapshotted onto the nomination.
     expect(latest.nominations[0].nomineeId).toBe("traveller-1");
+    expect(latest.nominations[0].threshold).toBe(3);
   });
 });
 
