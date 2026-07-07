@@ -23,6 +23,7 @@ import {
   MAX_PLAYERS,
   MAX_TRAVELLERS,
   MIN_PLAYERS,
+  TEENSYVILLE_MAX_PLAYERS,
   applySetupDeltas,
   parseSetupModifier,
   randomizeBagSelection,
@@ -122,6 +123,7 @@ export interface BagBuilderProps {
   almanacUrl?: string;
   firstNightOrder?: string[];
   otherNightOrder?: string[];
+  isTeensyville?: boolean;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -145,6 +147,7 @@ export function BagBuilder({
   almanacUrl,
   firstNightOrder,
   otherNightOrder,
+  isTeensyville,
 }: BagBuilderProps) {
   const router = useRouter();
   // Loaded once on mount (not re-read on every render) — a reload or a
@@ -283,6 +286,14 @@ export function BagBuilder({
   if (selectedIds.has(DRUNK_ID) && !standInId) {
     requirementWarnings.push(
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
+    );
+  }
+  // Teensyville scripts' small pools can't fill the standard distribution
+  // table above 6 players (BotC wiki "Behind the Curtain") — advisory only,
+  // per ADR 0003, since rule zero lets a storyteller deviate deliberately.
+  if (isTeensyville && effectivePlayerCount > TEENSYVILLE_MAX_PLAYERS) {
+    requirementWarnings.push(
+      `Teensyville scripts are designed for up to ${TEENSYVILLE_MAX_PLAYERS} players — ${effectivePlayerCount} may not leave enough characters to fill the bag.`,
     );
   }
 

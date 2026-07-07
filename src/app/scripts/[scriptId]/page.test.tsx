@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -142,5 +142,18 @@ describe("script sheet", () => {
 
   it("404s for an unknown script id", async () => {
     await expect(renderSheet("does-not-exist")).rejects.toThrow();
+  });
+
+  it("renders the Teensyville designation for a Teensyville script, not for a regular one (issue #120)", async () => {
+    await renderSheet("no-greater-joy");
+    expect(
+      screen.getByRole("heading", { name: /No Greater Joy/ }),
+    ).toHaveTextContent(/teensyville/i);
+
+    cleanup();
+    await renderSheet("tb");
+    expect(
+      screen.getByRole("heading", { name: "Trouble Brewing" }),
+    ).not.toHaveTextContent(/teensyville/i);
   });
 });
