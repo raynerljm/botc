@@ -80,8 +80,9 @@ export function minionDemonInfoEligible(game: GameDocument): boolean {
 
 interface RawEntry extends NightListEntry {
   // Sort key used when no _meta override places this entry explicitly:
-  // 0 dusk, 1 minion info, 2 demon info, 3 acting characters (by nightValue),
-  // 4 non-acting characters (show-all only), 5 dawn.
+  // 0 dusk, 3 minion info / demon info / acting characters (by nightValue,
+  // the vendored dataset's shared first-night scale), 4 non-acting
+  // characters (show-all only), 5 dawn.
   defaultBucket: number;
   nightValue: number;
   // A character entry's _meta override rank, computed once where it's also
@@ -91,7 +92,7 @@ interface RawEntry extends NightListEntry {
   overrideRank?: number;
 }
 
-function fixedEntry(id: string, bucket: number): RawEntry {
+function fixedEntry(id: string, bucket: number, nightValue: number): RawEntry {
   return {
     id,
     kind: "fixed",
@@ -105,9 +106,27 @@ function fixedEntry(id: string, bucket: number): RawEntry {
     skipped: false,
     actingCharacterId: null,
     defaultBucket: bucket,
-    nightValue: bucket,
+    nightValue,
   };
 }
+
+// Shared with the acting/non-acting character entries below, so Minion info
+// and Demon info sort by nightValue against characters instead of pinning
+// ahead of them in their own buckets.
+const ACTING_BUCKET = 3;
+const NOT_ACTING_BUCKET = 4;
+
+// Minion/Demon info sit on the same numeric first-night scale as acting
+// characters (vendored dataset: Minion info ≈ 5, Demon info ≈ 8), not in
+// buckets ahead of every character — e.g. Sects & Violets' Philosopher (2)
+// and Trouble Brewing's Bureaucrat/Thief (1) act before Minion info, while
+// Snitch (6) and Lunatic (7) act between the two info steps. Placed at the
+// midpoint of that gap (4.5, 7.5) rather than the dataset's own 5/8, so they
+// can never land on a real character's (always-integer) firstNight/otherNight
+// and fall back to alphabetical order — e.g. the Summoner's firstNight is 8,
+// exactly the info steps' approximate position.
+const MINION_INFO_NIGHT_VALUE = 4.5;
+const DEMON_INFO_NIGHT_VALUE = 7.5;
 
 // Index of `key` within a script's _meta night-order override, or undefined
 // if the override is absent or doesn't mention this entry. Character ids are
@@ -209,10 +228,10 @@ export function computeNightList({
   // night thereafter.
   const nightNumber = currentNightNumber(game);
 
-  const raw: RawEntry[] = [fixedEntry(FIXED_DUSK, 0)];
+  const raw: RawEntry[] = [fixedEntry(FIXED_DUSK, 0, 0)];
   if (includeMinionDemonInfo) {
-    raw.push(fixedEntry(FIXED_MINION_INFO, 1));
-    raw.push(fixedEntry(FIXED_DEMON_INFO, 2));
+    raw.push(fixedEntry(FIXED_MINION_INFO, ACTING_BUCKET, MINION_INFO_NIGHT_VALUE));
+    raw.push(fixedEntry(FIXED_DEMON_INFO, ACTING_BUCKET, DEMON_INFO_NIGHT_VALUE));
   }
 
   for (const player of game.players) {
@@ -242,7 +261,7 @@ export function computeNightList({
       isDrunk: player.isDrunk,
       skipped: player.dead && !unskippedIds.has(`char:${player.id}`),
       actingCharacterId: null,
-      defaultBucket: action.acts ? 3 : 4,
+      defaultBucket: action.acts ? ACTING_BUCKET : NOT_ACTING_BUCKET,
       nightValue: action.nightValue,
       overrideRank: action.overrideRank,
     });
@@ -269,13 +288,13 @@ export function computeNightList({
       dead: player.dead,
       isDrunk: player.isDrunk,
       skipped: player.dead && !unskippedIds.has(`actsas:${player.id}`),
-      defaultBucket: action.acts ? 3 : 4,
+      defaultBucket: action.acts ? ACTING_BUCKET : NOT_ACTING_BUCKET,
       nightValue: action.nightValue,
       overrideRank: action.overrideRank,
     });
   }
 
-  raw.push(fixedEntry(FIXED_DAWN, 5));
+  raw.push(fixedEntry(FIXED_DAWN, 5, 5));
 
   const ranked = raw.map((entry) => ({
     entry,

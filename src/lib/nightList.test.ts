@@ -144,6 +144,100 @@ describe("computeNightList: character entries and ordering", () => {
     expect(acting.map((e) => e.id)).toEqual(expectedOrder);
   });
 
+  it("sorts Minion info and Demon info onto the same numeric scale as acting characters, matching the official sheet", () => {
+    // Sects & Violets with a Philosopher: official first night is
+    // Dusk, Philosopher, Minion info, Demon info, ... (issue #115).
+    // 7+ seated players so Minion/Demon info are eligible at all.
+    const snv = gameWith([
+      "philosopher",
+      "witch",
+      "clockmaker",
+      "imp",
+      "poisoner",
+      "washerwoman",
+      "chef",
+    ]);
+    const snvEntries = computeNightList({
+      game: snv,
+      characterById: characterById(snv),
+      phase: "first",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    const snvIds = snvEntries.map((e) => e.characterId ?? e.id);
+    expect(snvIds.indexOf("philosopher")).toBeLessThan(snvIds.indexOf("fixed:minion-info"));
+    expect(snvIds.indexOf("fixed:minion-info")).toBeLessThan(snvIds.indexOf("fixed:demon-info"));
+    // Poisoner (17) acts well after Demon info.
+    expect(snvIds.indexOf("fixed:demon-info")).toBeLessThan(snvIds.indexOf("poisoner"));
+
+    // Trouble Brewing with Thief/Bureaucrat travellers: both act (1) before
+    // Minion info.
+    const tb = gameWith(["thief", "bureaucrat", "imp", "poisoner", "washerwoman", "chef", "empath"]);
+    const tbEntries = computeNightList({
+      game: tb,
+      characterById: characterById(tb),
+      phase: "first",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    const tbIds = tbEntries.map((e) => e.characterId ?? e.id);
+    expect(tbIds.indexOf("thief")).toBeLessThan(tbIds.indexOf("fixed:minion-info"));
+    expect(tbIds.indexOf("bureaucrat")).toBeLessThan(tbIds.indexOf("fixed:minion-info"));
+
+    // Snitch (6) and Lunatic (7) sit between the two info steps.
+    const between = gameWith(["snitch", "lunatic", "imp", "poisoner", "washerwoman", "chef", "empath"]);
+    const betweenEntries = computeNightList({
+      game: between,
+      characterById: characterById(between),
+      phase: "first",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    const betweenIds = betweenEntries.map((e) => e.characterId ?? e.id);
+    expect(betweenIds.indexOf("fixed:minion-info")).toBeLessThan(betweenIds.indexOf("snitch"));
+    expect(betweenIds.indexOf("snitch")).toBeLessThan(betweenIds.indexOf("fixed:demon-info"));
+    expect(betweenIds.indexOf("fixed:minion-info")).toBeLessThan(betweenIds.indexOf("lunatic"));
+    expect(betweenIds.indexOf("lunatic")).toBeLessThan(betweenIds.indexOf("fixed:demon-info"));
+  });
+
+  it("never ties Minion/Demon info's nightValue with a real character's (the Summoner's firstNight is 8, next to the info steps' approximate position)", () => {
+    // A numeric tie would fall back to alphabetical order by luck rather
+    // than a rule — assert Demon info's position is decided by its own
+    // nightValue, not a same-value tie-break against the Summoner.
+    const game = gameWith(["summoner", "washerwoman", "chef", "empath", "recluse", "baron", "mathematician"]);
+    const chars = characterById(game);
+    const entries = computeNightList({
+      game,
+      characterById: chars,
+      phase: "first",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+    const ids = entries.map((e) => e.characterId ?? e.id);
+    expect(ids.indexOf("fixed:demon-info")).toBeLessThan(ids.indexOf("summoner"));
+  });
+
+  it("leaves other-night ordering unaffected by the Minion/Demon info numeric scale", () => {
+    const game = gameWith(["poisoner", "washerwoman", "imp", "baron", "recluse", "chef", "empath"]);
+    const chars = characterById(game);
+    const entries = computeNightList({
+      game,
+      characterById: chars,
+      phase: "other",
+      showAll: false,
+      unskippedIds: new Set(),
+    });
+
+    const acting = entries.filter((e) => e.kind === "character");
+    const expectedOrder = [...acting]
+      .map((e) => ({ e, value: chars.get(e.characterId!)!.otherNight }))
+      .sort((a, b) => a.value - b.value)
+      .map(({ e }) => e.id);
+    expect(acting.map((e) => e.id)).toEqual(expectedOrder);
+    expect(entries.map((e) => e.id)).not.toContain("fixed:minion-info");
+    expect(entries.map((e) => e.id)).not.toContain("fixed:demon-info");
+  });
+
   it("excludes characters with no action tonight by default", () => {
     // Recluse has firstNight 0 (no first-night action).
     const game = gameWith(["recluse", "imp"]);
