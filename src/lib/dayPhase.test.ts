@@ -275,7 +275,8 @@ describe("computeBlock", () => {
       ...players,
       makePlayer({ id: "p6", name: "Traveller", isTraveller: true, travellerAlignment: "good" }),
     ];
-    // 6 players total -> exile threshold 3; 5 living -> execution threshold 3.
+    // 6 players total -> exile threshold 3; 6 living (traveller included) ->
+    // execution threshold 3 too.
     const nominations = [
       makeNomination({
         id: "n1",
@@ -290,7 +291,7 @@ describe("computeBlock", () => {
     expect(computeBlock(nominations, withTraveller)).toBe("p2");
   });
 
-  it("matches the issue #114 repro: an exile at its own threshold doesn't outrank a lower-tallied execution, and a tying vote on the exile doesn't clear the block either", () => {
+  it("matches the issue #114 repro: an exile at its own threshold doesn't corrupt a same-tallied execution's block", () => {
     const eightPlusTraveller = [
       ...players,
       makePlayer({ id: "p6", name: "Frankie" }),
@@ -298,7 +299,8 @@ describe("computeBlock", () => {
       makePlayer({ id: "p8", name: "Harper" }),
       makePlayer({ id: "p9", name: "Tessa", isTraveller: true, travellerAlignment: "good" }),
     ];
-    // 9 players total -> exile threshold 5; 8 living -> execution threshold 4.
+    // 9 players total -> exile threshold 5; 9 living (traveller included) ->
+    // execution threshold 5 too, per nominationThreshold's own math.
     const exile = makeNomination({
       id: "exile",
       nomineeId: "p9",
@@ -310,11 +312,17 @@ describe("computeBlock", () => {
       id: "exec",
       nomineeId: "p8",
       votes: ["p1", "p2", "p3", "p4"],
-      threshold: 4,
+      threshold: 5,
     });
 
-    expect(computeBlock([exile, execution], eightPlusTraveller)).toBe("p8");
+    // Below its own threshold — the exile sitting alongside it in
+    // `nominations` must not affect this either way.
+    expect(computeBlock([exile, execution], eightPlusTraveller)).toBeNull();
 
+    // A 5th vote exactly matches the exile's tally. Under the old bug this
+    // tied against the exile (which was still in the fold) and cleared the
+    // block; with the exile excluded entirely, the execution takes it
+    // outright instead.
     const executionWithFifthVote = { ...execution, votes: [...execution.votes, "p6"] };
     expect(computeBlock([exile, executionWithFifthVote], eightPlusTraveller)).toBe("p8");
   });
