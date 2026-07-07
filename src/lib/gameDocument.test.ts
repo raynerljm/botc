@@ -236,6 +236,23 @@ describe("anchoredReminderPosition (issue #71)", () => {
     expect(position.x).toBeLessThan(anchor.x);
     expect(position.x).toBeGreaterThanOrEqual(4);
   });
+
+  it("keeps several siblings on a clamped seat distinct instead of collapsing them onto the same point (code review finding)", () => {
+    const anchor = { x: 50, y: 94 };
+    const positions = Array.from({ length: 6 }, (_, i) =>
+      anchoredReminderPosition(anchor, i),
+    );
+    const xs = new Set(positions.map((p) => p.x));
+    expect(xs.size).toBe(positions.length);
+  });
+
+  it("still recovers clearance for an anchor outside the pad's own bounds, e.g. a legacy or hand-edited position (code review finding)", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 150 }, 0);
+    // Treated as clamped to y=96 before computing clearance, same as any
+    // other bottom-of-circle seat — not silently zeroed by a negative
+    // "clearance" from the out-of-range input.
+    expect(position.x).not.toBe(50);
+  });
 });
 
 describe("buildBagTokens", () => {

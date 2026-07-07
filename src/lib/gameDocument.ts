@@ -328,24 +328,36 @@ export function anchoredReminderPosition(
   anchorPosition: PlayerPosition,
   siblingIndex: number,
 ): PlayerPosition {
-  const desiredYOffset = ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y;
-  const y = clampPct(anchorPosition.y + desiredYOffset);
-  const verticalClearance = y - anchorPosition.y;
+  // Defensive: every position this function is actually handed today
+  // (circlePosition, a drag drop) is already within clampPct's range, but a
+  // hand-edited or pre-#117 exported game document isn't guaranteed to be —
+  // an anchor outside [4,96] would otherwise make verticalClearance exceed
+  // ANCHOR_OFFSET_Y and silently zero the recovery below (code review
+  // finding), reproducing the exact bug this function exists to fix.
+  const anchorX = clampPct(anchorPosition.x);
+  const anchorY = clampPct(anchorPosition.y);
+  const y = clampPct(anchorY + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y);
+  const verticalClearance = y - anchorY;
   // A seat near the bottom of the circle clamps y before it reaches its full
   // offset, which used to park the chip directly on the token instead of
   // below it (issue #117). Recover the clearance the clamp ate as a
   // horizontal push instead, so the chip ends up exactly as far from the
-  // token overall — just angled sideways rather than straight down — and
-  // fan it toward the pad's horizontal centre so it can't run off the
-  // opposite edge. Per-sibling horizontal stacking (ANCHOR_STACK_STEP_X)
-  // still separates siblings even where this recovery gives them all the
-  // same y (code review finding from #71, still true when clamped).
+  // token as an unclamped seat's chip would. Recovered against the *base*
+  // offset, not the growing per-sibling one — otherwise every sibling
+  // recomputes its own full recovery on top of the per-sibling fan below,
+  // and a handful of reminders on one clamped seat collapse back onto a
+  // single point far sooner than an unclamped seat would need before its
+  // own fan saturates (code review finding).
   const recoveredX = Math.sqrt(
-    Math.max(desiredYOffset ** 2 - verticalClearance ** 2, 0),
+    Math.max(ANCHOR_OFFSET_Y ** 2 - verticalClearance ** 2, 0),
   );
-  const direction = anchorPosition.x > 50 ? -1 : 1;
+  // Fan toward the pad's horizontal centre, not off the nearer edge — scales
+  // the per-sibling step too, so later siblings keep receding from the edge
+  // instead of the unscaled step undoing part of the recovery above (code
+  // review finding).
+  const direction = anchorX > 50 ? -1 : 1;
   const x = clampPct(
-    anchorPosition.x + direction * recoveredX + siblingIndex * ANCHOR_STACK_STEP_X,
+    anchorX + direction * (recoveredX + siblingIndex * ANCHOR_STACK_STEP_X),
   );
   return { x, y };
 }
