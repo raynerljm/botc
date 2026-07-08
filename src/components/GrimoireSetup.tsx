@@ -1191,6 +1191,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <div
             className={styles.circleLayout}
             hidden={showWalkthrough || screenObscured}
+            // Both side panels collapsed is the only case that actually frees
+            // width for the circle to grow into — the two panels share one
+            // grid column, so collapsing only one still leaves the column
+            // reserved for whichever panel is still expanded (issue #168).
+            data-side-collapsed={
+              game.nightListCollapsed && game.dayPhaseCollapsed ? "true" : undefined
+            }
           >
             <div
               role="region"

@@ -16,10 +16,11 @@ import { normalizeCharacterId } from "./scriptParser";
 // again for issue #113 (Nomination gained the required `threshold` field),
 // again for issue #114 (Nomination gained the required `isExile` field),
 // and again for issue #108 (GameDocument gained the required `drawSession`
-// field) — a document saved under an older shape must be rejected by
-// gameStorage's version check rather than loaded with any of these fields
-// silently undefined.
-export const GAME_SCHEMA_VERSION = 14;
+// field), and again for issue #168 (GameDocument gained the required
+// `nightListCollapsed`/`dayPhaseCollapsed` fields) — a document saved under
+// an older shape must be rejected by gameStorage's version check rather than
+// loaded with any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 15;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -261,6 +262,12 @@ export interface GameDocument {
   demonBluffsCollapsed: boolean;
   claimsCollapsed: boolean;
   endGamePanelCollapsed: boolean | null;
+  // Collapsed/expanded state for the board's side panels (issue #168), same
+  // plain-manual-toggle shape as demonBluffsCollapsed/claimsCollapsed above —
+  // defaults expanded so the tablet/desktop layout is unchanged until the
+  // storyteller deliberately reclaims the circle's width.
+  nightListCollapsed: boolean;
+  dayPhaseCollapsed: boolean;
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -647,6 +654,8 @@ export function createGame({
     demonBluffsCollapsed: false,
     claimsCollapsed: false,
     endGamePanelCollapsed: null,
+    nightListCollapsed: false,
+    dayPhaseCollapsed: false,
   };
 }
 

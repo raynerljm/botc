@@ -20,18 +20,6 @@
   }
 }
 
-.header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.heading {
-  font-size: 1.1rem;
-  margin: 0;
-}
-
 .progress {
   margin: 0;
   font-size: 0.85rem;

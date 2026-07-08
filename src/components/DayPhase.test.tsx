@@ -118,6 +118,39 @@ describe("Day phase: recording a nomination", () => {
   });
 });
 
+describe("Day phase: collapsing the panel (issue #168)", () => {
+  it("hides the body while collapsed before the first night ends, but keeps the heading reachable", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 0, dayPhaseCollapsed: true });
+    renderDayPhase(game);
+
+    expect(screen.queryByText(/Begins once the first night ends/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Day phase" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the nomination form and record while collapsed during an active day", () => {
+    const game = gameWith(["washerwoman", "imp"], { dayPhaseCollapsed: true });
+    renderDayPhase(game);
+
+    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Day 1" })).toBeInTheDocument();
+  });
+
+  it("toggles the persisted collapsed state via the heading", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"]);
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Day 1" }));
+
+    expect(latest).toEqual({ ...game, dayPhaseCollapsed: true });
+  });
+});
+
 describe("Day phase: vote tally and threshold", () => {
   it("shows the live tally against the threshold, with a meets-threshold indicator", async () => {
     const user = userEvent.setup();

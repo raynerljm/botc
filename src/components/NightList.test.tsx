@@ -326,3 +326,44 @@ describe("Night list: show-all toggle", () => {
     expect(screen.getByText(recluse.name)).toBeInTheDocument();
   });
 });
+
+describe("Night list: collapsing the panel (issue #168)", () => {
+  it("hides the body while collapsed, but keeps the heading reachable, before a night has opened", () => {
+    const game = gameWith(["washerwoman", "imp"], { nightListCollapsed: true });
+    renderNightList(game);
+
+    expect(
+      screen.queryByRole("button", { name: "Start First night" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Night list" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the entries and controls while collapsed during an open night", () => {
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      nightListCollapsed: true,
+    });
+    renderNightList(game);
+
+    expect(screen.queryByRole("checkbox", { name: "Show all" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "First night" }),
+    ).toBeInTheDocument();
+  });
+
+  it("toggles the persisted collapsed state via the heading", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"]);
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Night list" }));
+
+    expect(latest).toEqual({ ...game, nightListCollapsed: true });
+  });
+});

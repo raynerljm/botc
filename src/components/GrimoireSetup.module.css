@@ -362,4 +362,13 @@
   .circleArea {
     min-width: 0;
   }
+
+  /* Both side panels collapsed down to just their headings (issue #168) —
+     the 24rem reservation is no longer earning its keep, so let the column
+     shrink to its collapsed content and hand the freed width to the circle.
+     GrimoireBoard's own resize-fit logic (#98) re-measures the now-wider
+     column via its ResizeObserver and grows the circle to match. */
+  .circleLayout[data-side-collapsed="true"] {
+    grid-template-columns: 1fr auto;
+  }
 }
