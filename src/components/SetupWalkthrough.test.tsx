@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
-import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
+import { DEMON_BLUFFS_STEP_ID, type SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
 import { SetupWalkthrough } from "./SetupWalkthrough";
 
@@ -724,7 +724,7 @@ describe("generic step (homebrew fallback)", () => {
 
 describe("demonBluffs step (issue #155)", () => {
   const demonBluffsStep: SetupWalkthroughStep = {
-    id: "demonBluffs",
+    id: DEMON_BLUFFS_STEP_ID,
     kind: "demonBluffs",
     title: "Demon bluffs",
     ruleText:
@@ -780,6 +780,29 @@ describe("demonBluffs step (issue #155)", () => {
     expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
   });
 
+  it("closes only the 'Show to Demon' reveal on Escape, not the whole walkthrough underneath it (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
+    expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    // Nesting this reveal (its own dialog) inside the walkthrough's own
+    // dialog means two useDialogDismiss instances are mounted at once —
+    // without the dialog stack, both fire on the same Escape and this
+    // outer onClose gets called too, kicking the storyteller out of the
+    // whole walkthrough over a reveal they only meant to dismiss.
+    expect(screen.queryByRole("dialog", { name: /demon bluffs/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Setup walkthrough" })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("resolves answered via Confirm, without producing any reminder", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({
@@ -790,7 +813,7 @@ describe("demonBluffs step (issue #155)", () => {
     const step = screen.getByRole("group", { name: "Demon bluffs" });
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onResolveStep).toHaveBeenCalledWith("demonBluffs", "answered", []);
+    expect(onResolveStep).toHaveBeenCalledWith(DEMON_BLUFFS_STEP_ID, "answered", []);
   });
 
   it("can be skipped like any other step", async () => {
@@ -803,7 +826,7 @@ describe("demonBluffs step (issue #155)", () => {
     const step = screen.getByRole("group", { name: "Demon bluffs" });
     await user.click(within(step).getByRole("button", { name: /skip/i }));
 
-    expect(onResolveStep).toHaveBeenCalledWith("demonBluffs", "skipped", []);
+    expect(onResolveStep).toHaveBeenCalledWith(DEMON_BLUFFS_STEP_ID, "skipped", []);
   });
 
   it("hides the picker behind an Answered/Redo note once resolved, same as every other step", () => {

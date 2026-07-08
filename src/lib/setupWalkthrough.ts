@@ -22,26 +22,28 @@ export type SetupWalkthroughStepKind =
 // exported so callers can key off it without restating the literal.
 export const DEMON_BLUFFS_STEP_ID = "demonBluffs";
 
-interface StepBase {
-  // The holding player's id — stable across re-renders, since steps are
-  // rebuilt fresh from players/characterPool every time.
+// Shared by every step kind, player-anchored or not.
+interface StepShared {
   id: string;
-  characterId: string;
-  characterName: string;
-  playerId: string;
-  playerName: string;
   title: string;
   ruleText: string;
 }
 
+interface StepBase extends StepShared {
+  // The holding player's id — stable across re-renders, since steps are
+  // rebuilt fresh from players/characterPool every time.
+  characterId: string;
+  characterName: string;
+  playerId: string;
+  playerName: string;
+}
+
 // Unlike every other step kind, this one isn't anchored to a seat — Demon
 // bluffs are chosen once for the whole script, not per-player — so it
-// deliberately doesn't extend StepBase's playerId/characterId fields.
-export interface DemonBluffsStep {
-  id: string;
+// deliberately extends StepShared rather than StepBase, which every other
+// kind uses for its playerId/characterId fields.
+export interface DemonBluffsStep extends StepShared {
   kind: "demonBluffs";
-  title: string;
-  ruleText: string;
 }
 
 export interface PlayerPickStep extends StepBase {

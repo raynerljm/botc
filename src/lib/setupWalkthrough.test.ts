@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getCharacter, type Character } from "./characters";
-import { buildSetupWalkthroughSteps } from "./setupWalkthrough";
+import { buildSetupWalkthroughSteps, DEMON_BLUFFS_STEP_ID } from "./setupWalkthrough";
 import { createGame, type GameDocument } from "./gameDocument";
 
 function characters(...ids: string[]) {
@@ -40,10 +40,17 @@ function gameWithCharacters(ids: string[], drunkStandInFor?: string): GameDocume
   return { ...game, players };
 }
 
+// The demonBluffs step has no playerId (it isn't anchored to a seat) — this
+// is the one place that guard lives, so every per-player lookup below shares
+// it instead of repeating "playerId" in s at each call site.
+function stepsForPlayerId(steps: ReturnType<typeof buildSetupWalkthroughSteps>, playerId: string) {
+  return steps.filter((s) => "playerId" in s && s.playerId === playerId);
+}
+
 function stepFor(game: GameDocument, characterId: string) {
   const player = game.players.find((p) => p.characterId === characterId);
   const steps = buildSetupWalkthroughSteps(game);
-  return steps.find((s) => "playerId" in s && s.playerId === player?.id);
+  return player ? stepsForPlayerId(steps, player.id)[0] : undefined;
 }
 
 // The demonBluffs step is always present and always first (issue #155) —
@@ -66,7 +73,7 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
 
     const steps = buildSetupWalkthroughSteps(game);
     expect(steps).toHaveLength(1);
-    expect(steps[0]).toMatchObject({ id: "demonBluffs", kind: "demonBluffs" });
+    expect(steps[0]).toMatchObject({ id: DEMON_BLUFFS_STEP_ID, kind: "demonBluffs" });
   });
 
   it("returns no per-player steps for a game with no players assigned yet", () => {
@@ -215,16 +222,12 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
   it("gives the Drunk a review step keyed by the stand-in player, not their apparent character's own step", () => {
     const game = gameWithCharacters(["drunk", "washerwoman", "imp"], "washerwoman");
     const steps = buildSetupWalkthroughSteps(game);
-    const drunkPlayer = game.players.find((p) => p.isDrunk);
+    const drunkPlayer = game.players.find((p) => p.isDrunk)!;
+    const drunkSteps = stepsForPlayerId(steps, drunkPlayer.id);
 
-    const drunkStep = steps.find(
-      (s) => "playerId" in s && s.playerId === drunkPlayer?.id,
-    );
-    expect(drunkStep).toMatchObject({ kind: "review", reminderLabel: "Drunk" });
+    expect(drunkSteps[0]).toMatchObject({ kind: "review", reminderLabel: "Drunk" });
     // Only one step for that seat — not also a Washerwoman characterAndTwoPlayers step.
-    expect(
-      steps.filter((s) => "playerId" in s && s.playerId === drunkPlayer?.id),
-    ).toHaveLength(1);
+    expect(drunkSteps).toHaveLength(1);
   });
 
   it("gives a homebrew character with reminders a generic step", () => {

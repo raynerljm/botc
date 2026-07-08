@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
@@ -141,12 +141,12 @@ function StepPanel({
 }: StepPanelProps) {
   const [forceEditing, setForceEditing] = useState(false);
   const editing = forceEditing || status === undefined;
-  // The demonBluffs step isn't anchored to any one player, so there's no
-  // "other players" to compute for it — every other kind is.
+  // A script-level step (demonBluffs, currently the only one) isn't anchored
+  // to any one player, so there's no "other players" to compute for it —
+  // checked structurally (any step kind without a playerId), not by name, so
+  // a future script-level kind doesn't need its own special case here too.
   const otherPlayers =
-    step.kind === "demonBluffs"
-      ? []
-      : players.filter((p) => p.id !== step.playerId);
+    "playerId" in step ? players.filter((p) => p.id !== step.playerId) : [];
   const characterById = new Map(characterPool.map((c) => [c.id, c] as const));
   // Every curated playerPick (Fortune Teller's red herring, Grandmother's
   // grandchild, the Evil Twin's counterpart) requires a good player by rule
@@ -200,12 +200,9 @@ function StepPanel({
       {editing && (
         <>
           {step.kind === "demonBluffs" && (
-            <div className={styles.controls}>
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
               <DemonBluffsFields game={game} onChange={onChangeGame} />
-              <button type="button" onClick={() => resolve("answered")}>
-                Confirm
-              </button>
-            </div>
+            </ConfirmOnlyControls>
           )}
 
           {step.kind === "playerPick" && (
@@ -297,12 +294,9 @@ function StepPanel({
           )}
 
           {step.kind === "acknowledge" && (
-            <div className={styles.controls}>
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
               <p>{step.message}</p>
-              <button type="button" onClick={() => resolve("answered")}>
-                Confirm
-              </button>
-            </div>
+            </ConfirmOnlyControls>
           )}
 
           {step.kind === "review" && (
@@ -357,6 +351,26 @@ function StepPanel({
         </>
       )}
     </fieldset>
+  );
+}
+
+// Shared by the acknowledge and demonBluffs steps — both are just some
+// content (a message, or the bluff picker) plus a single, unconditional
+// Confirm — no fields to gate it on, unlike every other kind's controls.
+function ConfirmOnlyControls({
+  onConfirm,
+  children,
+}: {
+  onConfirm: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className={styles.controls}>
+      {children}
+      <button type="button" onClick={onConfirm}>
+        Confirm
+      </button>
+    </div>
   );
 }
 

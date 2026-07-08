@@ -39,6 +39,12 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
 // game.demonBluffs — instead of a second, divergence-prone copy. This board
 // panel is one caller; SetupWalkthrough.tsx's StepPanel is the other.
 export function DemonBluffsFields({ game, onChange }: DemonBluffsPanelProps) {
+  // showingToDemon resetting on its own when this panel collapses (so
+  // re-expanding never silently re-shows the Demon's identity, issue #122
+  // Copilot finding) relies on CollapsibleSection actually unmounting its
+  // children when collapsed (`{!collapsed && children}`) rather than just
+  // hiding them — there's no explicit reset here because a fresh mount
+  // already defaults this to false.
   const [showAll, setShowAll] = useState(false);
   const [showingToDemon, setShowingToDemon] = useState(false);
 
