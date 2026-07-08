@@ -98,6 +98,26 @@ function tokenSizeRem(total: number): number {
   return MAX_TOKEN_REM - t * (MAX_TOKEN_REM - MIN_TOKEN_REM);
 }
 
+// A token's menuBody is centred under its summary by default, which pushes
+// half its ~14rem width past the board's edge for a seat/reminder parked
+// near the left or right rim — the classic phone-width overflow (issue
+// #124). Flagging which hemisphere a token sits in lets CSS re-anchor the
+// menu to the token's own edge instead of its centre; centred tokens (the
+// 40-60 band) are unaffected since a centred menu already fits under them.
+function tokenSideAttr(x: number): "left" | "right" | undefined {
+  if (x < 40) return "left";
+  if (x > 60) return "right";
+  return undefined;
+}
+
+// Mirrors tokenSideAttr vertically: a token in the board's bottom half
+// opens its menu below by default, which is the side most likely to run
+// out of viewport height in landscape (issue #124) — flagging it lets CSS
+// flip the menu to open above the token instead.
+function tokenVSideAttr(y: number): "bottom" | undefined {
+  return y > 55 ? "bottom" : undefined;
+}
+
 // A circle any smaller than this stops reading as "the board" regardless of
 // how little viewport is left — better to require a small scroll in that
 // extreme case than to shrink the circle into illegibility.
@@ -719,6 +739,8 @@ export function GrimoireBoard({
                 className={styles.tokenWrap}
                 data-player-id={player.id}
                 data-menu-open={menuOpen ? "true" : undefined}
+                data-side={tokenSideAttr(position.x)}
+                data-vside={tokenVSideAttr(position.y)}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details
@@ -1013,6 +1035,8 @@ export function GrimoireBoard({
                 className={styles.reminderWrap}
                 data-reminder-id={reminder.id}
                 data-menu-open={menuOpen ? "true" : undefined}
+                data-side={tokenSideAttr(position.x)}
+                data-vside={tokenVSideAttr(position.y)}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details

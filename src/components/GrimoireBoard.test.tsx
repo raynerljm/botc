@@ -1512,6 +1512,55 @@ describe("token menu exclusivity and dismissal (issue #70)", () => {
   });
 });
 
+describe("token menu viewport clamping (issue #124)", () => {
+  it("marks a seat near the board's right edge so its menu can anchor left instead of overflowing", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 92, y: 50 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).toHaveAttribute("data-side", "right");
+    expect(wrap).not.toHaveAttribute("data-vside");
+  });
+
+  it("marks a seat near the board's left edge so its menu can anchor right instead of overflowing", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 8, y: 50 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).toHaveAttribute("data-side", "left");
+  });
+
+  it("marks a seat near the board's bottom edge so its menu can flip above instead of overflowing", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 50, y: 90 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).toHaveAttribute("data-vside", "bottom");
+    expect(wrap).not.toHaveAttribute("data-side");
+  });
+
+  it("leaves centred seats unmarked so their menu keeps its default centred anchor", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 50, y: 50 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).not.toHaveAttribute("data-side");
+    expect(wrap).not.toHaveAttribute("data-vside");
+  });
+
+  it("marks a reminder's wrap the same way a seat's is marked", () => {
+    const reminder = makeReminder({ id: "r1", position: { x: 90, y: 88 } });
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      reminders: [reminder],
+    });
+    const reminderWrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+    expect(reminderWrap).toHaveAttribute("data-side", "right");
+    expect(reminderWrap).toHaveAttribute("data-vside", "bottom");
+  });
+});
+
 describe("remove player", () => {
   it("lets the storyteller remove a player from their token menu", async () => {
     const user = userEvent.setup();

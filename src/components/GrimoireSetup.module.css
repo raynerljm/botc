@@ -178,6 +178,10 @@
   justify-content: center;
   gap: 1rem;
   padding: 2rem;
+  /* Scrolls internally (issue #124) so a two-line ability wrap in landscape
+     — where the fixed viewport is short — never clips "Hide & pass" below
+     the fold with no way to reach it. */
+  overflow-y: auto;
   background: var(--background);
   text-align: center;
 }
@@ -270,6 +274,12 @@
   min-height: 2.75rem;
 }
 
+/* max-width (issue #124): a native <select>'s intrinsic content width (e.g.
+   192px for the longest character name) can exceed its seat card's width
+   at phone sizes — the .seats grid's minmax(10rem, 1fr) columns are
+   narrower than that. Capping it to the card's own width, rather than a
+   fixed value, keeps every other .select call site (traveller/add-character
+   forms, whose cards already have room) unaffected. */
 .select {
   padding: 0.5rem 0.75rem;
   font: inherit;
@@ -278,6 +288,7 @@
   border-radius: 0.5rem;
   color: var(--foreground);
   min-height: 2.75rem;
+  max-width: 100%;
 }
 
 /* Grid (not flex) so the night list can sit *before* the circle in visual
