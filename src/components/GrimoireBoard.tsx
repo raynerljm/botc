@@ -164,6 +164,11 @@ interface DragState {
   dragged: boolean;
   boardRect: DOMRect;
   lastPosition: PlayerPosition;
+  // The token's own board-percentage position at pickup — every move adds
+  // the pointer's pixel delta (converted to board percent) on top of this,
+  // instead of jumping the token's centre to the raw pointer position
+  // (issue #167).
+  startPosition: PlayerPosition;
 }
 
 
@@ -424,7 +429,16 @@ export function GrimoireBoard({
         player.id,
         livePlayerDrag?.id === player.id
           ? livePlayerDrag.position
-          : (player.position ?? circlePosition(index, total)),
+          : player.position
+            ? // Re-clamped the same way anchoredReminderPosition already
+              // clamps its anchor input: a hand-edited or pre-#117 exported
+              // document isn't guaranteed to be within [4,96], and an
+              // out-of-range stored position would otherwise make a drag's
+              // grab offset (GrimoireBoard.tsx's pointer handlers) jump the
+              // token to the clamp edge on pickup — the exact bug issue
+              // #167 fixed, just re-triggered by out-of-range legacy data.
+              { x: clampPct(player.position.x), y: clampPct(player.position.y) }
+            : circlePosition(index, total),
       );
     });
     return map;
@@ -451,6 +465,7 @@ export function GrimoireBoard({
     event: ReactPointerEvent<HTMLElement>,
     kind: TokenKind,
     id: string,
+    position: PlayerPosition,
   ) {
     const board = boardRef.current;
     if (!board) return;
@@ -466,6 +481,9 @@ export function GrimoireBoard({
     // pointerup/pointermove would then fail the pointerId check below and
     // the first drag would never resolve.
     if (dragRef.current) return;
+    // Captured once per gesture — the board doesn't reflow mid-drag, so
+    // re-querying layout on every pointermove is wasted work.
+    const boardRect = board.getBoundingClientRect();
     dragRef.current = {
       kind,
       id,
@@ -473,10 +491,12 @@ export function GrimoireBoard({
       startX: event.clientX,
       startY: event.clientY,
       dragged: false,
-      // Captured once per gesture — the board doesn't reflow mid-drag, so
-      // re-querying layout on every pointermove is wasted work.
-      boardRect: board.getBoundingClientRect(),
-      lastPosition: { x: 0, y: 0 },
+      boardRect,
+      lastPosition: position,
+      // `position` is the token's own currently-displayed board-percentage
+      // position (its seat/pad position, or an anchored reminder's offset
+      // display spot — never a stale stored position (issue #167)).
+      startPosition: position,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
@@ -490,10 +510,14 @@ export function GrimoireBoard({
     if (!drag.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     drag.dragged = true;
 
-    const { boardRect } = drag;
+    // The token's pickup position plus the pointer's own pixel delta (as a
+    // board percentage) — keeps the token under the finger from pickup to
+    // drop instead of snapping its centre to the raw pointer position
+    // (issue #167).
+    const { boardRect, startPosition } = drag;
     const position = {
-      x: clampPct(((event.clientX - boardRect.left) / boardRect.width) * 100),
-      y: clampPct(((event.clientY - boardRect.top) / boardRect.height) * 100),
+      x: clampPct(startPosition.x + (dx / boardRect.width) * 100),
+      y: clampPct(startPosition.y + (dy / boardRect.height) * 100),
     };
     drag.lastPosition = position;
     // Local state only, for smooth visual feedback — the game document is
@@ -765,7 +789,7 @@ export function GrimoireBoard({
                     className={styles.tokenSummary}
                     data-dead={player.dead || undefined}
                     onPointerDown={(event) =>
-                      handlePointerDown(event, "player", player.id)
+                      handlePointerDown(event, "player", player.id, position)
                     }
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
@@ -1032,9 +1056,12 @@ export function GrimoireBoard({
               ? positionByPlayerId.get(reminder.anchorPlayerId)
               : undefined;
             const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
+            // Clamped for the same reason as positionByPlayerId above — a
+            // free-standing reminder's stored position isn't guaranteed to
+            // be within [4,96] for legacy/hand-edited documents.
             const restingPosition = anchorSeatPosition
               ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
-              : reminder.position;
+              : { x: clampPct(reminder.position.x), y: clampPct(reminder.position.y) };
             const position =
               liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
                 ? liveDrag.position
@@ -1060,7 +1087,7 @@ export function GrimoireBoard({
                   <summary
                     className={styles.tokenSummary}
                     onPointerDown={(event) =>
-                      handlePointerDown(event, "reminder", reminder.id)
+                      handlePointerDown(event, "reminder", reminder.id, position)
                     }
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
