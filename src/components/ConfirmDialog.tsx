@@ -1,9 +1,17 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import styles from "./ConfirmDialog.module.css";
 import { useDialogDismiss } from "./useDialogDismiss";
+
+// A double-tap on the button that opens this dialog can land its second tap
+// on the just-mounted backdrop — the trigger's screen position is now
+// covered by the overlay, so click 2 fires a backdrop-tap-cancel before the
+// storyteller ever sees Confirm/Cancel (issue #125). Ignoring backdrop taps
+// for a brief window after mount survives a double-tap; a deliberate
+// tap-outside just lands a moment later.
+const BACKDROP_GRACE_MS = 500;
 
 export interface ConfirmDialogProps {
   title: string;
@@ -40,6 +48,12 @@ export function ConfirmDialog({
   // always idempotent (e.g. starting a new game creates a fresh id each
   // call), only the first response after open is allowed through.
   const respondedRef = useRef(false);
+  // Set in an effect, not read eagerly during render (impure — React's
+  // purity rule flags a direct `useRef(performance.now())`). performance.now()
+  // rather than Date.now(): monotonic, so a backward system-clock adjustment
+  // mid-game can't strand this dialog with a permanently-unresponsive
+  // backdrop.
+  const mountedAtRef = useRef<number | null>(null);
 
   function respond(action: () => void) {
     if (respondedRef.current) return;
@@ -49,11 +63,21 @@ export function ConfirmDialog({
 
   useDialogDismiss(dialogRef, cancelButtonRef, () => respond(onCancel));
 
+  useEffect(() => {
+    mountedAtRef.current = performance.now();
+  }, []);
+
   return (
     <div
       className={styles.overlay}
       onClick={(event) => {
-        if (event.target === event.currentTarget) respond(onCancel);
+        if (event.target !== event.currentTarget) return;
+        const elapsed =
+          mountedAtRef.current === null
+            ? 0
+            : performance.now() - mountedAtRef.current;
+        if (elapsed < BACKDROP_GRACE_MS) return;
+        respond(onCancel);
       }}
     >
       <div
