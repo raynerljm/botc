@@ -132,6 +132,28 @@ describe("Select", () => {
     expect(onChange).toHaveBeenCalledWith("imp");
   });
 
+  it("never seeds the keyboard-active option with a value that isn't actually selectable, so a stray Enter right after opening can't commit an invalid value (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <Select
+        aria-label="Claim"
+        value="not-a-real-option"
+        onChange={onChange}
+        entries={FLAT_ENTRIES}
+      />,
+    );
+    const trigger = screen.getByRole("combobox", { name: "Claim" });
+
+    trigger.focus();
+    // First Enter opens the popup; a second Enter immediately after commits
+    // whatever option is currently active.
+    await user.keyboard("{Enter}{Enter}");
+
+    expect(onChange).not.toHaveBeenCalledWith("not-a-real-option");
+    expect(onChange).toHaveBeenCalledWith("");
+  });
+
   it("is a single Tab stop — focus never leaves the trigger while the popup is open", async () => {
     const user = userEvent.setup();
     render(

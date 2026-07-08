@@ -81,7 +81,14 @@ export function Select({
   }, [open, activeIndex, baseId]);
 
   function openList() {
-    setActiveValue(value || (flat[0]?.value ?? ""));
+    // `value` is only a valid seed if it's actually one of `entries` —
+    // otherwise a stray Enter right after opening would commit() a value
+    // that was never selectable in the first place (Copilot review
+    // finding).
+    const seed = flat.some((option) => option.value === value)
+      ? value
+      : (flat[0]?.value ?? "");
+    setActiveValue(seed);
     setOpen(true);
   }
 
