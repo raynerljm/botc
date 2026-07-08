@@ -47,13 +47,13 @@ import styles from "./BagBuilder.module.css";
 const RELAXED_VALIDATION_IDS = new Set(["legion", "riot", "atheist", "summoner"]);
 
 // Setup characters whose bracket falls through to isFreeform (no structured
-// count delta parses out) despite describing a seating or alignment
-// constraint rather than a distribution change — Marionette's "[You
-// neighbor the Demon]" is a placement rule and Bounty Hunter's "[1
-// Townsfolk is evil]" is an alignment note, neither a Townsfolk/Outsider/
-// Minion swap, so they must not relax count validation the way
-// Legion/Atheist's genuine distribution-breaking brackets do.
-const SEATING_CONSTRAINT_IDS = new Set(["marionette", "bountyhunter"]);
+// count delta parses out) despite describing something other than a
+// distribution change — Marionette's "[You neighbor the Demon]" is a
+// seating constraint and Bounty Hunter's "[1 Townsfolk is evil]" is an
+// alignment note, neither a Townsfolk/Outsider/Minion swap, so they must
+// not relax count validation the way Legion/Atheist/Summoner's genuine
+// distribution-breaking brackets do.
+const NON_DISTRIBUTION_FREEFORM_IDS = new Set(["marionette", "bountyhunter"]);
 
 // Characters whose "+the X" requirement is fulfilled automatically rather
 // than merely warned about (Huntsman brings its own Damsel; Choirboy just
@@ -138,7 +138,7 @@ function isRelaxedCharacter(
   character: Character,
   parsed: ParsedSetupModifier | null | undefined,
 ): boolean {
-  if (SEATING_CONSTRAINT_IDS.has(character.id)) return false;
+  if (NON_DISTRIBUTION_FREEFORM_IDS.has(character.id)) return false;
   return RELAXED_VALIDATION_IDS.has(character.id) || parsed?.isFreeform === true;
 }
 

@@ -838,6 +838,28 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     expect(screen.getByRole("alertdialog", { name: /count/i })).toBeInTheDocument();
   });
 
+  it("still warns on a count mismatch when Bounty Hunter's alignment-note bracket is in the bag", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("bountyhunter", "washerwoman")}
+        scriptId="custom-bountyhunter"
+        scriptName="Custom"
+      />,
+    );
+
+    // Bounty Hunter alone leaves Townsfolk/Minion/Demon all under target;
+    // like Marionette, its freeform bracket is an alignment note rather
+    // than a distribution change, so validation must not relax and the
+    // mismatch dialog should still fire.
+    await user.click(screen.getByRole("button", { name: /^Bounty Hunter/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.getByRole("alertdialog", { name: /count/i })).toBeInTheDocument();
+  });
+
   it("moves focus into the dialog when it opens, traps Tab within it, and restores focus on dismiss", async () => {
     const user = userEvent.setup();
     render(
