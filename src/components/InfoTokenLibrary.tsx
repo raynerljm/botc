@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
-import { STANDARD_INFO_TOKENS } from "@/lib/infoTokens";
+import { visibleInfoTokens } from "@/lib/infoTokens";
 
 import { DialogOverlay } from "./DialogOverlay";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
@@ -58,6 +58,7 @@ export function InfoTokenLibrary({
 
   const groups =
     chosenText !== null ? groupByTeam(Array.from(characterById.values())) : [];
+  const standardTokens = visibleInfoTokens(new Set(characterById.keys()));
 
   return (
     <DialogOverlay onCancel={onCancel}>
@@ -80,7 +81,7 @@ export function InfoTokenLibrary({
             </button>
 
             <div className={styles.standardCards}>
-              {STANDARD_INFO_TOKENS.map((template) => (
+              {standardTokens.map((template) => (
                 <button
                   key={template.id}
                   type="button"
