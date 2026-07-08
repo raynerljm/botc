@@ -22,4 +22,5 @@
 
 .useName {
   composes: input;
+  cursor: pointer;
 }
