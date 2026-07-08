@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
-import { DEMON_BLUFF_SLOTS, type GameDocument } from "@/lib/gameDocument";
+import { DEMON_BLUFF_SLOTS, heldCharacterIds, type GameDocument } from "@/lib/gameDocument";
 
 import { CharacterToken } from "./CharacterToken";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -24,12 +24,24 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
     () => new Map(game.scriptCharacters.map((c) => [c.id, c] as const)),
     [game.scriptCharacters],
   );
-  const notInPlayGood = useMemo(() => {
-    const inPlayIds = new Set(game.characterPool.map((c) => c.id));
-    return game.scriptCharacters.filter(
-      (c) => GOOD_TEAMS.has(c.team) && !inPlayIds.has(c.id),
-    );
-  }, [game.characterPool, game.scriptCharacters]);
+  const inPlayIds = useMemo(
+    () => new Set(game.characterPool.map((c) => c.id)),
+    [game.characterPool],
+  );
+  const notInPlayGood = useMemo(
+    () =>
+      game.scriptCharacters.filter(
+        (c) => GOOD_TEAMS.has(c.team) && !inPlayIds.has(c.id),
+      ),
+    [game.scriptCharacters, inPlayIds],
+  );
+  // Distinct from inPlayIds above: characterPool only ever grows (a swap or
+  // an acts-as target adds to it and nothing ever removes from it), so it
+  // means "ever referenced this game," not "held by a player right now."
+  // The "(in play)" annotation needs the latter — flagging a bluff pick that
+  // collides with what's physically at the table this moment, not a
+  // character that merely used to be, or might later be, in play.
+  const heldIds = useMemo(() => heldCharacterIds(game.players), [game.players]);
   // Lunatic/Marionette games legitimately break the "good, not-in-play" rule
   // (ADR 0003: advisory, never a hard restriction), so "show all" opens the
   // full script pool regardless of team or in-play status.
@@ -49,6 +61,14 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
     const current = bluffCharacters[index];
     if (!current || options.some((c) => c.id === current.id)) return groupedOptions;
     return groupByTeam([...options, current]);
+  }
+
+  // Picking an in-play character is never blocked — Show-all is a
+  // deliberate Lunatic/Marionette escape hatch (ADR 0003) — but under ADR
+  // 0003 the advisory cue itself is the safety mechanism, so an in-play
+  // pick still gets flagged rather than silently accepted (issue #128).
+  function optionLabel(character: Character): string {
+    return heldIds.has(character.id) ? `${character.name} (in play)` : character.name;
   }
 
   function setSlot(index: number, characterId: string | null) {
@@ -103,7 +123,7 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
                     <optgroup key={group.team} label={teamNames[group.team]}>
                       {group.characters.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.name}
+                          {optionLabel(c)}
                         </option>
                       ))}
                     </optgroup>
