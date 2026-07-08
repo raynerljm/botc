@@ -119,6 +119,31 @@ describe("Day phase: recording a nomination", () => {
 });
 
 describe("Day phase: collapsing the panel (issue #168)", () => {
+  it("keeps the glanceable block-holder status visible even while collapsed", () => {
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"], {
+      dayPhaseCollapsed: true,
+    });
+    const [nominator, nominee, voter1, voter2] = game.players;
+    const withBlock: GameDocument = {
+      ...game,
+      nominations: [
+        {
+          id: "n1",
+          nominatorId: nominator.id,
+          nomineeId: nominee.id,
+          votes: [voter1.id, voter2.id],
+          threshold: 2,
+          isExile: false,
+        },
+      ],
+    };
+    renderDayPhase(withBlock);
+
+    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(screen.getByText(`On the block: ${nominee.name}`)).toBeInTheDocument();
+  });
+
+
   it("hides the body while collapsed before the first night ends, but keeps the heading reachable", () => {
     const game = gameWith(["washerwoman", "imp"], { night: 0, dayPhaseCollapsed: true });
     renderDayPhase(game);

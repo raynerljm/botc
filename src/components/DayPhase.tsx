@@ -222,16 +222,21 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
           })}
         </ul>
 
-        {/* Rendered after the list, never above it — inserting this above the
-            nominations shifted every voter checkbox down by a row on the exact
-            tap that crossed the threshold, losing votes mid-count (issue
-            #125). */}
-        {blockHolder && (
-          <p className={styles.block} role="status">
-            On the block: {blockHolder.name}
-          </p>
-        )}
       </CollapsibleSection>
+
+      {/* Kept outside CollapsibleSection, unlike the nomination form/history
+          itself — a storyteller collapsing this panel to reclaim circle
+          width (issue #168) still needs this glanceable status without
+          re-expanding the whole nomination record (code review finding).
+          Also keeps issue #125's fix intact: it was moved after the (now
+          collapsible) list specifically so it can never shift a voter
+          checkbox down mid-tap — rendering it outside the list entirely
+          preserves that. */}
+      {blockHolder && (
+        <p className={styles.block} role="status">
+          On the block: {blockHolder.name}
+        </p>
+      )}
     </section>
   );
 }

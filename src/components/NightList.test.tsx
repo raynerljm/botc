@@ -354,6 +354,17 @@ describe("Night list: collapsing the panel (issue #168)", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps the glanceable progress count visible even while collapsed", () => {
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      nightListCollapsed: true,
+    });
+    renderNightList(game);
+
+    expect(screen.getByRole("status")).toHaveTextContent(/^0\/\d+ done$/);
+  });
+
   it("toggles the persisted collapsed state via the heading", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp"]);

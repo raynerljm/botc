@@ -368,7 +368,7 @@
      shrink to its collapsed content and hand the freed width to the circle.
      GrimoireBoard's own resize-fit logic (#98) re-measures the now-wider
      column via its ResizeObserver and grows the circle to match. */
-  .circleLayout[data-side-collapsed="true"] {
+  .circleLayout[data-side-collapsed] {
     grid-template-columns: 1fr auto;
   }
 }

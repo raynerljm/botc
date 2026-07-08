@@ -100,10 +100,6 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
         collapsed={game.nightListCollapsed}
         onToggleCollapsed={toggleCollapsed}
       >
-        <p className={styles.progress} role="status">
-          {checkedCount}/{countable.length} done
-        </p>
-
         <label className={styles.showAll}>
           <Checkbox checked={showAll} onChange={setShowAll} />
           Show all
@@ -194,6 +190,14 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
           End {phaseLabel(phase, nightNumber)}
         </button>
       </CollapsibleSection>
+
+      {/* Kept outside CollapsibleSection, unlike the checklist itself — a
+          storyteller collapsing this panel to reclaim circle width (issue
+          #168) still needs this glanceable "how much is left" count without
+          re-expanding the whole entries list (code review finding). */}
+      <p className={styles.progress} role="status">
+        {checkedCount}/{countable.length} done
+      </p>
     </section>
   );
 }

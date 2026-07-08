@@ -1196,7 +1196,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             // grid column, so collapsing only one still leaves the column
             // reserved for whichever panel is still expanded (issue #168).
             data-side-collapsed={
-              game.nightListCollapsed && game.dayPhaseCollapsed ? "true" : undefined
+              (game.nightListCollapsed && game.dayPhaseCollapsed) || undefined
             }
           >
             <div
