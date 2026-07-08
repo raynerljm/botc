@@ -56,7 +56,12 @@ export function ReminderPicker({
         aria-label="Add reminder"
         aria-modal="true"
       >
-        <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+        <button
+          type="button"
+          ref={cancelButtonRef}
+          className={styles.cancelButton}
+          onClick={onCancel}
+        >
           Cancel
         </button>
 

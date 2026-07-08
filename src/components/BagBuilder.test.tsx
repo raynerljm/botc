@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveBagBuilderDraft } from "@/lib/bagBuilderDraft";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
@@ -86,6 +87,60 @@ describe("player count and official target counts", () => {
     await user.clear(playerCountInput);
 
     expect(playerCountInput).toHaveValue(null);
+  });
+});
+
+describe("Teensyville player count cap", () => {
+  it("caps the player count input at 6 for a Teensyville script", () => {
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
+
+  it("clamps a typed-in count above 6 back down to 6 on blur", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "15");
+    await user.tab();
+
+    expect(playerCountInput).toHaveValue(6);
+  });
+
+  it("leaves a regular script's player count uncapped at 6", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute(
+      "max",
+      "15",
+    );
+  });
+
+  it("clamps a draft's stale above-6 player count on mount, instead of showing an out-of-range value", () => {
+    // Simulates a draft saved before the script gained (or was recognized
+    // as) Teensyville status, or written back when isTeensyville was false.
+    saveBagBuilderDraft("no-greater-joy", {
+      playerCount: 10,
+      travellerCount: 0,
+      selectedIds: [],
+      autoAddedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+    });
+
+    render(
+      <BagBuilder
+        characters={tb}
+        scriptId="no-greater-joy"
+        scriptName="No Greater Joy"
+        isTeensyville
+      />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(6);
   });
 });
 
@@ -429,6 +484,46 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps a manually-selected Damsel when the Huntsman is deselected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman", "damsel")} />);
+
+    // Deliberate manual pick, before Huntsman is ever touched.
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+    // No-op: Damsel is already in the bag, so nothing changes.
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    // Deselect: only an auto-added Damsel should leave with the Huntsman.
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("keeps a Damsel confirmed manually after auto-add selected, and still rendered, once the Huntsman is deselected — even though Damsel isn't on this script", async () => {
+    // Damsel is *not* in the script's own characters here — she only ever
+    // enters the pool via the auto-add extra (BagBuilder.tsx's `pool`
+    // useMemo). That pool must keep offering her once she's a confirmed
+    // manual pick, not just while Huntsman is still selected.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    const damsel = screen.getByRole("button", { name: /^Damsel/ });
+    // Confirm the auto-added Damsel as a deliberate pick: toggle her off
+    // then back on while Huntsman stays selected.
+    await user.click(damsel);
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("brings the Damsel along when Randomize itself picks the Huntsman", async () => {
     // Huntsman is the only Townsfolk candidate here, so Randomize's
     // Townsfolk fill is guaranteed to pick it deterministically.
@@ -517,6 +612,38 @@ describe("special flow: Legion/Riot/Atheist/Summoner relax validation (AC4)", ()
     expect(screen.getByRole("status")).toHaveTextContent(/On night X/);
     const townsfolkCounter = screen.getByText(/^Townsfolk \d+\/\d+$/);
     expect(townsfolkCounter).not.toHaveAttribute("data-state");
+  });
+
+  it("does not relax validation for a seating-constraint bracket like Marionette's", async () => {
+    // Marionette's "[You neighbor the Demon]" bracket doesn't resolve to a
+    // structured count delta either, but unlike Legion/Atheist/Summoner/Xaan
+    // it isn't a distribution-breaker — it's a seating constraint, so it
+    // must not relax count validation.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("marionette", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Marionette/ }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    const minionsCounter = screen.getByText(/^Minions \d+\/\d+$/);
+    expect(minionsCounter).toHaveAttribute("data-state");
+  });
+
+  it("also does not relax validation for Bounty Hunter's alignment-note bracket", async () => {
+    // Bounty Hunter's "[1 Townsfolk is evil]" bracket falls through to
+    // isFreeform for the same reason Marionette's does, but it's an
+    // alignment note, not a distribution change — official team counts
+    // stay standard, so it must not relax validation either.
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={characters("bountyhunter", "washerwoman")} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Bounty Hunter/ }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    const townsfolkCounter = screen.getByText(/^Townsfolk \d+\/\d+$/);
+    expect(townsfolkCounter).toHaveAttribute("data-state");
   });
 });
 
@@ -687,6 +814,50 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
+  });
+
+  it("still warns on a count mismatch when a seating-constraint bracket like Marionette's is in the bag", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("marionette", "washerwoman")}
+        scriptId="custom-marionette"
+        scriptName="Custom"
+      />,
+    );
+
+    // Marionette alone leaves Townsfolk/Demon under target (it's a Minion
+    // itself, so Minions match); unlike Legion's freeform bracket,
+    // Marionette's seating constraint must not relax validation, so the
+    // mismatch dialog should still fire.
+    await user.click(screen.getByRole("button", { name: /^Marionette/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.getByRole("alertdialog", { name: /count/i })).toBeInTheDocument();
+  });
+
+  it("still warns on a count mismatch when Bounty Hunter's alignment-note bracket is in the bag", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("bountyhunter", "washerwoman")}
+        scriptId="custom-bountyhunter"
+        scriptName="Custom"
+      />,
+    );
+
+    // Bounty Hunter alone leaves Townsfolk/Minion/Demon all under target;
+    // like Marionette, its freeform bracket is an alignment note rather
+    // than a distribution change, so validation must not relax and the
+    // mismatch dialog should still fire.
+    await user.click(screen.getByRole("button", { name: /^Bounty Hunter/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.getByRole("alertdialog", { name: /count/i })).toBeInTheDocument();
   });
 
   it("moves focus into the dialog when it opens, traps Tab within it, and restores focus on dismiss", async () => {
@@ -934,44 +1105,3 @@ describe("in-progress builder state survives reload / browser-back (issue #118)"
   });
 });
 
-describe("Teensyville player-count advisory (issue #120)", () => {
-  it("warns when a Teensyville script is configured above 6 players", async () => {
-    const user = userEvent.setup();
-    render(<BagBuilder characters={tb} isTeensyville />);
-
-    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
-
-    const playerCountInput = screen.getByLabelText("Player count");
-    await user.clear(playerCountInput);
-    await user.type(playerCountInput, "15");
-
-    expect(screen.getByText(/teensyville/i)).toBeInTheDocument();
-    expect(screen.getByText(/up to 6 players/i)).toBeInTheDocument();
-    // Advisory, never blocking (ADR 0003): still not disabled.
-    expect(
-      screen.getByRole("button", { name: /^Randomize/ }),
-    ).not.toBeDisabled();
-  });
-
-  it("stays silent for a Teensyville script at exactly 6 players", async () => {
-    const user = userEvent.setup();
-    render(<BagBuilder characters={tb} isTeensyville />);
-
-    const playerCountInput = screen.getByLabelText("Player count");
-    await user.clear(playerCountInput);
-    await user.type(playerCountInput, "6");
-
-    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
-  });
-
-  it("stays silent for a non-Teensyville script at any player count", async () => {
-    const user = userEvent.setup();
-    render(<BagBuilder characters={tb} />);
-
-    const playerCountInput = screen.getByLabelText("Player count");
-    await user.clear(playerCountInput);
-    await user.type(playerCountInput, "15");
-
-    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
-  });
-});

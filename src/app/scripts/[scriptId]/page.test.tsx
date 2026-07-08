@@ -144,6 +144,16 @@ describe("script sheet", () => {
     await expect(renderSheet("does-not-exist")).rejects.toThrow();
   });
 
+  it("marks a Teensyville script's designation", async () => {
+    await renderSheet("no-greater-joy");
+    expect(screen.getByText("Teensyville")).toBeInTheDocument();
+  });
+
+  it("does not mark a regular script as Teensyville", async () => {
+    await renderSheet("tb");
+    expect(screen.queryByText("Teensyville")).not.toBeInTheDocument();
+  });
+
   it("renders the Teensyville designation for a Teensyville script, not for a regular one (issue #120)", async () => {
     await renderSheet("no-greater-joy");
     expect(

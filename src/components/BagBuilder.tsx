@@ -46,6 +46,15 @@ import styles from "./BagBuilder.module.css";
 // isRelaxedCharacter below.
 const RELAXED_VALIDATION_IDS = new Set(["legion", "riot", "atheist", "summoner"]);
 
+// Setup characters whose bracket falls through to isFreeform (no structured
+// count delta parses out) despite describing something other than a
+// distribution change — Marionette's "[You neighbor the Demon]" is a
+// seating constraint and Bounty Hunter's "[1 Townsfolk is evil]" is an
+// alignment note, neither a Townsfolk/Outsider/Minion swap, so they must
+// not relax count validation the way Legion/Atheist/Summoner's genuine
+// distribution-breaking brackets do.
+const NON_DISTRIBUTION_FREEFORM_IDS = new Set(["marionette", "bountyhunter"]);
+
 // Characters whose "+the X" requirement is fulfilled automatically rather
 // than merely warned about (Huntsman brings its own Damsel; Choirboy just
 // requires the King already be in the bag).
@@ -54,14 +63,30 @@ const AUTO_ADD_TARGET_ID: Record<string, string> = { huntsman: "damsel" };
 // Expands a selection with every auto-add target whose trigger is present —
 // shared by a direct toggle and by Randomize, so a trigger ending up in the
 // bag always brings its target along regardless of how it got selected.
-function applyAutoAdds(ids: Set<string>): Set<string> {
+// Also reports which target ids were newly added by this call (as opposed
+// to already present, e.g. from a manual pick) — callers use that to track
+// auto-add provenance, so a trigger's later deselection only sweeps out a
+// target it actually brought in (issue #129).
+function applyAutoAdds(ids: Set<string>): { next: Set<string>; added: string[] } {
   let next = ids;
+  const added: string[] = [];
   for (const [triggerId, targetId] of Object.entries(AUTO_ADD_TARGET_ID)) {
     if (next.has(triggerId) && !next.has(targetId)) {
       if (next === ids) next = new Set(ids);
       next.add(targetId);
+      added.push(targetId);
     }
   }
+  return { next, added };
+}
+
+// Folds newly-added auto-add target ids (from applyAutoAdds) into a
+// provenance set — shared by toggleCharacter's select branch and
+// handleRandomize, the two places new auto-adds can happen.
+function withAutoAdded(prev: Set<string>, added: string[]): Set<string> {
+  if (added.length === 0) return prev;
+  const next = new Set(prev);
+  added.forEach((id) => next.add(id));
   return next;
 }
 
@@ -113,6 +138,7 @@ function isRelaxedCharacter(
   character: Character,
   parsed: ParsedSetupModifier | null | undefined,
 ): boolean {
+  if (NON_DISTRIBUTION_FREEFORM_IDS.has(character.id)) return false;
   return RELAXED_VALIDATION_IDS.has(character.id) || parsed?.isFreeform === true;
 }
 
@@ -131,6 +157,19 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+// Blank stays blank (it's a deliberately-empty field mid-edit, not a real
+// count); a real count reclamps against the current bounds, since a draft
+// can predate this script being known/capped as Teensyville.
+function clampDraftCount(
+  value: number | "" | undefined,
+  min: number,
+  max: number,
+): number | "" {
+  if (value === undefined) return min;
+  if (value === "") return value;
+  return clamp(value, min, max);
+}
+
 function omitKey(
   record: Record<string, number>,
   key: string,
@@ -147,9 +186,10 @@ export function BagBuilder({
   almanacUrl,
   firstNightOrder,
   otherNightOrder,
-  isTeensyville,
+  isTeensyville = false,
 }: BagBuilderProps) {
   const router = useRouter();
+  const maxPlayers = isTeensyville ? TEENSYVILLE_MAX_PLAYERS : MAX_PLAYERS;
   // Loaded once on mount (not re-read on every render) — a reload or a
   // browser-back from `/game/` remounts this component fresh, so the lazy
   // initializers below are exactly when this needs to run (issue #118).
@@ -157,13 +197,19 @@ export function BagBuilder({
     scriptId ? loadBagBuilderDraft(scriptId) : null,
   );
   const [playerCount, setPlayerCount] = useState<number | "">(
-    initialDraft?.playerCount ?? MIN_PLAYERS,
+    clampDraftCount(initialDraft?.playerCount, MIN_PLAYERS, maxPlayers),
   );
   const [travellerCount, setTravellerCount] = useState<number | "">(
     initialDraft?.travellerCount ?? 0,
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(initialDraft?.selectedIds ?? []),
+  );
+  // Provenance for the subset of `selectedIds` an auto-add (Huntsman →
+  // Damsel) put there, as opposed to a deliberate pick — see toggleCharacter
+  // and handleRandomize (issue #129).
+  const [autoAddedIds, setAutoAddedIds] = useState<Set<string>>(
+    new Set(initialDraft?.autoAddedIds ?? []),
   );
   const [modifierChoices, setModifierChoices] = useState<
     Record<string, number>
@@ -187,6 +233,7 @@ export function BagBuilder({
       playerCount,
       travellerCount,
       selectedIds: Array.from(selectedIds),
+      autoAddedIds: Array.from(autoAddedIds),
       modifierChoices,
       extraCopies,
       standInId,
@@ -196,6 +243,7 @@ export function BagBuilder({
     playerCount,
     travellerCount,
     selectedIds,
+    autoAddedIds,
     modifierChoices,
     extraCopies,
     standInId,
@@ -203,12 +251,18 @@ export function BagBuilder({
 
   // The selectable pool is the script's characters plus anything a special
   // flow auto-adds (e.g. Huntsman pulling in the Damsel) that the script
-  // didn't already include.
+  // didn't already include — offered either while the trigger is selected
+  // (so it can be toggled back on after a manual deselect, mid-interaction)
+  // or while the target itself is still selected (so a target confirmed as
+  // a manual pick stays rendered after its trigger is deselected, issue
+  // #129, instead of vanishing out from under a selection the storyteller
+  // deliberately kept).
   const pool = useMemo(() => {
     const ids = new Set(characters.map((c) => c.id));
     const extras: Character[] = [];
     for (const [triggerId, targetId] of Object.entries(AUTO_ADD_TARGET_ID)) {
-      if (selectedIds.has(triggerId) && !ids.has(targetId)) {
+      if (ids.has(targetId)) continue;
+      if (selectedIds.has(triggerId) || selectedIds.has(targetId)) {
         const target = getCharacter(targetId);
         if (target) extras.push(target);
       }
@@ -255,7 +309,7 @@ export function BagBuilder({
   const effectivePlayerCount = clamp(
     playerCount === "" ? NaN : playerCount,
     MIN_PLAYERS,
-    MAX_PLAYERS,
+    maxPlayers,
   );
   const effectiveTravellerCount = clamp(
     travellerCount === "" ? NaN : travellerCount,
@@ -288,27 +342,33 @@ export function BagBuilder({
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
     );
   }
-  // Teensyville scripts' small pools can't fill the standard distribution
-  // table above 6 players (BotC wiki "Behind the Curtain") — advisory only,
-  // per ADR 0003, since rule zero lets a storyteller deviate deliberately.
-  if (isTeensyville && effectivePlayerCount > TEENSYVILLE_MAX_PLAYERS) {
-    requirementWarnings.push(
-      `Teensyville scripts are designed for up to ${TEENSYVILLE_MAX_PLAYERS} players — ${effectivePlayerCount} may not leave enough characters to fill the bag.`,
-    );
-  }
-
   function toggleCharacter(character: Character) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const autoAddId = AUTO_ADD_TARGET_ID[normalizeCharacterId(character.id)];
-      if (next.has(character.id)) {
-        next.delete(character.id);
-        if (autoAddId) next.delete(autoAddId);
-        return next;
+    const autoAddId = AUTO_ADD_TARGET_ID[normalizeCharacterId(character.id)];
+    if (selectedIds.has(character.id)) {
+      // Only sweep the auto-add target out too if it's still exactly the
+      // one this trigger brought in — a target picked deliberately, before
+      // or independently of the trigger, survives the trigger's deselection
+      // (issue #129).
+      const sweepAutoAddTarget = autoAddId !== undefined && autoAddedIds.has(autoAddId);
+      const next = new Set(selectedIds);
+      next.delete(character.id);
+      if (sweepAutoAddTarget) next.delete(autoAddId!);
+      setSelectedIds(next);
+      if (autoAddedIds.has(character.id) || sweepAutoAddTarget) {
+        setAutoAddedIds((prev) => {
+          const nextAutoAdded = new Set(prev);
+          nextAutoAdded.delete(character.id);
+          if (sweepAutoAddTarget) nextAutoAdded.delete(autoAddId!);
+          return nextAutoAdded;
+        });
       }
-      next.add(character.id);
-      return applyAutoAdds(next);
-    });
+    } else {
+      const { next, added } = applyAutoAdds(new Set(selectedIds).add(character.id));
+      setSelectedIds(next);
+      if (added.length > 0) {
+        setAutoAddedIds((prev) => withAutoAdded(prev, added));
+      }
+    }
     // A modifier choice or extra-copies count only makes sense for the
     // selection it was made under — clear it so re-selecting the character
     // later starts from its default rather than a stale prior choice.
@@ -348,11 +408,14 @@ export function BagBuilder({
     }
     // Randomize can pick a trigger character (e.g. Huntsman) the same as a
     // direct toggle can — bring its auto-add target along either way.
-    current = applyAutoAdds(current);
-    setSelectedIds(current);
+    const { next, added } = applyAutoAdds(current);
+    setSelectedIds(next);
+    if (added.length > 0) {
+      setAutoAddedIds((prev) => withAutoAdded(prev, added));
+    }
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.
-    if (standInId && current.has(standInId)) setStandInId(null);
+    if (standInId && next.has(standInId)) setStandInId(null);
   }
 
   function handleContinue() {
@@ -468,7 +531,7 @@ export function BagBuilder({
           <input
             type="number"
             min={MIN_PLAYERS}
-            max={MAX_PLAYERS}
+            max={maxPlayers}
             value={playerCount}
             // Clamping is deferred to blur: clamping on every keystroke
             // fights the browser's in-progress digit-by-digit typing (e.g.
@@ -481,7 +544,7 @@ export function BagBuilder({
             }}
             onBlur={() =>
               setPlayerCount((value) =>
-                clamp(value === "" ? NaN : value, MIN_PLAYERS, MAX_PLAYERS),
+                clamp(value === "" ? NaN : value, MIN_PLAYERS, maxPlayers),
               )
             }
           />

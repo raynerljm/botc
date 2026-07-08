@@ -5,13 +5,15 @@ import {
   type GameDocument,
   type Player,
 } from "./gameDocument";
+import { formatDateStampSGT } from "./gameTime";
 
 // The export is its own versioned format (ADR 0002), independent of the game
 // document's schema version (ADR 0001) — a document-schema bump must not
 // silently restamp exports whose shape hasn't changed. Bumped to 2 for issue
-// #15's activeFabled field, an addition to the snapshot shape itself (unlike
-// claim/demonBluffs, which were already part of v1's shape as placeholders).
-export const EXPORT_SCHEMA_VERSION = 2;
+// #15's activeFabled field, and to 3 for issue #126's isDrunk field —
+// additions to the snapshot shape itself (unlike claim/demonBluffs, which
+// were already part of v1's shape as placeholders).
+export const EXPORT_SCHEMA_VERSION = 3;
 
 // The exported snapshot shape (ADR 0002: a snapshot, not an event log).
 export interface SnapshotPlayer {
@@ -19,6 +21,11 @@ export interface SnapshotPlayer {
   seat: number;
   startingCharacter: string | null;
   finalCharacter: string | null;
+  // Whether this player is standing in as a Townsfolk while secretly the
+  // Drunk (CONTEXT.md: Stand-in — "the grimoire records them as the
+  // Drunk"). Without this, a Drunk's stand-in character is indistinguishable
+  // from a genuine copy of it.
+  isDrunk: boolean;
   startingAlignment: Alignment | null;
   finalAlignment: Alignment | null;
   dead: boolean;
@@ -73,6 +80,7 @@ export function buildGameSnapshot(game: GameDocument): GameSnapshot {
       seat: player.seat,
       startingCharacter: player.startingCharacterId,
       finalCharacter: player.characterId,
+      isDrunk: player.isDrunk,
       startingAlignment: alignmentOf(player, startingCharacter),
       finalAlignment: alignmentOf(player, finalCharacter),
       dead: player.dead,
@@ -112,7 +120,7 @@ export function gameSnapshotFilename(game: GameDocument): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "game";
-  const date = (game.endedAt ?? game.createdAt).slice(0, 10);
+  const date = formatDateStampSGT(game.endedAt ?? game.createdAt);
   return `botc-${slug}-${date}.json`;
 }
 

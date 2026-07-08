@@ -70,6 +70,27 @@ describe("EndGamePanel", () => {
     );
   });
 
+  it("ends an in-flight bag draw along with the game, so an ended game can't keep resuming into the ritual (issue #108)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <EndGamePanel
+        game={makeGame({
+          drawSession: { seatId: "seat-1", stage: "choosing" },
+        })}
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /good wins/i }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /declare/i }));
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ winner: "good", drawSession: null }),
+    );
+  });
+
   it("cancels a pending winner declaration without changing the game", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -117,9 +138,10 @@ describe("EndGamePanel", () => {
 
     await user.type(screen.getByLabelText(/notes/i), "x");
 
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ notes: "x" }),
-    );
+    // Exactly the changed field, never a whole document spread from the
+    // `game` prop — a stale spread from this always-mounted panel could
+    // revert a same-tick draw-stage write (Cursor review finding).
+    expect(onChange).toHaveBeenCalledWith({ notes: "x" });
   });
 
   it("can reopen an ended game to keep playing", async () => {
@@ -153,8 +175,8 @@ describe("EndGamePanel", () => {
     const { rerender } = render(
       <EndGamePanel
         game={game}
-        onChange={(next) => {
-          latest = next;
+        onChange={(patch) => {
+          latest = { ...latest, ...patch };
         }}
       />,
     );
@@ -173,14 +195,19 @@ describe("EndGamePanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Game" }));
 
-    expect(onChange).toHaveBeenCalledWith({ ...game, endGamePanelCollapsed: true });
+    expect(onChange).toHaveBeenCalledWith({ endGamePanelCollapsed: true });
   });
 
   it("doesn't reopen the declare-winner confirmation on its own after collapsing and re-expanding the section (Copilot review finding)", async () => {
     const user = userEvent.setup();
     function Wrapper() {
       const [game, setGame] = useState(() => makeGame());
-      return <EndGamePanel game={game} onChange={setGame} />;
+      return (
+        <EndGamePanel
+          game={game}
+          onChange={(patch) => setGame((g) => ({ ...g, ...patch }))}
+        />
+      );
     }
     render(<Wrapper />);
 

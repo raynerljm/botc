@@ -23,6 +23,13 @@ export interface ScriptMeta {
   teensyville?: boolean;
 }
 
+// The single source of truth for "is this script Teensyville" — every
+// consumer (library scripts, custom/uploaded scripts) reads this instead of
+// re-deriving `meta.teensyville === true` independently.
+export function isTeensyvilleScript(meta: ScriptMeta): boolean {
+  return meta.teensyville === true;
+}
+
 // meta.almanac comes from user-provided script JSON (upload/paste), so any
 // consumer rendering it as a link href must check this first — otherwise a
 // javascript: URL could be persisted and executed on click.

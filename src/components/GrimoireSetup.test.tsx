@@ -128,6 +128,23 @@ describe("seat list generated from player count", () => {
 
     expect(seat1Name).toHaveValue("Alice");
   });
+
+  it("trims a renamed seat on blur and falls back to \"Player N\" when emptied", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    const seat1Name = screen.getByLabelText("Seat 1 name");
+    await user.clear(seat1Name);
+    await user.type(seat1Name, "  Bob  ");
+    await user.tab();
+    expect(seat1Name).toHaveValue("Bob");
+
+    await user.clear(seat1Name);
+    await user.type(seat1Name, "   ");
+    await user.tab();
+    expect(seat1Name).toHaveValue("Player 1");
+  });
 });
 
 describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
@@ -500,6 +517,207 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     await user.keyboard("{Escape}");
     expect(
       screen.getByRole("dialog", { name: /washerwoman|imp/i }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("draw session survives a reload (issue #108)", () => {
+  // Simulates a page reload the same way GamePage does on a real
+  // navigation: tear down the component instance entirely and remount
+  // fresh from the persisted document.
+  function reload(unmount: () => void) {
+    unmount();
+    render(<GrimoireSetup game={loadGame() as GameDocument} />);
+  }
+
+  it("keeps drawn seats masked and the ritual alive after a reload at the 'Card hidden' screen", async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("baron")!,
+    ];
+    const game = makeGame({ playerCount: 3, selectedCharacters: candidates });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+
+    reload(unmount);
+
+    // The privacy guard is restored — the ritual did not silently end into
+    // an open grimoire.
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start bag draw" }),
+    ).not.toBeInTheDocument();
+
+    // Seat 1's identity (one of the candidates) stays behind the mask: no
+    // token art, no character name, and no manual-assign dropdowns listing
+    // the remaining bag.
+    candidates.forEach((c) => {
+      expect(screen.queryByText(c.name)).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByLabelText(/Assign seat \d manually/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+
+    // The ritual continues where it left off: the next player confirms and
+    // draws from the remaining bag.
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+  });
+
+  it("resumes a mid-reveal reload at the privacy guard instead of re-rendering the drawn identity", async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("baron")!,
+    ];
+    const game = makeGame({ playerCount: 3, selectedCharacters: candidates });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    const seat1Character = candidates.find((c) =>
+      screen.queryByRole("heading", { name: c.name }),
+    )!;
+    expect(seat1Character).toBeDefined();
+
+    // Reload while the private reveal is on-screen: whoever holds the device
+    // after the remount is unknown, so the card must not come back.
+    reload(unmount);
+
+    expect(
+      screen.queryByRole("heading", { name: seat1Character.name }),
+    ).not.toBeInTheDocument();
+    candidates.forEach((c) => {
+      expect(screen.queryByText(c.name)).not.toBeInTheDocument();
+      expect(screen.queryByText(c.ability)).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+
+    // The drawn character was committed when the reveal opened, so the seat
+    // stays assigned and the ritual carries on with the next player.
+    expect(loadGame()!.players[0].characterId).toBe(seat1Character.id);
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+  });
+
+  it("never shows the '(actually the Drunk)' note after a mid-ritual reload", async () => {
+    const user = userEvent.setup();
+    // Only the Drunk is selected, so its Librarian stand-in is the bag's
+    // sole token — seat 1's draw is guaranteed to be the disguised Drunk,
+    // deterministically, with seat 2 still unassigned to keep the ritual
+    // (and its privacy guard) alive across the reload.
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("librarian")!,
+    });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    expect(
+      screen.getByRole("heading", { name: "Librarian" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    reload(unmount);
+
+    expect(loadGame()!.players[0].isDrunk).toBe(true);
+    expect(screen.queryByText("(actually the Drunk)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Librarian")).not.toBeInTheDocument();
+  });
+
+  it("resumes a mid-choosing reload with the face-down grid for the same seat", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
+
+    reload(unmount);
+
+    // Choosing is the safe stage — the same seat's face-down grid is simply
+    // back, with nothing assigned and nothing revealed.
+    expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+    expect(
+      screen.queryByRole("button", { name: "Start bag draw" }),
+    ).not.toBeInTheDocument();
+
+    // The ritual is still live end-to-end: seat 1 can draw right away.
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    expect(loadGame()!.players[0].characterId).not.toBeNull();
+  });
+
+  it("resumes the last seat's mid-reveal reload at the guard, ending the ritual only on an explicit tap", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    // Seat 1 draws and passes; seat 2 (the last seat) draws and is
+    // mid-reveal when the reload hits.
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+
+    reload(unmount);
+
+    // The finished board (which would show every seat's identity) stays
+    // hidden — role queries respect `hidden`, matching how the live
+    // last-seat reveal asserts the same thing — and with no next seat to
+    // pass to, the guard says to hand back instead.
+    expect(
+      screen.queryByRole("region", { name: "Grimoire circle" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Washerwoman" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Imp" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Card hidden\. Return the device to the storyteller\./),
+    ).toBeInTheDocument();
+
+    // Only the explicit tap opens the finished grimoire.
+    await user.click(screen.getByRole("button", { name: "Open the grimoire" }));
+    expect(
+      screen.getByRole("region", { name: "Grimoire circle" }),
     ).toBeInTheDocument();
   });
 });
@@ -1482,6 +1700,184 @@ describe("acts-as (issue #17)", () => {
   });
 });
 
+describe("night-list bookkeeping stays coherent (issue #128)", () => {
+  it("delivers a retargeted acts-as entry unchecked, pruning the stale checkmark", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const empath = getCharacter("empath")!;
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    // Empath and Fortune Teller both act on the first night, so the acts-as
+    // entry stays visible across the retarget without needing "Show all".
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [washerwoman, imp],
+      scriptCharacters: [washerwoman, imp, empath, fortuneTeller],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [washerwoman.id, imp.id][i],
+        startingCharacterId: [washerwoman.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.selectOptions(within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${washerwoman.name} as ${empath.name}`,
+      }),
+    );
+    const playerId = seated.players[0].id;
+    expect(loadGame()!.nightChecked).toContain(`actsas:${playerId}`);
+
+    // Retarget mid-night — the new target's entry must not inherit the
+    // Empath entry's checkmark; the wake for Fortune Teller was never done.
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/acts as/i),
+      "fortuneteller",
+    );
+
+    expect(loadGame()!.nightChecked).not.toContain(`actsas:${playerId}`);
+    expect(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${washerwoman.name} as ${fortuneTeller.name}`,
+      }),
+    ).not.toBeChecked();
+  });
+
+  it("resets a mid-night character swap's entry to unchecked", async () => {
+    const { user, circle } = await completeSetup();
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    const washerwoman = getCharacter("washerwoman")!;
+    await user.click(
+      screen.getByRole("checkbox", { name: `${washerwoman.name} — Player 1` }),
+    );
+    const playerId = loadGame()!.players[0].id;
+    expect(loadGame()!.nightChecked).toContain(`char:${playerId}`);
+
+    // Fortune Teller also acts on the first night, so its entry stays
+    // visible without needing "Show all".
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "fortuneteller",
+    );
+
+    expect(loadGame()!.nightChecked).not.toContain(`char:${playerId}`);
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    expect(
+      screen.getByRole("checkbox", { name: `${fortuneTeller.name} — Player 1` }),
+    ).not.toBeChecked();
+  });
+
+  it("loses a checked entry's checkmark, alongside the (skipped) badge, when the player dies mid-night", async () => {
+    const { user, circle } = await completeSetup();
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    const washerwoman = getCharacter("washerwoman")!;
+    const checkbox = screen.getByRole("checkbox", {
+      name: `${washerwoman.name} — Player 1`,
+    });
+    await user.click(checkbox);
+    expect(loadGame()!.nightChecked.length).toBe(1);
+
+    await user.click(within(seat1Wrap).getByRole("button", { name: /mark dead/i }));
+
+    expect(loadGame()!.nightChecked).toEqual([]);
+    expect(
+      screen.getByRole("checkbox", { name: `${washerwoman.name} — Player 1` }),
+    ).not.toBeChecked();
+    expect(screen.getByText(/\(skipped\)/)).toBeInTheDocument();
+  });
+
+  it("prunes a stale un-skip alongside a mid-night character swap (code review finding)", async () => {
+    const { user, circle } = await completeSetup();
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(within(seat1Wrap).getByRole("button", { name: /mark dead/i }));
+    await user.click(screen.getByRole("button", { name: "Un-skip" }));
+
+    const playerId = loadGame()!.players[0].id;
+    expect(loadGame()!.nightUnskipped).toContain(`char:${playerId}`);
+
+    // Fortune Teller also acts on the first night, so its entry stays
+    // visible without needing "Show all".
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "fortuneteller",
+    );
+
+    expect(loadGame()!.nightUnskipped).not.toContain(`char:${playerId}`);
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    // The un-skip for the old character must not silently carry over — the
+    // new character's entry starts auto-skipped again, same as any other
+    // dead player's entry the storyteller hasn't un-skipped yet.
+    expect(
+      screen.getByRole("checkbox", { name: `${fortuneTeller.name} — Player 1` }),
+    ).toBeDisabled();
+  });
+
+  it("prunes a stale un-skip alongside an acts-as retarget (code review finding)", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const empath = getCharacter("empath")!;
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [washerwoman, imp],
+      scriptCharacters: [washerwoman, imp, empath, fortuneTeller],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [washerwoman.id, imp.id][i],
+        startingCharacterId: [washerwoman.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await user.selectOptions(within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(within(seat1Wrap).getByRole("button", { name: /mark dead/i }));
+    await user.click(screen.getByRole("button", { name: "Un-skip" }));
+
+    const playerId = seated.players[0].id;
+    expect(loadGame()!.nightUnskipped).toContain(`actsas:${playerId}`);
+
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/acts as/i),
+      "fortuneteller",
+    );
+
+    expect(loadGame()!.nightUnskipped).not.toContain(`actsas:${playerId}`);
+    expect(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${washerwoman.name} as ${fortuneTeller.name}`,
+      }),
+    ).toBeDisabled();
+  });
+});
+
 describe("the first visible grimoire (issue #12)", () => {
   it("keeps showing the setup view while any seat is unassigned", () => {
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
@@ -1548,6 +1944,31 @@ describe("the first visible grimoire (issue #12)", () => {
     await user.type(seat1Name, "Alice");
 
     expect(loadGame()!.players[0].name).toBe("Alice");
+  });
+
+  it("trims and falls back to \"Player N\" when a token's name is emptied on blur", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Token = within(circle).getByText("Player 1").closest("div")!;
+    await user.click(within(circle).getByText("Player 1"));
+    const seat1Name = within(seat1Token).getByLabelText(/player name/i);
+    await user.clear(seat1Name);
+    await user.type(seat1Name, "   ");
+    await user.tab();
+
+    expect(seat1Name).toHaveValue("Player 1");
+    expect(loadGame()!.players[0].name).toBe("Player 1");
   });
 });
 

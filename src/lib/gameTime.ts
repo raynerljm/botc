@@ -21,6 +21,30 @@ export function formatStartTimeSGT(createdAt: string): string {
   return `${startTimeFormatter.format(date)} SGT`;
 }
 
+const dateStampFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: SGT_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+// The SGT calendar date, for filenames — distinct from formatStartTimeSGT's
+// display string. A UTC timestamp in the 16:00-24:00 window is already the
+// next day in SGT (+8h), so a raw ISO slice would date it a day behind what
+// the games list (and this) shows.
+//
+// Built from formatToParts rather than the formatter's plain output: en-CA
+// conventionally renders as YYYY-MM-DD, but that's an ICU convention, not a
+// guarantee — a different separator would land in a downloaded filename.
+export function formatDateStampSGT(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "unknown-date";
+  const parts = dateStampFormatter.formatToParts(date);
+  const part = (type: "year" | "month" | "day") =>
+    parts.find((p) => p.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 function formatDurationMs(ms: number): string {
   // Floor, not round: a display with no seconds shouldn't claim "1h 0m" for
   // a game that's 59m31s in — that reads as a full hour when it isn't one.

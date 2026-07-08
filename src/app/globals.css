@@ -1,4 +1,10 @@
 :root {
+  /* Tells the UA to render unclassed native controls (selects, inputs,
+     scrollbars) with its dark widget set instead of defaulting to light —
+     otherwise every bare native renders as a light control jammed between
+     the app's own dark-themed ones. */
+  color-scheme: dark;
+
   /* Dark-first: the storyteller uses this at a table in the dark. */
   --background: #16131d;
   --surface: #211c2b;
@@ -19,6 +25,14 @@
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+}
+
+/* The hidden attribute must always actually hide: any container that sets
+   its own display (e.g. the grimoire's circle-layout grid) otherwise beats
+   the UA's [hidden] { display: none } — which rendered the fully open
+   board beneath the bag draw's privacy guard (issue #108). */
+[hidden] {
+  display: none !important;
 }
 
 html,

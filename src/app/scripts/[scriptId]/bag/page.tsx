@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BagBuilder } from "@/components/BagBuilder";
 import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
+import { isTeensyvilleScript } from "@/lib/scriptParser";
 import { getScriptById, listScriptSummaries } from "@/lib/scripts";
 
 import styles from "./page.module.css";
@@ -31,6 +32,8 @@ export default async function BagBuilderPage({ params }: Props) {
   const script = getScriptById(scriptId);
   if (!script) notFound();
 
+  const isTeensyville = isTeensyvilleScript(script.meta);
+
   return (
     <main>
       <header className={styles.header}>
@@ -39,7 +42,7 @@ export default async function BagBuilderPage({ params }: Props) {
         </Link>
         <h1 className={styles.title}>
           {script.name}
-          {script.meta.teensyville === true && <TeensyvilleBadge />}
+          {isTeensyville && <TeensyvilleBadge />}
         </h1>
       </header>
       <BagBuilder
@@ -49,7 +52,7 @@ export default async function BagBuilderPage({ params }: Props) {
         almanacUrl={script.meta.almanac}
         firstNightOrder={script.meta.firstNight}
         otherNightOrder={script.meta.otherNight}
-        isTeensyville={script.meta.teensyville === true}
+        isTeensyville={isTeensyville}
       />
     </main>
   );

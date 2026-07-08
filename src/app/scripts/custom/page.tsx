@@ -6,8 +6,9 @@ import { Suspense } from "react";
 
 import { ScriptSheet } from "@/components/ScriptSheet";
 import { ShareScriptButton } from "@/components/ShareScriptButton";
+import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
 import { resolveStoredScript } from "@/lib/customScripts";
-import { describeScriptParseError } from "@/lib/scriptParser";
+import { describeScriptParseError, isTeensyvilleScript } from "@/lib/scriptParser";
 
 import styles from "./page.module.css";
 
@@ -23,6 +24,9 @@ function CustomScriptContent() {
           ← Scripts
         </Link>
         {stored && <h1 className={styles.title}>{stored.name}</h1>}
+        {result?.ok && isTeensyvilleScript(result.script.meta) && (
+          <TeensyvilleBadge />
+        )}
         {result?.ok && stored && (
           <ShareScriptButton
             // The script's own JSON may have no _meta.name — fall back to

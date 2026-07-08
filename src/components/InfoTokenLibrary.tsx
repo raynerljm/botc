@@ -70,7 +70,12 @@ export function InfoTokenLibrary({
       >
         {chosenText === null ? (
           <>
-            <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+            <button
+              type="button"
+              ref={cancelButtonRef}
+              className={styles.cancelButton}
+              onClick={onCancel}
+            >
               Cancel
             </button>
 

@@ -52,6 +52,10 @@ export interface GrimoireBoardProps {
   nominatorTodayIds?: ReadonlySet<string>;
   nomineeTodayIds?: ReadonlySet<string>;
   onRename: (playerId: string, name: string) => void;
+  // Fired when the name field loses focus, so a normalization (trim,
+  // fall back to "Player N" if left blank) can land as one committed edit
+  // instead of fighting the user's cursor on every keystroke of onRename.
+  onRenameCommit: (playerId: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
   onReorderSeat: (playerId: string, direction: "earlier" | "later") => void;
@@ -96,6 +100,26 @@ function tokenSizeRem(total: number): number {
   const clamped = Math.min(MAX_TOKEN_COUNT, Math.max(MIN_TOKEN_COUNT, total));
   const t = (clamped - MIN_TOKEN_COUNT) / (MAX_TOKEN_COUNT - MIN_TOKEN_COUNT);
   return MAX_TOKEN_REM - t * (MAX_TOKEN_REM - MIN_TOKEN_REM);
+}
+
+// A token's menuBody is centred under its summary by default, which pushes
+// half its ~14rem width past the board's edge for a seat/reminder parked
+// near the left or right rim — the classic phone-width overflow (issue
+// #124). Flagging which hemisphere a token sits in lets CSS re-anchor the
+// menu to the token's own edge instead of its centre; centred tokens (the
+// 40-60 band) are unaffected since a centred menu already fits under them.
+function tokenSideAttr(x: number): "left" | "right" | undefined {
+  if (x < 40) return "left";
+  if (x > 60) return "right";
+  return undefined;
+}
+
+// Mirrors tokenSideAttr vertically: a token in the board's bottom half
+// opens its menu below by default, which is the side most likely to run
+// out of viewport height in landscape (issue #124) — flagging it lets CSS
+// flip the menu to open above the token instead.
+function tokenVSideAttr(y: number): "bottom" | undefined {
+  return y > 55 ? "bottom" : undefined;
 }
 
 // A circle any smaller than this stops reading as "the board" regardless of
@@ -152,6 +176,7 @@ export function GrimoireBoard({
   nominatorTodayIds,
   nomineeTodayIds,
   onRename,
+  onRenameCommit,
   onMove,
   onReCircle,
   onReorderSeat,
@@ -706,6 +731,13 @@ export function GrimoireBoard({
               ? travellerSwapOptions
               : swapOptions;
             const position = positionByPlayerId.get(player.id)!;
+            // A menu's anchor side must not chase a live drag preview — a
+            // storyteller can press-drag the very token whose menu is
+            // already open (dragging doesn't close it), and if data-side/
+            // data-vside tracked the in-flight position, the menu would
+            // flicker between anchors every pointermove instead of staying
+            // put until the drag actually settles (code review finding).
+            const restingPosition = player.position ?? circlePosition(index, total);
             const official = character ? isOfficialCharacter(character) : false;
             // True only while the player is still wearing the stand-in's
             // identity — once swapped to any other character (including a
@@ -719,6 +751,8 @@ export function GrimoireBoard({
                 className={styles.tokenWrap}
                 data-player-id={player.id}
                 data-menu-open={menuOpen ? "true" : undefined}
+                data-side={tokenSideAttr(restingPosition.x)}
+                data-vside={tokenVSideAttr(restingPosition.y)}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details
@@ -766,7 +800,9 @@ export function GrimoireBoard({
                       <span className={styles.note}>(actually the Drunk)</span>
                     )}
                     {player.isTraveller && (
-                      <span className={styles.note}>{player.travellerAlignment}</span>
+                      <span className={styles.noteCapitalized}>
+                        {player.travellerAlignment}
+                      </span>
                     )}
                     {player.claim && (
                       <span className={styles.claimBadge}>
@@ -792,9 +828,11 @@ export function GrimoireBoard({
                       Player name
                       <input
                         id={`token-name-${player.id}`}
+                        className={styles.textInput}
                         type="text"
                         value={player.name}
                         onChange={(event) => onRename(player.id, event.target.value)}
+                        onBlur={() => onRenameCommit(player.id)}
                       />
                     </label>
 
@@ -834,19 +872,25 @@ export function GrimoireBoard({
                     {isHiddenDrunk && (
                       <button
                         type="button"
+                        className={styles.menuButton}
                         onClick={() => onRevealDrunk(player.id)}
                       >
                         Reveal Drunk
                       </button>
                     )}
 
-                    <button type="button" onClick={() => onRemovePlayer(player.id)}>
+                    <button
+                      type="button"
+                      className={styles.menuButton}
+                      onClick={() => onRemovePlayer(player.id)}
+                    >
                       Remove player
                     </button>
 
                     {!activeOverlay && !placingReminderId && (
                       <button
                         type="button"
+                        className={styles.menuButton}
                         onClick={() =>
                           setActiveOverlay({
                             type: "reminder",
@@ -896,6 +940,7 @@ export function GrimoireBoard({
                       Acts as
                       <select
                         id={`token-acts-as-${player.id}`}
+                        className={styles.select}
                         value={player.actsAs ?? ""}
                         onChange={(event) =>
                           onSetActsAs(player.id, event.target.value || null)
@@ -917,6 +962,7 @@ export function GrimoireBoard({
                     <div className={styles.seatControls}>
                       <button
                         type="button"
+                        className={styles.menuButton}
                         disabled={index === 0}
                         onClick={() => onReorderSeat(player.id, "earlier")}
                       >
@@ -924,6 +970,7 @@ export function GrimoireBoard({
                       </button>
                       <button
                         type="button"
+                        className={styles.menuButton}
                         disabled={index === total - 1}
                         onClick={() => onReorderSeat(player.id, "later")}
                       >
@@ -1003,6 +1050,8 @@ export function GrimoireBoard({
                 className={styles.reminderWrap}
                 data-reminder-id={reminder.id}
                 data-menu-open={menuOpen ? "true" : undefined}
+                data-side={tokenSideAttr(restingPosition.x)}
+                data-vside={tokenVSideAttr(restingPosition.y)}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details

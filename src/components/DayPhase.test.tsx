@@ -207,6 +207,35 @@ describe("Day phase: the block", () => {
     expect(screen.getByText(`On the block: ${nominee.name}`)).toBeInTheDocument();
   });
 
+  it("renders the block status after the nominations list, never above it, so it can't shift voter checkboxes mid-count (issue #125)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    const [nominator, nominee, voter1, voter2] = game.players;
+    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [firstCheckbox] = screen.getAllByRole("checkbox");
+    await user.click(screen.getByRole("checkbox", { name: voter1.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: voter2.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const blockStatus = screen.getByText(`On the block: ${nominee.name}`);
+    // DOCUMENT_POSITION_FOLLOWING: firstCheckbox comes before blockStatus in
+    // the DOM, so the block line can never push a checkbox above it down.
+    expect(
+      firstCheckbox.compareDocumentPosition(blockStatus) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("doesn't let a third nomination retake the block by matching a tied high-water mark (issue #113 repro)", async () => {
     const user = userEvent.setup();
     const game = gameWith([

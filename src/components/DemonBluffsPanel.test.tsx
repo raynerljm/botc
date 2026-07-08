@@ -91,6 +91,66 @@ describe("DemonBluffsPanel", () => {
     expect(slot.value).toBe("imp");
   });
 
+  it("flags an in-play character as '(in play)' once 'show all' surfaces it as a bluff option (issue #128)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame();
+    // "In play" for the annotation means held by a seated player right now
+    // (not merely part of the game's roster) — Imp is on the roster and
+    // seated here; Baron is on the roster but nobody's holding it yet.
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => (i === 0 ? { ...p, characterId: "imp" } : p)),
+    };
+    render(<DemonBluffsPanel game={seated} onChange={vi.fn()} />);
+
+    await user.click(screen.getByLabelText(/show all characters/i));
+
+    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
+    const impOption = within(slot).getByRole("option", { name: /^imp/i });
+    expect(impOption).toHaveTextContent("Imp (in play)");
+
+    // On the roster but not currently held by anyone — stays unannotated.
+    const baronOption = within(slot).getByRole("option", { name: /^baron/i });
+    expect(baronOption).not.toHaveTextContent("(in play)");
+
+    // Off the roster entirely — also unannotated.
+    const washerwomanOption = within(slot).getByRole("option", {
+      name: /^washerwoman/i,
+    });
+    expect(washerwomanOption).not.toHaveTextContent("(in play)");
+  });
+
+  it("stops flagging a character as '(in play)' once nobody holds it anymore, unlike the ever-growing character pool (issue #128)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame();
+    // Imp was swapped out mid-game (still lingering in characterPool, which
+    // only ever grows) but no player currently holds it.
+    const swappedAway: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => (i === 0 ? { ...p, characterId: "recluse" } : p)),
+    };
+    render(<DemonBluffsPanel game={swappedAway} onChange={vi.fn()} />);
+
+    await user.click(screen.getByLabelText(/show all characters/i));
+
+    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
+    const impOption = within(slot).getByRole("option", { name: /^imp/i });
+    expect(impOption).not.toHaveTextContent("(in play)");
+  });
+
+  it("selecting an in-play bluff is never blocked — only annotated (issue #128, ADR 0003)", async () => {
+    const user = userEvent.setup();
+    const { onChange, game } = renderPanel();
+
+    await user.click(screen.getByLabelText(/show all characters/i));
+    await user.selectOptions(screen.getByLabelText("Bluff slot 1"), "imp");
+
+    expect(onChange).toHaveBeenCalledWith({
+      ...game,
+      demonBluffs: ["imp", null, null],
+    });
+  });
+
   it("sets a slot's bluff and preserves the other slots", async () => {
     const user = userEvent.setup();
     const { onChange, game } = renderPanel({

@@ -1,9 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmDialog } from "./ConfirmDialog";
+
+afterEach(() => {
+  // A failed assertion between useFakeTimers()/useRealTimers() would otherwise
+  // leave fake timers active for every later test, hanging userEvent (which
+  // relies on real timers) until the test runner's timeout.
+  vi.useRealTimers();
+});
 
 function ToggleHarness({ destructive = false }: { destructive?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -138,7 +145,10 @@ describe("ConfirmDialog", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onCancel on a backdrop tap outside the dialog", async () => {
+  it("calls onCancel on a backdrop tap outside the dialog, once the opening grace period has passed", async () => {
+    // Only performance.now() is mocked — setTimeout/RAF stay real so
+    // userEvent's own internal waits don't hang against a fake clock.
+    vi.useFakeTimers({ toFake: ["performance"] });
     const user = userEvent.setup();
     const onCancel = vi.fn();
     const { container } = render(
@@ -151,9 +161,31 @@ describe("ConfirmDialog", () => {
       />,
     );
 
+    vi.advanceTimersByTime(600);
     await user.click(container.firstChild as Element);
 
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a backdrop tap in the brief window right after opening, so a double-tap on the trigger can't self-cancel (issue #125)", async () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const { container } = render(
+      <ConfirmDialog
+        title="Delete this?"
+        message="This can't be undone."
+        confirmLabel="Delete"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    // A double-tap's second click can land on the backdrop the instant it
+    // mounts (the trigger it covers is gone) — that must not cancel.
+    await user.click(container.firstChild as Element);
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("moves focus into the dialog on open, traps Tab within it, and restores focus to the trigger on close", async () => {

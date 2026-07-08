@@ -103,16 +103,11 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     <section className={styles.panel} aria-label="Day phase">
       <h2 className={styles.heading}>Day {day}</h2>
 
-      {blockHolder && (
-        <p className={styles.block} role="status">
-          On the block: {blockHolder.name}
-        </p>
-      )}
-
       <form className={styles.form} onSubmit={recordNomination}>
         <label className={styles.field}>
           Nominator
           <select
+            className={styles.select}
             value={nominatorId}
             onChange={(event) => setNominatorId(event.target.value)}
           >
@@ -130,6 +125,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         <label className={styles.field}>
           Nominee
           <select
+            className={styles.select}
             value={nomineeId}
             onChange={(event) => setNomineeId(event.target.value)}
           >
@@ -213,6 +209,16 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
           );
         })}
       </ul>
+
+      {/* Rendered after the list, never above it — inserting this above the
+          nominations shifted every voter checkbox down by a row on the exact
+          tap that crossed the threshold, losing votes mid-count (issue
+          #125). */}
+      {blockHolder && (
+        <p className={styles.block} role="status">
+          On the block: {blockHolder.name}
+        </p>
+      )}
     </section>
   );
 }

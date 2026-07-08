@@ -26,6 +26,7 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  min-height: 2.75rem;
 }
 
 .board {
@@ -197,11 +198,32 @@
 .playerName {
   font-size: 0.75rem;
   color: var(--muted);
+  /* An unbroken name (no spaces to wrap on) used to render as one line
+     however wide it needed to be, cutting across the circle and painting
+     over neighbouring tokens/labels and the Claims panel. Clamping to two
+     lines with an ellipsis bounds both width and height so it can never
+     grow past its own row, regardless of wrap points. */
+  max-width: 6rem;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
 }
 
 .note {
   font-size: 0.7rem;
   color: var(--muted);
+}
+
+/* Opt-in, not the default: capitalize suits the traveller-alignment note
+   ("good" -> "Good"), but applying it to every .note mangled the Drunk's
+   "(actually the Drunk)" into "(Actually The Drunk)". A future note that
+   isn't a single lowercase word stays correct by default instead of having
+   to know to opt out. */
+.noteCapitalized {
+  composes: note;
   text-transform: capitalize;
 }
 
@@ -226,10 +248,47 @@
   gap: 0.5rem;
   width: max-content;
   max-width: 14rem;
+  /* Viewport clamp (issue #124): without this, a menu whose content grows
+     tall enough to reach the viewport edge is only reachable by scrolling
+     the page — and since a page-background touch reads as "outside" (the
+     pointerdown-outside-closes handler above), that scroll gesture closes
+     the menu before it lands. Scrolling *inside* an already-clamped menu
+     stays "inside" for that handler, so it never fires. `100vh` on a phone
+     browser is the *layout* viewport, taller than what's actually visible
+     behind a collapsible address bar/toolbar — `dvh` tracks the real,
+     currently-visible viewport instead; unsupported browsers ignore that
+     line and keep the `vh` clamp above it. */
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   padding: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
+}
+
+/* Re-anchors the menu to the token's own edge instead of its centre for a
+   token parked near the board's rim, where a centred ~14rem-wide menu would
+   otherwise overflow the viewport (issue #124). data-side/data-vside are
+   set from the token's circle position — see tokenSideAttr/tokenVSideAttr
+   in GrimoireBoard.tsx. */
+.tokenWrap[data-side="right"] .menuBody,
+.reminderWrap[data-side="right"] .menuBody {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.tokenWrap[data-side="left"] .menuBody,
+.reminderWrap[data-side="left"] .menuBody {
+  left: 0;
+  transform: none;
+}
+
+.tokenWrap[data-vside="bottom"] .menuBody,
+.reminderWrap[data-vside="bottom"] .menuBody {
+  top: auto;
+  bottom: calc(100% + 0.5rem);
 }
 
 /* Browsers restart a CSS animation whenever an element goes from `display:
@@ -256,6 +315,32 @@
   border-radius: 0.5rem;
   color: var(--foreground);
   min-height: 2.75rem;
+}
+
+.textInput {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  min-height: 2.75rem;
+}
+
+.menuButton {
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menuButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .markDead {
