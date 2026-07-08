@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { DEMON_BLUFF_SLOTS, heldCharacterIds, type GameDocument } from "@/lib/gameDocument";
@@ -8,6 +8,7 @@ import { DEMON_BLUFF_SLOTS, heldCharacterIds, type GameDocument } from "@/lib/ga
 import { CharacterToken } from "./CharacterToken";
 import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./DemonBluffsPanel.module.css";
+import { useDialogDismiss } from "./useDialogDismiss";
 
 export interface DemonBluffsPanelProps {
   game: GameDocument;
@@ -144,31 +145,61 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
         </button>
 
         {showingToDemon && (
-          <div className={styles.overlay} role="dialog" aria-label="Demon bluffs">
-            <ul className={styles.overlaySlots}>
-              {bluffCharacters.map((character, index) => (
-                <li key={index} className={styles.overlaySlot}>
-                  {character ? (
-                    <>
-                      <CharacterToken character={character} />
-                      <span className={styles.overlayName}>{character.name}</span>
-                    </>
-                  ) : (
-                    <span className={styles.overlayName}>Not set</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className={styles.closeButton}
-              onClick={() => setShowingToDemon(false)}
-            >
-              Close
-            </button>
-          </div>
+          <ShowToDemonOverlay
+            bluffCharacters={bluffCharacters}
+            onClose={() => setShowingToDemon(false)}
+          />
         )}
       </CollapsibleSection>
     </section>
+  );
+}
+
+function ShowToDemonOverlay({
+  bluffCharacters,
+  onClose,
+}: {
+  bluffCharacters: (Character | undefined)[];
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // The overlay was already fully opaque and full-viewport, so nothing was
+  // ever reachable behind it — this just makes Escape and the keyboard trap
+  // honor that too (issue #122).
+  useDialogDismiss(dialogRef, closeButtonRef, onClose);
+
+  return (
+    <div
+      ref={dialogRef}
+      className={styles.overlay}
+      role="dialog"
+      aria-label="Demon bluffs"
+      aria-modal="true"
+    >
+      <ul className={styles.overlaySlots}>
+        {bluffCharacters.map((character, index) => (
+          <li key={index} className={styles.overlaySlot}>
+            {character ? (
+              <>
+                <CharacterToken character={character} />
+                <span className={styles.overlayName}>{character.name}</span>
+              </>
+            ) : (
+              <span className={styles.overlayName}>Not set</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        ref={closeButtonRef}
+        className={styles.closeButton}
+        onClick={onClose}
+      >
+        Close
+      </button>
+    </div>
   );
 }

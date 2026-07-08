@@ -199,6 +199,27 @@ describe("DemonBluffsPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("moves focus into the overlay on open, traps Tab within it, calls onClose on Escape, and restores focus to the trigger on close (issue #122)", async () => {
+    const user = userEvent.setup();
+    renderPanel({ demonBluffs: ["washerwoman", "librarian", null] });
+
+    const trigger = screen.getByRole("button", { name: /show to demon/i });
+    await user.click(trigger);
+
+    const closeButton = screen.getByRole("button", { name: /close/i });
+    expect(document.activeElement).toBe(closeButton);
+
+    // The overlay's only focusable control is Close — Tab must cycle back
+    // to it rather than escaping to the rest of the panel (the show-all
+    // checkbox, the bluff slot selects) hidden behind the opaque backdrop.
+    await user.tab();
+    expect(document.activeElement).toBe(closeButton);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   it("themes the full-screen reveal's Close button instead of leaving it plain grey (issue #74)", async () => {
     const user = userEvent.setup();
     renderPanel({ demonBluffs: ["washerwoman", "librarian", null] });
