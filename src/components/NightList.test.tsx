@@ -117,7 +117,7 @@ describe("Night list: undoing a transition (issue #165)", () => {
     const game = gameWith(["washerwoman", "imp"]);
     renderNightList(game);
 
-    expect(screen.queryByRole("button", { name: /^← /ig})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^← /i })).not.toBeInTheDocument();
   });
 
   it("offers a back control while a night is open, distinct from End night", () => {
