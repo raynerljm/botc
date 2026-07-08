@@ -2387,23 +2387,24 @@ describe("post-draw setup walkthrough (issue #26)", () => {
         getCharacter("empath")!,
       ],
     });
-    render(<GrimoireSetup game={game} />);
-    await selectOption(user, 
+    const rendered = render(<GrimoireSetup game={game} />);
+    await selectOption(user,
       screen.getByLabelText("Assign seat 1 manually"),
       "Fortune Teller",
     );
-    await selectOption(user, 
+    await selectOption(user,
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
-    await selectOption(user, 
+    await selectOption(user,
       screen.getByLabelText("Assign seat 3 manually"),
       "Chef",
     );
-    await selectOption(user, 
+    await selectOption(user,
       screen.getByLabelText("Assign seat 4 manually"),
       "Empath",
     );
+    return rendered;
   }
 
   it("offers the walkthrough automatically once a decision is needed", async () => {
@@ -2488,10 +2489,29 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     expect(within(offer).getByText(/pending/i)).toBeInTheDocument();
     expect(within(offer).queryByText(/before the first night/i)).not.toBeInTheDocument();
 
-    // Reachable from the board toolbar regardless of the banner's own state.
+    // The board toolbar's reopen button is a separate entry point, hidden
+    // once the first night has ended (issue #170) — the offer above is
+    // unaffected and stays reachable.
+    expect(
+      screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the board toolbar's reopen button once the first night has ended (issue #170)", async () => {
+    const user = userEvent.setup();
+    const { unmount } = await completedFortuneTellerBoard(user);
+
     expect(
       screen.getByRole("button", { name: "Setup walkthrough" }),
     ).toBeInTheDocument();
+
+    const game = loadGame() as GameDocument;
+    unmount();
+    render(<GrimoireSetup game={{ ...game, night: 1 }} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
   });
 
   it("starting the walkthrough replaces the grimoire view with it", async () => {

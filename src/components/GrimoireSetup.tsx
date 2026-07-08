@@ -1231,11 +1231,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onRemoveFabled={removeFabled}
                 onSetClaim={setClaim}
                 onSetActsAs={setActsAs}
-                // Always available — the walkthrough always has at least its
-                // Demon bluffs step (issue #155), so this is never undefined
-                // in practice; GrimoireBoard's own prop stays optional since
-                // it's a generically reusable board, not specific to this.
-                onOpenSetupWalkthrough={openWalkthrough}
+                // Undefined once the first night has ended (issue #170) —
+                // those are pre-first-night decisions, so the standing
+                // reopen entry point is clutter afterward. Before that, the
+                // walkthrough always has at least its Demon bluffs step
+                // (issue #155), so this is never undefined in practice;
+                // GrimoireBoard's own prop stays optional since it's a
+                // generically reusable board, not specific to this.
+                onOpenSetupWalkthrough={
+                  firstNightEnded(game) ? undefined : openWalkthrough
+                }
               />
             </div>
             <div className={styles.nightListArea}>
