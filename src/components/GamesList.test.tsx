@@ -76,6 +76,38 @@ describe("GamesList", () => {
     expect(within(inProgress).getByText(/in progress/i)).toBeInTheDocument();
   });
 
+  it("labels the traveller count alongside the seated player count", () => {
+    const game = makeGame("Trouble Brewing");
+    saveGame({
+      ...game,
+      players: [
+        ...game.players,
+        {
+          ...game.players[0],
+          id: "traveller-1",
+          isTraveller: true,
+          travellerAlignment: "good",
+        },
+      ],
+    });
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Trouble Brewing").closest("li")!;
+    expect(
+      within(row).getByText(/5 players \+ 1 traveller/i),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the traveller label when a game has none", () => {
+    saveGame(makeGame("Trouble Brewing"));
+
+    render(<GamesList />);
+
+    const row = screen.getByText("Trouble Brewing").closest("li")!;
+    expect(within(row).getByText(/^5 players ·/i)).toBeInTheDocument();
+  });
+
   it("shows each game's SGT start time and elapsed time since start", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-04T02:15:00.000Z"));

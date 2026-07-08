@@ -246,6 +246,21 @@ describe("buildGameSnapshot", () => {
     });
   });
 
+  it("records a stand-in's true identity as the Drunk", () => {
+    const snapshot = buildGameSnapshot(makeGame());
+    const alex = snapshot.players.find((p) => p.name === "Alex")!;
+
+    expect(alex.startingCharacter).toBe("librarian");
+    expect(alex.isDrunk).toBe(true);
+  });
+
+  it("marks a genuine (non-Drunk) player false", () => {
+    const snapshot = buildGameSnapshot(makeGame());
+    const sarah = snapshot.players.find((p) => p.name === "Sarah")!;
+
+    expect(sarah.isDrunk).toBe(false);
+  });
+
   it("carries only the filled Demon bluff slots into the snapshot", () => {
     const game = makeGame({
       demonBluffs: ["fortuneteller", null, "slayer"],
@@ -275,6 +290,15 @@ describe("gameSnapshotFilename", () => {
     expect(
       gameSnapshotFilename(
         makeGame({ endedAt: "2026-07-05T10:00:00.000Z" }),
+      ),
+    ).toBe("botc-trouble-brewing-2026-07-05.json");
+  });
+
+  it("dates the filename by the SGT calendar day, not UTC's", () => {
+    // 2026-07-04T20:00:00Z is 2026-07-05T04:00:00+08:00 in SGT.
+    expect(
+      gameSnapshotFilename(
+        makeGame({ endedAt: "2026-07-04T20:00:00.000Z" }),
       ),
     ).toBe("botc-trouble-brewing-2026-07-05.json");
   });
