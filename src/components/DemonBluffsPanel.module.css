@@ -124,6 +124,37 @@
   color: var(--foreground);
 }
 
+.overlayTeam {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.overlayTeam[data-team="townsfolk"] {
+  color: var(--team-townsfolk);
+}
+
+.overlayTeam[data-team="outsider"] {
+  color: var(--team-outsider);
+}
+
+.overlayTeam[data-team="minion"] {
+  color: var(--team-minion);
+}
+
+.overlayTeam[data-team="demon"] {
+  color: var(--team-demon);
+}
+
+.overlayAbility {
+  max-width: 22rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--foreground);
+  text-align: center;
+}
+
 .closeButton {
   padding: 0.6rem 1rem;
   font: inherit;

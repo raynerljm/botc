@@ -199,6 +199,59 @@ describe("DemonBluffsPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("shows each set bluff's ability text on the Show to Demon overlay (issue #164)", async () => {
+    const user = userEvent.setup();
+    renderPanel({ demonBluffs: ["washerwoman", "librarian", null] });
+
+    await user.click(screen.getByRole("button", { name: /show to demon/i }));
+
+    const dialog = screen.getByRole("dialog", { name: /demon bluffs/i });
+    expect(
+      within(dialog).getByText(getCharacter("washerwoman")!.ability),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(getCharacter("librarian")!.ability),
+    ).toBeInTheDocument();
+  });
+
+  it("shows each set bluff's team (Townsfolk / Outsiders) on the Show to Demon overlay (issue #164)", async () => {
+    const user = userEvent.setup();
+    // Washerwoman is Townsfolk, Butler is an Outsider on the TB script.
+    renderPanel({ demonBluffs: ["washerwoman", "butler", null] });
+
+    await user.click(screen.getByRole("button", { name: /show to demon/i }));
+
+    const dialog = screen.getByRole("dialog", { name: /demon bluffs/i });
+    const slots = within(dialog).getAllByRole("listitem");
+    expect(within(slots[0]).getByText("Townsfolk")).toBeInTheDocument();
+    expect(within(slots[1]).getByText("Outsiders")).toBeInTheDocument();
+  });
+
+  it("shows a bluff's actual team on the overlay when 'show all' picked an off-rule (evil) character (issue #164)", async () => {
+    const user = userEvent.setup();
+    // Imp is a Demon, only pickable as a bluff via the 'show all' escape
+    // hatch (Lunatic/Marionette games, ADR 0003) — the overlay should show
+    // its real team, not force it into Townsfolk/Outsider.
+    renderPanel({ demonBluffs: ["imp", null, null] });
+
+    await user.click(screen.getByRole("button", { name: /show to demon/i }));
+
+    const dialog = screen.getByRole("dialog", { name: /demon bluffs/i });
+    expect(within(dialog).getByText("Demons")).toBeInTheDocument();
+  });
+
+  it("still renders empty bluff slots as 'Not set' on the overlay, with no ability or team shown (issue #164)", async () => {
+    const user = userEvent.setup();
+    renderPanel({ demonBluffs: ["washerwoman", null, null] });
+
+    await user.click(screen.getByRole("button", { name: /show to demon/i }));
+
+    const dialog = screen.getByRole("dialog", { name: /demon bluffs/i });
+    const slots = within(dialog).getAllByRole("listitem");
+    expect(within(slots[1]).getByText("Not set")).toBeInTheDocument();
+    expect(within(slots[1]).queryByText(/townsfolk|outsiders|minions|demons/i)).not.toBeInTheDocument();
+  });
+
   it("moves focus into the overlay on open, traps Tab within it, calls onClose on Escape, and restores focus to the trigger on close (issue #122)", async () => {
     const user = userEvent.setup();
     renderPanel({ demonBluffs: ["washerwoman", "librarian", null] });
