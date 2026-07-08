@@ -846,8 +846,8 @@ describe("naming the drawn seat's player (issue #54)", () => {
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
     await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
 
-    await user.type(screen.getByLabelText(/custom player name/i), "Substitute Sam");
-    await user.click(screen.getByRole("button", { name: /use this name/i }));
+    await user.type(screen.getByLabelText(/player name/i), "Substitute Sam");
+    await user.click(screen.getByRole("button", { name: /name yourself/i }));
 
     expect(loadGame()!.players[0].name).toBe("Substitute Sam");
   });
@@ -859,7 +859,7 @@ describe("naming the drawn seat's player (issue #54)", () => {
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
 
-    expect(screen.queryByRole("button", { name: /use this name/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/player name/i)).not.toBeInTheDocument();
   });
 
   it("hides the drawn seat's plain name field while its reveal is on-screen, so only the picker edits it (code review finding)", async () => {

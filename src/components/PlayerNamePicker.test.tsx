@@ -6,8 +6,14 @@ import { REGULAR_PLAYERS } from "@/lib/players";
 
 import { PlayerNamePicker } from "./PlayerNamePicker";
 
-describe("searching and selecting from the regular players list (issue #54)", () => {
-  it("lists every regular player before any search text is entered", () => {
+describe("a single merged input for searching and naming (issue #157)", () => {
+  it("renders exactly one text input, with no separate custom-name form", () => {
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+  });
+
+  it("lists every regular player before any text is entered", () => {
     render(<PlayerNamePicker onSelect={vi.fn()} />);
 
     for (const name of REGULAR_PLAYERS) {
@@ -15,11 +21,11 @@ describe("searching and selecting from the regular players list (issue #54)", ()
     }
   });
 
-  it("narrows the list to names matching the search text, case-insensitively", async () => {
+  it("narrows the list to names matching the typed text, case-insensitively", async () => {
     const user = userEvent.setup();
     render(<PlayerNamePicker onSelect={vi.fn()} />);
 
-    await user.type(screen.getByRole("textbox", { name: /search players/i }), "jor");
+    await user.type(screen.getByRole("textbox"), "jor");
 
     expect(screen.getByRole("button", { name: "Jordan" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Alex" })).not.toBeInTheDocument();
@@ -35,28 +41,108 @@ describe("searching and selecting from the regular players list (issue #54)", ()
     expect(onSelect).toHaveBeenCalledWith("Bailey");
   });
 
-  it("clears the search text after a selection, so the full list is available again", async () => {
+  it("clears the input after a selection, so the full list is available again", async () => {
     const user = userEvent.setup();
     render(<PlayerNamePicker onSelect={vi.fn()} />);
 
-    const search = screen.getByRole("textbox", { name: /search players/i });
-    await user.type(search, "jor");
+    const input = screen.getByRole("textbox");
+    await user.type(input, "jor");
     await user.click(screen.getByRole("button", { name: "Jordan" }));
 
-    expect(search).toHaveValue("");
+    expect(input).toHaveValue("");
     expect(screen.getByRole("button", { name: "Alex" })).toBeInTheDocument();
   });
 });
 
-describe("custom name entry when a player isn't in the regular list (issue #54)", () => {
-  it("selects a typed custom name, without it needing to match the regular list", async () => {
+describe("naming yourself from the same input when there's no matching player (issue #157)", () => {
+  it("offers a 'name yourself' action once the typed text matches no regular player", async () => {
+    const user = userEvent.setup();
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    await user.type(screen.getByRole("textbox"), "Substitute Sam");
+
+    expect(
+      screen.getByRole("button", { name: /name yourself.*substitute sam/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not offer the 'name yourself' action while the text still matches a regular player", async () => {
+    const user = userEvent.setup();
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    await user.type(screen.getByRole("textbox"), "Jordan");
+
+    expect(
+      screen.queryByRole("button", { name: /name yourself/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("selects the typed custom name when the 'name yourself' action is used", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(<PlayerNamePicker onSelect={onSelect} />);
 
-    await user.type(screen.getByLabelText(/custom player name/i), "Substitute Sam");
-    await user.click(screen.getByRole("button", { name: /use this name/i }));
+    await user.type(screen.getByRole("textbox"), "Substitute Sam");
+    await user.click(screen.getByRole("button", { name: /name yourself/i }));
 
     expect(onSelect).toHaveBeenCalledWith("Substitute Sam");
+  });
+
+  it("trims the committed custom name", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<PlayerNamePicker onSelect={onSelect} />);
+
+    await user.type(screen.getByRole("textbox"), "  Substitute Sam  ");
+    await user.click(screen.getByRole("button", { name: /name yourself/i }));
+
+    expect(onSelect).toHaveBeenCalledWith("Substitute Sam");
+  });
+
+  it("does not offer a 'name yourself' action for whitespace-only input", async () => {
+    const user = userEvent.setup();
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    await user.type(screen.getByRole("textbox"), "   ");
+
+    expect(
+      screen.queryByRole("button", { name: /name yourself/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers 'name yourself' for text that is only a substring of a regular player's name, not an exact match (code review finding)", async () => {
+    const user = userEvent.setup();
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    // "an" narrows the regular-players list to Dana and Jordan (both
+    // contain it), but nobody is named exactly "an" — naming yourself
+    // should still be offered rather than being blocked by that filter.
+    await user.type(screen.getByRole("textbox"), "an");
+
+    expect(screen.getByRole("button", { name: "Dana" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Jordan" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /name yourself.*"an"/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("selects the typed custom name when Enter is pressed (code review finding)", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<PlayerNamePicker onSelect={onSelect} />);
+
+    await user.type(screen.getByRole("textbox"), "Substitute Sam{Enter}");
+
+    expect(onSelect).toHaveBeenCalledWith("Substitute Sam");
+  });
+
+  it("does not commit anything on Enter while the text still matches a regular player (code review finding)", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<PlayerNamePicker onSelect={onSelect} />);
+
+    await user.type(screen.getByRole("textbox"), "Jordan{Enter}");
+
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });
