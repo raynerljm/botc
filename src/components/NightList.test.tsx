@@ -112,6 +112,175 @@ describe("Night list: starting and ending a night", () => {
   });
 });
 
+describe("Night list: undoing a transition (issue #165)", () => {
+  it("does not offer a back control before any night has been opened", () => {
+    const game = gameWith(["washerwoman", "imp"]);
+    renderNightList(game);
+
+    expect(screen.queryByRole("button", { name: /^← /i })).not.toBeInTheDocument();
+  });
+
+  it("offers a back control while a night is open, distinct from End night", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    renderNightList(game);
+
+    expect(screen.getByRole("button", { name: "← Back" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /End First night/ })).toBeInTheDocument();
+  });
+
+  it("undoes Start night: closes the night without advancing the counter", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+
+    expect(latest.nightOpen).toBe(false);
+    expect(latest.night).toBe(0);
+    expect(latest.nightChecked).toEqual([]);
+    expect(latest.nightUnskipped).toEqual([]);
+  });
+
+  it("discards any check-offs made before backing out of a night", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      nightChecked: ["char:stale"],
+      nightUnskipped: ["char:stale"],
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+
+    expect(latest.nightChecked).toEqual([]);
+    expect(latest.nightUnskipped).toEqual([]);
+  });
+
+  it("does not offer to reopen a night that hasn't ended yet", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: false });
+    renderNightList(game);
+
+    expect(screen.queryByRole("button", { name: /^← Reopen/ })).not.toBeInTheDocument();
+  });
+
+  it("offers to reopen the just-ended night once one has ended", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    ).toBeInTheDocument();
+  });
+
+  it("undoes End night: restores the night counter, checklist, and today's nominations", async () => {
+    const user = userEvent.setup();
+    const nomination = {
+      id: "n1",
+      nominatorId: "p1",
+      nomineeId: "p2",
+      votes: ["p3"],
+      threshold: 1,
+      isExile: false,
+    };
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      nightChecked: ["char:p1"],
+      nightUnskipped: ["char:p2"],
+      nominations: [nomination],
+    });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+    rerender(
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={(next) => {
+          latest = next;
+        }}
+      />,
+    );
+    // Ending the night cleared these, exactly as the existing "starting and
+    // ending a night" tests already cover.
+    expect(latest.nominations).toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+
+    expect(latest.night).toBe(0);
+    expect(latest.nightOpen).toBe(true);
+    expect(latest.nightChecked).toEqual(["char:p1"]);
+    expect(latest.nightUnskipped).toEqual(["char:p2"]);
+    expect(latest.nominations).toEqual([nomination]);
+  });
+
+  it("consumes the reopen offer once used, so it can't be replayed a second time", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+    rerender(
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={(next) => {
+          latest = next;
+        }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+    );
+
+    expect(latest.lastEndedNightSnapshot).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^← Reopen/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("labels the reopen control for a later night correctly", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End Night 2/ }));
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "← Reopen Night 2" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Night list: entries", () => {
   it("shows each entry's token, holding player, reminder text, and a checkbox", () => {
     const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });

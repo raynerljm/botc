@@ -55,6 +55,44 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       // resets at dawn (issue #20 AC) — today's nominations don't carry
       // over (CONTEXT.md: "tracked for the current day only").
       nominations: [],
+      // Captured before being cleared above, so "Reopen" can restore this
+      // night rather than reopening it blank (issue #165).
+      lastEndedNightSnapshot: {
+        nightChecked: game.nightChecked,
+        nightUnskipped: game.nightUnskipped,
+        nominations: game.nominations,
+      },
+    });
+  }
+
+  // Undoes "Start night". The state a night opened from is always blank
+  // (starting always clears nightChecked/nightUnskipped, and nothing else
+  // touches them while a night is closed), so going back just needs to
+  // close the night again — including discarding any check-offs made
+  // before backing out (issue #165 AC).
+  function undoStartNight() {
+    onChange({ ...game, nightOpen: false, nightChecked: [], nightUnskipped: [] });
+  }
+
+  // Undoes "End night": reopens the just-ended night with its checklist and
+  // the day's nominations restored from the snapshot End night captured,
+  // then consumes the snapshot so the offer can't be replayed (issue #165).
+  function undoEndNight() {
+    const snapshot = game.lastEndedNightSnapshot;
+    if (!snapshot) return;
+    onChange({
+      ...game,
+      night: game.night - 1,
+      nightOpen: true,
+      nightChecked: snapshot.nightChecked,
+      nightUnskipped: snapshot.nightUnskipped,
+      // Only restore the snapshotted nominations if none have been recorded
+      // since — End night always leaves nominations empty, so a non-empty
+      // array here means the storyteller has already nominated today, and
+      // that must never be silently overwritten by older, pre-End data
+      // (issue #165 AC: "does not silently lose the day-phase state").
+      nominations: game.nominations.length === 0 ? snapshot.nominations : game.nominations,
+      lastEndedNightSnapshot: null,
     });
   }
 
@@ -77,6 +115,11 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
           <button type="button" className={styles.startNight} onClick={startNight}>
             Start {phaseLabel(phase, nightNumber)}
           </button>
+          {game.lastEndedNightSnapshot && (
+            <button type="button" className={styles.back} onClick={undoEndNight}>
+              ← Reopen {phaseLabel(phaseForNight(game.night), game.night)}
+            </button>
+          )}
         </CollapsibleSection>
       </section>
     );
@@ -100,6 +143,10 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
         collapsed={game.nightListCollapsed}
         onToggleCollapsed={toggleCollapsed}
       >
+        <button type="button" className={styles.back} onClick={undoStartNight}>
+          ← Back
+        </button>
+
         <label className={styles.showAll}>
           <Checkbox checked={showAll} onChange={setShowAll} />
           Show all

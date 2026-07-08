@@ -23,6 +23,7 @@ import {
   withRestoredReminder,
   type Alignment,
   type BagToken,
+  type EndedNightSnapshot,
   type GameDocument,
   type Player,
   type PlayerPosition,
@@ -324,6 +325,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
     const dead = !player.dead;
+    const entryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(playerId, { dead }),
@@ -332,11 +334,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // "(skipped)" badge NightList renders, rather than a checked box that
       // both counts as done and reads as never-performed (issue #128).
       nightChecked: dead
-        ? withoutNightListEntries(game.nightChecked, [
-            charEntryId(playerId),
-            actsAsEntryId(playerId),
-          ])
+        ? withoutNightListEntries(game.nightChecked, entryIds)
         : game.nightChecked,
+      lastEndedNightSnapshot: dead
+        ? withoutSnapshotNightListEntries(game.lastEndedNightSnapshot, entryIds)
+        : game.lastEndedNightSnapshot,
     });
   }
 
@@ -507,6 +509,24 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     return list.filter((id) => !ids.includes(id));
   }
 
+  // The same pruning, applied to a captured "End night" snapshot (issue
+  // #165) rather than the live nightChecked/nightUnskipped — a reopened
+  // night replays the snapshot verbatim, so a swap/retarget/death that
+  // lands between End night and Reopen must prune it too, or Reopen
+  // resurrects the exact ambiguous checked-and-skipped state issue #128
+  // prunes on the live arrays.
+  function withoutSnapshotNightListEntries(
+    snapshot: EndedNightSnapshot | null,
+    ids: readonly string[],
+  ): EndedNightSnapshot | null {
+    if (!snapshot) return null;
+    return {
+      ...snapshot,
+      nightChecked: withoutNightListEntries(snapshot.nightChecked, ids),
+      nightUnskipped: withoutNightListEntries(snapshot.nightUnskipped, ids),
+    };
+  }
+
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
@@ -523,6 +543,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     { endDisguise = true }: { endDisguise?: boolean } = {},
   ) {
     const character = getCharacter(characterId);
+    const entryIds = [charEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(
@@ -535,10 +556,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // checked/un-skipped state the player's previous character left behind
       // — "done", or exempt from auto-skip, for a wake the new character
       // never had.
-      nightChecked: withoutNightListEntries(game.nightChecked, [charEntryId(playerId)]),
-      nightUnskipped: withoutNightListEntries(game.nightUnskipped, [
-        charEntryId(playerId),
-      ]),
+      nightChecked: withoutNightListEntries(game.nightChecked, entryIds),
+      nightUnskipped: withoutNightListEntries(game.nightUnskipped, entryIds),
+      lastEndedNightSnapshot: withoutSnapshotNightListEntries(
+        game.lastEndedNightSnapshot,
+        entryIds,
+      ),
     });
   }
 
@@ -599,6 +622,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           ]
         : game.travellerBag;
 
+    // A removed player's night-list entries and any snapshotted nomination
+    // votes must not survive them (issue #20's live-nominations rule,
+    // extended to the "End night" snapshot by issue #165 — otherwise
+    // Reopen could resurrect a checkmark or a vote tally for a player who
+    // no longer exists).
+    const snapshotEntryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
+    const prunedSnapshot = withoutSnapshotNightListEntries(
+      game.lastEndedNightSnapshot,
+      snapshotEntryIds,
+    );
+
     update({
       ...game,
       players: remainingPlayers,
@@ -610,6 +644,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         ...n,
         votes: n.votes.filter((id) => id !== playerId),
       })),
+      lastEndedNightSnapshot: prunedSnapshot && {
+        ...prunedSnapshot,
+        nominations: prunedSnapshot.nominations.map((n) => ({
+          ...n,
+          votes: n.votes.filter((id) => id !== playerId),
+        })),
+      },
     });
   }
 
@@ -644,6 +685,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // acts-as entry silently never appears.
   function setActsAs(playerId: string, characterId: string | null) {
     const character = characterId ? scriptCharacterById.get(characterId) : undefined;
+    const entryIds = [actsAsEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(playerId, {
@@ -655,10 +697,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // (issue #128), so retargeting (or clearing) would otherwise leave a
       // stale checked/un-skipped state behind — "done", or exempt from
       // auto-skip, for a wake the new target never had.
-      nightChecked: withoutNightListEntries(game.nightChecked, [actsAsEntryId(playerId)]),
-      nightUnskipped: withoutNightListEntries(game.nightUnskipped, [
-        actsAsEntryId(playerId),
-      ]),
+      nightChecked: withoutNightListEntries(game.nightChecked, entryIds),
+      nightUnskipped: withoutNightListEntries(game.nightUnskipped, entryIds),
+      lastEndedNightSnapshot: withoutSnapshotNightListEntries(
+        game.lastEndedNightSnapshot,
+        entryIds,
+      ),
     });
   }
 
