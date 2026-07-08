@@ -482,6 +482,26 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
       screen.queryByRole("button", { name: "Export game" }),
     ).not.toBeInTheDocument();
   });
+
+  it("doesn't claim aria-modal on the reveal, since Share via QR/Game stay reachable behind it by design (issue #122)", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+
+    const reveal = screen.getByRole("dialog", { name: /washerwoman|imp/i });
+    expect(reveal).not.toHaveAttribute("aria-modal");
+
+    // Escape must never dismiss this privacy guard — a stray keypress can't
+    // be allowed to end the ritual (unlike every other dialog in the app).
+    await user.keyboard("{Escape}");
+    expect(
+      screen.getByRole("dialog", { name: /washerwoman|imp/i }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("recovering from a bag shorter than the seat count (issue #118 AC1)", () => {

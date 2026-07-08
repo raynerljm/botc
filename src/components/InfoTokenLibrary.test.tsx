@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter, type Character } from "@/lib/characters";
@@ -134,5 +135,87 @@ describe("InfoTokenLibrary", () => {
       text: "The Grandmother is in play",
       characterIds: [],
     });
+  });
+});
+
+describe("dialog dismiss behavior (issue #122)", () => {
+  it("moves focus into the library on open, traps Tab within it, and restores focus to the trigger on close", async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button type="button" onClick={() => setOpen(true)}>
+            Info tokens
+          </button>
+          {open && (
+            <InfoTokenLibrary
+              characterById={characterById([])}
+              onShow={vi.fn()}
+              onCancel={() => setOpen(false)}
+            />
+          )}
+        </div>
+      );
+    }
+    render(<Harness />);
+
+    const trigger = screen.getByRole("button", { name: "Info tokens" });
+    await user.click(trigger);
+
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    expect(document.activeElement).toBe(cancelButton);
+
+    await user.click(cancelButton);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("calls onCancel on Escape", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onCancel on a backdrop tap outside the library", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const { container } = render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    await user.click(container.firstChild as Element);
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't call onCancel from a tap inside the library", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+
+    await user.click(screen.getByRole("dialog"));
+
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });

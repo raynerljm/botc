@@ -827,8 +827,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               className={styles.reveal}
               role="dialog"
               aria-label={revealedCharacter.name}
-              aria-modal="true"
             >
+              {/* No aria-modal: ShareScriptButton/EndGamePanel are
+                  deliberately still mounted and focusable underneath this
+                  backdrop (issue #21 AC: always reachable, even through a
+                  reveal), so Tab can reach them — claiming aria-modal would
+                  be dishonest about that (issue #122). Escape correctly does
+                  not dismiss this overlay either, since a reload/reload-safe
+                  privacy guard must never be bypassable by a stray keypress. */}
               {/* The animation lives on this inner wrapper, not .reveal
                   itself: .reveal is the opaque full-viewport privacy
                   backdrop (issue #53), and scaling *that* down leaves its

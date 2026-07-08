@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
@@ -140,6 +141,43 @@ describe("SetupWalkthrough shell", () => {
 
     await user.tab({ shift: true });
     expect(within(step).getByRole("button", { name: /skip/i })).toHaveFocus();
+  });
+
+  it("calls onClose on Escape and restores focus to the trigger on close (issue #122)", async () => {
+    const user = userEvent.setup();
+    function ToggleHarness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button type="button" onClick={() => setOpen(true)}>
+            Setup walkthrough
+          </button>
+          {open && (
+            <SetupWalkthrough
+              steps={[fortuneTellerStep]}
+              stepStatuses={{}}
+              players={[
+                makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
+              ]}
+              characterPool={characterPool}
+              onResolveStep={vi.fn()}
+              onReassignStandIn={vi.fn()}
+              onClose={() => setOpen(false)}
+            />
+          )}
+        </div>
+      );
+    }
+    render(<ToggleHarness />);
+
+    const trigger = screen.getByRole("button", { name: "Setup walkthrough" });
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Setup walkthrough" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("themes the per-step Skip button instead of leaving it bare (issue #74)", () => {

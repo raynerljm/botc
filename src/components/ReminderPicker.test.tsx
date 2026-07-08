@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter, type Character } from "@/lib/characters";
@@ -107,6 +108,68 @@ describe("custom free-text reminder", () => {
     await user.click(screen.getByRole("button", { name: /add custom reminder/i }));
 
     expect(onAdd).toHaveBeenCalledWith({ characterId: null, label: "Poisoned by me" });
+  });
+});
+
+describe("dialog dismiss behavior (issue #122)", () => {
+  it("moves focus into the picker on open, traps Tab within it, and restores focus to the trigger on close", async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button type="button" onClick={() => setOpen(true)}>
+            Add reminder
+          </button>
+          {open && (
+            <ReminderPicker
+              characterById={characterById}
+              inPlayCharacterIds={new Set()}
+              onAdd={vi.fn()}
+              onCancel={() => setOpen(false)}
+            />
+          )}
+        </div>
+      );
+    }
+    render(<Harness />);
+
+    const trigger = screen.getByRole("button", { name: "Add reminder" });
+    await user.click(trigger);
+
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    expect(document.activeElement).toBe(cancelButton);
+
+    await user.click(cancelButton);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("calls onCancel on Escape", async () => {
+    const user = userEvent.setup();
+    const { onCancel } = renderPicker();
+
+    await user.keyboard("{Escape}");
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onCancel on a backdrop tap outside the picker", async () => {
+    const user = userEvent.setup();
+    const { onCancel, container } = renderPicker();
+
+    await user.click(container.firstChild as Element);
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't call onCancel from a tap inside the picker", async () => {
+    const user = userEvent.setup();
+    const { onCancel } = renderPicker();
+
+    await user.click(screen.getByRole("dialog"));
+
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });
 

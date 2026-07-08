@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Character } from "@/lib/characters";
 
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
 import styles from "./ReminderPicker.module.css";
+import { useDialogDismiss } from "./useDialogDismiss";
 
 export interface ReminderPickerProps {
   // The universe to pick from — a script's characterPool, so homebrew
@@ -27,6 +28,14 @@ export function ReminderPicker({
   onCancel,
 }: ReminderPickerProps) {
   const [showAll, setShowAll] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Same shared dialog semantics as ConfirmDialog (issue #122): focus moves
+  // in on open, Tab is trapped within the picker so it can't reach the board
+  // controls (Re-circle, Hide grimoire) behind the backdrop, Escape cancels,
+  // and focus returns to the trigger on close.
+  useDialogDismiss(dialogRef, cancelButtonRef, onCancel);
 
   const characters = Array.from(characterById.values());
   const inPlay = characters.filter((c) => inPlayCharacterIds.has(c.id));
@@ -40,41 +49,32 @@ export function ReminderPicker({
   );
 
   return (
-    <div className={styles.picker} role="dialog" aria-label="Add reminder">
-      <button type="button" onClick={onCancel}>
-        Cancel
-      </button>
+    <div
+      className={styles.overlay}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className={styles.picker}
+        role="dialog"
+        aria-label="Add reminder"
+        aria-modal="true"
+      >
+        <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+          Cancel
+        </button>
 
-      <PickerGroup
-        legend="Global reminders"
-        items={globalReminders.map(({ character, label }) => ({
-          label,
-          onClick: () => onAdd({ characterId: character.id, label }),
-        }))}
-      />
-
-      {inPlay.map((character) => (
         <PickerGroup
-          key={character.id}
-          legend={character.name}
-          items={character.reminders.map((label) => ({
+          legend="Global reminders"
+          items={globalReminders.map(({ character, label }) => ({
             label,
             onClick: () => onAdd({ characterId: character.id, label }),
           }))}
         />
-      ))}
 
-      <label>
-        <input
-          type="checkbox"
-          checked={showAll}
-          onChange={(event) => setShowAll(event.target.checked)}
-        />
-        Show all characters
-      </label>
-
-      {showAll &&
-        others.map((character) => (
+        {inPlay.map((character) => (
           <PickerGroup
             key={character.id}
             legend={character.name}
@@ -85,11 +85,33 @@ export function ReminderPicker({
           />
         ))}
 
-      <PickerCustomTextForm
-        label="Custom reminder text"
-        submitLabel="Add custom reminder"
-        onSubmit={(label) => onAdd({ characterId: null, label })}
-      />
+        <label>
+          <input
+            type="checkbox"
+            checked={showAll}
+            onChange={(event) => setShowAll(event.target.checked)}
+          />
+          Show all characters
+        </label>
+
+        {showAll &&
+          others.map((character) => (
+            <PickerGroup
+              key={character.id}
+              legend={character.name}
+              items={character.reminders.map((label) => ({
+                label,
+                onClick: () => onAdd({ characterId: character.id, label }),
+              }))}
+            />
+          ))}
+
+        <PickerCustomTextForm
+          label="Custom reminder text"
+          submitLabel="Add custom reminder"
+          onSubmit={(label) => onAdd({ characterId: null, label })}
+        />
+      </div>
     </div>
   );
 }

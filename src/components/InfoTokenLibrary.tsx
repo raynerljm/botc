@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { STANDARD_INFO_TOKENS } from "@/lib/infoTokens";
@@ -8,6 +8,7 @@ import { STANDARD_INFO_TOKENS } from "@/lib/infoTokens";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
 import styles from "./InfoTokenLibrary.module.css";
+import { useDialogDismiss } from "./useDialogDismiss";
 
 export interface InfoTokenLibraryProps {
   // The game's own characterPool (homebrew-aware, same universe
@@ -29,6 +30,17 @@ export function InfoTokenLibrary({
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>(
     [],
   );
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Shared by both steps' Cancel button (only one is ever mounted at a
+  // time) — the hook only needs whichever is current when it focuses on
+  // mount, which is always the browsing step's.
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Same shared dialog semantics as ConfirmDialog (issue #122): focus moves
+  // in on open, Tab is trapped within the library so it can't reach the
+  // board controls (Re-circle, Hide grimoire) behind the backdrop, Escape
+  // cancels, and focus returns to the trigger on close.
+  useDialogDismiss(dialogRef, cancelButtonRef, onCancel);
 
   function chooseText(text: string) {
     setSelectedCharacterIds([]);
@@ -43,67 +55,81 @@ export function InfoTokenLibrary({
     );
   }
 
-  if (chosenText === null) {
-    return (
-      <div className={styles.library} role="dialog" aria-label="Info tokens">
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-
-        <div className={styles.standardCards}>
-          {STANDARD_INFO_TOKENS.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              onClick={() => chooseText(template.text)}
-            >
-              {template.text}
-            </button>
-          ))}
-        </div>
-
-        <PickerCustomTextForm
-          label="Custom info token text"
-          submitLabel="Use this text"
-          onSubmit={chooseText}
-        />
-      </div>
-    );
-  }
-
-  const groups = groupByTeam(Array.from(characterById.values()));
+  const groups =
+    chosenText !== null ? groupByTeam(Array.from(characterById.values())) : [];
 
   return (
-    <div className={styles.library} role="dialog" aria-label="Info tokens">
-      <p className={styles.chosenText}>{chosenText}</p>
+    <div
+      className={styles.overlay}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className={styles.library}
+        role="dialog"
+        aria-label="Info tokens"
+        aria-modal="true"
+      >
+        {chosenText === null ? (
+          <>
+            <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+              Cancel
+            </button>
 
-      {groups.map((group) => (
-        <PickerGroup
-          key={group.team}
-          legend={teamNames[group.team]}
-          items={group.characters.map((character) => ({
-            label: character.name,
-            selected: selectedCharacterIds.includes(character.id),
-            onClick: () => toggleCharacter(character.id),
-          }))}
-        />
-      ))}
+            <div className={styles.standardCards}>
+              {STANDARD_INFO_TOKENS.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => chooseText(template.text)}
+                >
+                  {template.text}
+                </button>
+              ))}
+            </div>
 
-      <div className={styles.attachActions}>
-        <button type="button" onClick={() => setChosenText(null)}>
-          Back
-        </button>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onShow({ text: chosenText, characterIds: selectedCharacterIds })
-          }
-        >
-          Show
-        </button>
+            <PickerCustomTextForm
+              label="Custom info token text"
+              submitLabel="Use this text"
+              onSubmit={chooseText}
+            />
+          </>
+        ) : (
+          <>
+            <p className={styles.chosenText}>{chosenText}</p>
+
+            {groups.map((group) => (
+              <PickerGroup
+                key={group.team}
+                legend={teamNames[group.team]}
+                items={group.characters.map((character) => ({
+                  label: character.name,
+                  selected: selectedCharacterIds.includes(character.id),
+                  onClick: () => toggleCharacter(character.id),
+                }))}
+              />
+            ))}
+
+            <div className={styles.attachActions}>
+              <button type="button" onClick={() => setChosenText(null)}>
+                Back
+              </button>
+              <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onShow({ text: chosenText, characterIds: selectedCharacterIds })
+                }
+              >
+                Show
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
