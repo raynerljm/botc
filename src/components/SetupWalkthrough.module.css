@@ -40,7 +40,9 @@
   min-height: 2.75rem;
 }
 
-.walkthrough button {
+/* :not(.skip) so this blanket rule never fights .skip's own (slightly
+   taller) padding on specificity — .skip already themes that button. */
+.walkthrough button:not(.skip) {
   padding: 0.5rem 1rem;
   font: inherit;
   background: var(--surface-raised);
