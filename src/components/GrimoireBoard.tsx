@@ -726,6 +726,13 @@ export function GrimoireBoard({
               ? travellerSwapOptions
               : swapOptions;
             const position = positionByPlayerId.get(player.id)!;
+            // A menu's anchor side must not chase a live drag preview — a
+            // storyteller can press-drag the very token whose menu is
+            // already open (dragging doesn't close it), and if data-side/
+            // data-vside tracked the in-flight position, the menu would
+            // flicker between anchors every pointermove instead of staying
+            // put until the drag actually settles (code review finding).
+            const restingPosition = player.position ?? circlePosition(index, total);
             const official = character ? isOfficialCharacter(character) : false;
             // True only while the player is still wearing the stand-in's
             // identity — once swapped to any other character (including a
@@ -739,8 +746,8 @@ export function GrimoireBoard({
                 className={styles.tokenWrap}
                 data-player-id={player.id}
                 data-menu-open={menuOpen ? "true" : undefined}
-                data-side={tokenSideAttr(position.x)}
-                data-vside={tokenVSideAttr(position.y)}
+                data-side={tokenSideAttr(restingPosition.x)}
+                data-vside={tokenVSideAttr(restingPosition.y)}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details
@@ -1035,8 +1042,8 @@ export function GrimoireBoard({
                 className={styles.reminderWrap}
                 data-reminder-id={reminder.id}
                 data-menu-open={menuOpen ? "true" : undefined}
-                data-side={tokenSideAttr(position.x)}
-                data-vside={tokenVSideAttr(position.y)}
+                data-side={tokenSideAttr(restingPosition.x)}
+                data-vside={tokenVSideAttr(restingPosition.y)}
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <details

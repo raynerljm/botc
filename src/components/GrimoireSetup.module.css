@@ -180,7 +180,15 @@
   padding: 2rem;
   /* Scrolls internally (issue #124) so a two-line ability wrap in landscape
      — where the fixed viewport is short — never clips "Hide & pass" below
-     the fold with no way to reach it. */
+     the fold with no way to reach it. Plain `center` clips a centered
+     flexbox's overflow symmetrically off *both* ends, and scrollTop can't
+     go negative to reach the clipped start — so on its own this would only
+     trade "Hide & pass" clipped for the token/character name clipped
+     instead. The `safe` keyword falls back to start-alignment once content
+     overflows (top-anchored, nothing clipped pre-scroll) while keeping true
+     centering whenever content already fits; unsupported browsers ignore
+     the line and keep the plain `center` above. */
+  justify-content: safe center;
   overflow-y: auto;
   background: var(--background);
   text-align: center;
