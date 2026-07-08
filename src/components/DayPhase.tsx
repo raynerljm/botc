@@ -113,6 +113,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         <label className={styles.field}>
           Nominator
           <select
+            className={styles.select}
             value={nominatorId}
             onChange={(event) => setNominatorId(event.target.value)}
           >
@@ -130,6 +131,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         <label className={styles.field}>
           Nominee
           <select
+            className={styles.select}
             value={nomineeId}
             onChange={(event) => setNomineeId(event.target.value)}
           >

@@ -26,6 +26,36 @@
   animation: dialog-in 150ms ease;
 }
 
+/* Every step's per-kind controls (PlayerPickControls, BelievedDemonControls,
+   etc.) render bare <select>/<button> elements — themed here at the
+   container level rather than per call site, since the steps are numerous
+   and structurally identical. */
+.walkthrough select {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  min-height: 2.75rem;
+}
+
+.walkthrough button {
+  padding: 0.5rem 1rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+.walkthrough button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @keyframes overlay-in {
   from {
     opacity: 0;

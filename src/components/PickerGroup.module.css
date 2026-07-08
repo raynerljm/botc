@@ -28,6 +28,7 @@
   border-radius: 0.4rem;
   color: var(--foreground);
   cursor: pointer;
+  min-height: 2.75rem;
 }
 
 .items button[aria-pressed="true"] {
