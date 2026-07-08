@@ -125,6 +125,7 @@ describe("Teensyville player count cap", () => {
       playerCount: 10,
       travellerCount: 0,
       selectedIds: [],
+      autoAddedIds: [],
       modifierChoices: {},
       extraCopies: {},
       standInId: null,
@@ -481,6 +482,46 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
     expect(
       screen.getByText("Huntsman needs Damsel in the bag."),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a manually-selected Damsel when the Huntsman is deselected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman", "damsel")} />);
+
+    // Deliberate manual pick, before Huntsman is ever touched.
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+    // No-op: Damsel is already in the bag, so nothing changes.
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    // Deselect: only an auto-added Damsel should leave with the Huntsman.
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("keeps a Damsel confirmed manually after auto-add selected, and still rendered, once the Huntsman is deselected — even though Damsel isn't on this script", async () => {
+    // Damsel is *not* in the script's own characters here — she only ever
+    // enters the pool via the auto-add extra (BagBuilder.tsx's `pool`
+    // useMemo). That pool must keep offering her once she's a confirmed
+    // manual pick, not just while Huntsman is still selected.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    const damsel = screen.getByRole("button", { name: /^Damsel/ });
+    // Confirm the auto-added Damsel as a deliberate pick: toggle her off
+    // then back on while Huntsman stays selected.
+    await user.click(damsel);
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("brings the Damsel along when Randomize itself picks the Huntsman", async () => {
