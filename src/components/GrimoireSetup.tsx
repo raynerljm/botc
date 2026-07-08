@@ -30,7 +30,7 @@ import {
   type SetupWalkthroughStepStatus,
 } from "@/lib/gameDocument";
 import { saveGame } from "@/lib/gameStorage";
-import { currentNightNumber } from "@/lib/nightList";
+import { actsAsEntryId, charEntryId, currentNightNumber } from "@/lib/nightList";
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
@@ -307,7 +307,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   function toggleDead(playerId: string) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
-    update({ ...game, players: updatePlayer(playerId, { dead: !player.dead }) });
+    const dead = !player.dead;
+    update({
+      ...game,
+      players: updatePlayer(playerId, { dead }),
+      // A player who dies with an already-checked night-list entry leaves
+      // no ambiguous state: dying prunes the checkmark alongside the
+      // "(skipped)" badge NightList renders, rather than a checked box that
+      // both counts as done and reads as never-performed (issue #128).
+      nightChecked: dead
+        ? withoutNightListEntries(game.nightChecked, [
+            charEntryId(playerId),
+            actsAsEntryId(playerId),
+          ])
+        : game.nightChecked,
+    });
   }
 
   function toggleGhostVote(playerId: string) {
@@ -468,6 +482,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     return [...pool, character];
   }
 
+  // Drops the given night-list entry ids from a nightChecked/nightUnskipped
+  // array — shared by every place a player's character, acts-as target, or
+  // vital status changes underneath an entry id that's keyed by player only
+  // (nightList.ts), so neither checked nor un-skipped state can survive
+  // pointing at a wake the new identity never had (issue #128).
+  function withoutNightListEntries(list: string[], ids: readonly string[]): string[] {
+    return list.filter((id) => !ids.includes(id));
+  }
+
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
@@ -491,6 +514,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         endDisguise ? { characterId, isDrunk: false } : { characterId },
       ),
       characterPool: withCharacterInPool(game.characterPool, character),
+      // The night-list entry id doesn't encode which character it was for
+      // (issue #128), so a mid-night swap would otherwise inherit whatever
+      // checked/un-skipped state the player's previous character left behind
+      // — "done", or exempt from auto-skip, for a wake the new character
+      // never had.
+      nightChecked: withoutNightListEntries(game.nightChecked, [charEntryId(playerId)]),
+      nightUnskipped: withoutNightListEntries(game.nightUnskipped, [
+        charEntryId(playerId),
+      ]),
     });
   }
 
@@ -585,6 +617,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         actsAsSetOnNight: characterId ? currentNightNumber(game) : null,
       }),
       characterPool: withCharacterInPool(game.characterPool, character),
+      // The acts-as entry's id is keyed by player, not by target character
+      // (issue #128), so retargeting (or clearing) would otherwise leave a
+      // stale checked/un-skipped state behind — "done", or exempt from
+      // auto-skip, for a wake the new target never had.
+      nightChecked: withoutNightListEntries(game.nightChecked, [actsAsEntryId(playerId)]),
+      nightUnskipped: withoutNightListEntries(game.nightUnskipped, [
+        actsAsEntryId(playerId),
+      ]),
     });
   }
 

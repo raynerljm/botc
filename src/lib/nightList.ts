@@ -18,6 +18,18 @@ export function currentNightNumber(game: GameDocument): number {
   return game.night + 1;
 }
 
+// The night-list entry id for a player's own character, and for an acts-as
+// entry borrowing another character's ability — the one place both are
+// built, so nightChecked/nightUnskipped pruning elsewhere (GrimoireSetup.tsx)
+// can't drift out of step with what computeNightList actually generates.
+export function charEntryId(playerId: string): string {
+  return `char:${playerId}`;
+}
+
+export function actsAsEntryId(playerId: string): string {
+  return `actsas:${playerId}`;
+}
+
 export interface NightListEntry {
   id: string;
   kind: "fixed" | "character";
@@ -250,7 +262,7 @@ export function computeNightList({
     if (!action.acts && !showAll) continue;
 
     raw.push({
-      id: `char:${player.id}`,
+      id: charEntryId(player.id),
       kind: "character",
       label: character.name,
       reminderText: action.reminderText,
@@ -259,7 +271,7 @@ export function computeNightList({
       playerName: player.name,
       dead: player.dead,
       isDrunk: player.isDrunk,
-      skipped: player.dead && !unskippedIds.has(`char:${player.id}`),
+      skipped: player.dead && !unskippedIds.has(charEntryId(player.id)),
       actingCharacterId: null,
       defaultBucket: action.acts ? ACTING_BUCKET : NOT_ACTING_BUCKET,
       nightValue: action.nightValue,
@@ -277,7 +289,7 @@ export function computeNightList({
     if (!action.acts && !showAll) continue;
 
     raw.push({
-      id: `actsas:${player.id}`,
+      id: actsAsEntryId(player.id),
       kind: "character",
       label: target.name,
       reminderText: action.reminderText,
@@ -287,7 +299,7 @@ export function computeNightList({
       playerName: player.name,
       dead: player.dead,
       isDrunk: player.isDrunk,
-      skipped: player.dead && !unskippedIds.has(`actsas:${player.id}`),
+      skipped: player.dead && !unskippedIds.has(actsAsEntryId(player.id)),
       defaultBucket: action.acts ? ACTING_BUCKET : NOT_ACTING_BUCKET,
       nightValue: action.nightValue,
       overrideRank: action.overrideRank,
