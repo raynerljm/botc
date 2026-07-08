@@ -112,7 +112,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       : [],
   );
   const [travellerFormOpen, setTravellerFormOpen] = useState(false);
-  const [travellerTokenId, setTravellerTokenId] = useState("");
+  const [travellerCharacterId, setTravellerCharacterId] = useState("");
   const [travellerAlignment, setTravellerAlignment] =
     useState<Alignment>("good");
   const [showWalkthrough, setShowWalkthrough] = useState(false);
@@ -187,6 +187,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         SEAT_HOLDING_TEAMS.includes(c.team),
       ),
     [game.characterPool],
+  );
+
+  // Traveller add options (issue #119): every traveller-team character,
+  // script-first then the rest of the dataset, whether or not it was ever
+  // built into travellerBag — travellers may join the circle at any time per
+  // the rulebook, even in a game built with 0 travellers. Sourced from
+  // scriptCharacters, not characterPool: characterPool only holds what's
+  // already selected/built (gameDocument.ts), so a homebrew script's own
+  // traveller — never in the vendored dataset — would otherwise be
+  // unreachable in a 0-traveller game exactly like the "Claims" pool a few
+  // lines up, this needs the "not in play yet" universe, not the in-play one.
+  const travellerAddOptions = useMemo(
+    () => characterPickerPool(game.scriptCharacters, "traveller"),
+    [game.scriptCharacters],
   );
 
   // The in-flight draw ritual, read straight from the document so every
@@ -566,9 +580,27 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       };
     });
 
+    // A removed traveller's token goes back in the bag — the same character
+    // is then reachable again from "Add traveller" without ever having been
+    // physically built into the game (issue #119). A fresh id (not the
+    // original token's) is fine: nothing else keys off a traveller token's id
+    // once it's left the bag.
+    const travellerBag =
+      player.isTraveller && player.characterId
+        ? [
+            ...game.travellerBag,
+            {
+              id: crypto.randomUUID(),
+              characterId: player.characterId,
+              isDrunkStandIn: false,
+            },
+          ]
+        : game.travellerBag;
+
     update({
       ...game,
       players: remainingPlayers,
+      travellerBag,
       reminders,
       // A removed player's recorded vote must not go on counting toward a
       // nomination's tally forever (issue #20).
@@ -756,27 +788,34 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   function openTravellerForm() {
-    setTravellerTokenId(game.travellerBag[0]?.id ?? "");
+    const preferred = game.travellerBag[0]?.characterId ?? travellerAddOptions[0]?.id ?? "";
+    setTravellerCharacterId(preferred);
     setTravellerAlignment("good");
     setTravellerSeat(lastSeat(game.players) + 1);
     setTravellerFormOpen(true);
   }
 
-  // Travellers join the circle from their own bag, at whichever seat the
-  // storyteller chose — they never compete with the official-team target
-  // counts.
+  // Travellers join the circle at whichever seat the storyteller chose, and
+  // never compete with the official-team target counts. Prefer consuming a
+  // physical token already sitting in travellerBag (the built-for-this-game
+  // case); if the chosen character has none there — a latecomer picked from
+  // the wider dataset, or the game was built with 0 travellers — just add
+  // the seat without touching the bag (issue #119).
   function addTraveller(event: FormEvent) {
     event.preventDefault();
-    const token = game.travellerBag.find((t) => t.id === travellerTokenId);
-    if (!token) return;
+    const character = travellerAddOptions.find((c) => c.id === travellerCharacterId);
+    if (!character) return;
+    const matchingToken = game.travellerBag.find(
+      (t) => t.characterId === character.id,
+    );
 
     const travellerCount = game.players.filter((p) => p.isTraveller).length;
     const newPlayer: Player = {
       id: crypto.randomUUID(),
       seat: travellerSeat,
       name: `Traveller ${travellerCount + 1}`,
-      characterId: token.characterId,
-      startingCharacterId: token.characterId,
+      characterId: character.id,
+      startingCharacterId: character.id,
       isDrunk: false,
       isTraveller: true,
       travellerAlignment,
@@ -791,7 +830,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({
       ...game,
       players: [...insertAtSeat(game.players, travellerSeat), newPlayer],
-      travellerBag: game.travellerBag.filter((t) => t.id !== token.id),
+      travellerBag: matchingToken
+        ? game.travellerBag.filter((t) => t.id !== matchingToken.id)
+        : game.travellerBag,
+      characterPool: withCharacterInPool(game.characterPool, character),
     });
     setTravellerFormOpen(false);
   }
@@ -992,10 +1034,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
       {/* Gated on `!draw`, not just `!screenObscured` — screenObscured
           deliberately treats the 'choosing' stage as safe for most controls,
-          but the traveller select below lists travellerBag by name, which
-          is exactly the kind of bag-composition leak issue #111 closed for
-          the official bag's manual-assign selects. */}
-      {!draw && game.travellerBag.length > 0 && !travellerFormOpen && (
+          but this form's default selection is seeded from travellerBag
+          (openTravellerForm), which is exactly the kind of bag-composition
+          leak issue #111 closed for the official bag's manual-assign
+          selects. Always offered regardless of travellerBag's size — a
+          traveller may join at any time per the rulebook, even in a game
+          built with 0 travellers (issue #119). */}
+      {!draw && !travellerFormOpen && (
         <button
           type="button"
           className={styles.addTraveller}
@@ -1010,12 +1055,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <label>
             Traveller character
             <select
-              value={travellerTokenId}
-              onChange={(event) => setTravellerTokenId(event.target.value)}
+              value={travellerCharacterId}
+              onChange={(event) => setTravellerCharacterId(event.target.value)}
             >
-              {game.travellerBag.map((token) => (
-                <option key={token.id} value={token.id}>
-                  {tokenCharacterName(token)}
+              {travellerAddOptions.map((character) => (
+                <option key={character.id} value={character.id}>
+                  {character.name}
                 </option>
               ))}
             </select>
