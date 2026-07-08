@@ -12,6 +12,7 @@ import {
 import { executionNominations } from "@/lib/dayPhase";
 import {
   anchoredReminderPosition,
+  defaultPlayerName,
   DRUNK_ID,
   firstNightEnded,
   insertAtSeat,
@@ -251,6 +252,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         player.id === playerId ? { ...player, name } : player,
       ),
     });
+  }
+
+  // Normalizes on blur rather than on every renamePlayer keystroke — trimming
+  // live would fight a controlled input's cursor (e.g. stripping a trailing
+  // space the storyteller just typed before continuing a two-word name).
+  // Falls back to the seat's default "Player N" so a name emptied out never
+  // persists as blank/whitespace (dangling "Butler — " in the night list,
+  // blank options in the Nominator/Nominee dropdowns).
+  function commitPlayerName(playerId: string) {
+    const currentGame = gameRef.current;
+    const player = currentGame.players.find((p) => p.id === playerId);
+    if (!player) return;
+    const trimmed = player.name.trim();
+    const normalized = trimmed === "" ? defaultPlayerName(player.seat) : trimmed;
+    if (normalized === player.name) return;
+    renamePlayer(playerId, normalized);
   }
 
   function movePlayer(playerId: string, position: PlayerPosition) {
@@ -1114,6 +1131,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 nominatorTodayIds={nominatorTodayIds}
                 nomineeTodayIds={nomineeTodayIds}
                 onRename={renamePlayer}
+                onRenameCommit={commitPlayerName}
                 onMove={movePlayer}
                 onReCircle={reCircle}
                 onReorderSeat={reorderSeat}
@@ -1196,6 +1214,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                         onChange={(event) =>
                           renamePlayer(player.id, event.target.value)
                         }
+                        onBlur={() => commitPlayerName(player.id)}
                       />
                     </>
                   )}

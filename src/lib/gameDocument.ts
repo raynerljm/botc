@@ -562,6 +562,13 @@ export interface CreateGameInput {
   scriptCharacters?: Character[];
 }
 
+// The one place "Player N" is spelled out — both a fresh seat's initial name
+// and a renamed-to-blank seat's fallback (GrimoireSetup.tsx) go through this,
+// so the two can never drift into different default-naming conventions.
+export function defaultPlayerName(seat: number): string {
+  return `Player ${seat}`;
+}
+
 export function createGame({
   scriptId,
   scriptName,
@@ -586,7 +593,7 @@ export function createGame({
   const players: Player[] = Array.from({ length: playerCount }, (_, i) => ({
     id: newId(),
     seat: i + 1,
-    name: `Player ${i + 1}`,
+    name: defaultPlayerName(i + 1),
     characterId: null,
     startingCharacterId: null,
     isDrunk: false,
