@@ -89,6 +89,15 @@ describe("player count and official target counts", () => {
 
     expect(playerCountInput).toHaveValue(null);
   });
+
+  it("focuses the player count field when its visible caption is clicked, not the −/+ steppers beside it", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} />);
+
+    await user.click(screen.getByText("Player count"));
+
+    expect(screen.getByLabelText("Player count")).toHaveFocus();
+  });
 });
 
 describe("Teensyville player count cap", () => {

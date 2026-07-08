@@ -529,13 +529,14 @@ export function BagBuilder({
     <div className={styles.main}>
       <div className={styles.controls}>
         <div className={styles.field}>
-          <span>Player count</span>
+          <label htmlFor="player-count">Player count</label>
           {/* Clamping is deferred to blur: clamping on every keystroke
               fights the browser's in-progress digit-by-digit typing (e.g.
               typing "13" would clamp the intermediate "1" to 5 first), and
               an empty string is kept as-is so the field can actually be
               blanked mid-edit instead of snapping to 0. */}
           <NumberStepper
+            id="player-count"
             aria-label="Player count"
             min={MIN_PLAYERS}
             max={maxPlayers}
@@ -549,8 +550,9 @@ export function BagBuilder({
           />
         </div>
         <div className={styles.field}>
-          <span>Traveller count</span>
+          <label htmlFor="traveller-count">Traveller count</label>
           <NumberStepper
+            id="traveller-count"
             aria-label="Traveller count"
             min={0}
             max={MAX_TRAVELLERS}
@@ -747,8 +749,11 @@ export function BagBuilder({
                     )}
                     {copiesRange && (
                       <div className={styles.extraCopies}>
-                        <span>{`Extra ${character.name} copies`}</span>
+                        <label htmlFor={`extra-copies-${character.id}`}>
+                          {`Extra ${character.name} copies`}
+                        </label>
                         <NumberStepper
+                          id={`extra-copies-${character.id}`}
                           aria-label={`Extra ${character.name} copies`}
                           min={copiesRange.min}
                           max={copiesRange.max}

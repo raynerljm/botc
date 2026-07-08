@@ -53,7 +53,7 @@ export function Select({
   const rootRef = useRef<HTMLDivElement>(null);
 
   const flat = flattenOptions(entries);
-  const indexOf = new Map(flat.map((option, index) => [option, index] as const));
+  const activeIndex = flat.findIndex((option) => option.value === activeValue);
   const selected = flat.find((option) => option.value === value);
 
   useEffect(() => {
@@ -67,6 +67,19 @@ export function Select({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
+  // Keyboard nav only moves aria-activedescendant — without this, arrowing
+  // past a handful of rows leaves the highlighted option scrolled out of
+  // the listbox's capped-height viewport with no visual trace of where the
+  // selection went (real scripts run 20+ options deep, e.g. "Assign seat
+  // manually").
+  useEffect(() => {
+    if (!open) return;
+    document
+      .getElementById(`${baseId}-option-${activeIndex}`)
+      // jsdom doesn't implement scrollIntoView.
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [open, activeIndex, baseId]);
+
   function openList() {
     setActiveValue(value || (flat[0]?.value ?? ""));
     setOpen(true);
@@ -78,11 +91,7 @@ export function Select({
   }
 
   function moveActive(delta: number) {
-    const currentIndex = flat.findIndex((option) => option.value === activeValue);
-    const nextIndex = Math.min(
-      Math.max(currentIndex + delta, 0),
-      flat.length - 1,
-    );
+    const nextIndex = Math.min(Math.max(activeIndex + delta, 0), flat.length - 1);
     const next = flat[nextIndex];
     if (next) setActiveValue(next.value);
   }
@@ -127,8 +136,10 @@ export function Select({
     }
   }
 
-  function renderOption(option: SelectOption) {
-    const index = indexOf.get(option);
+  // `index` is this option's position in `flat` — the caller threads a
+  // running counter through so grouped and ungrouped options share one
+  // index space, matching activeIndex/aria-activedescendant.
+  function renderOption(option: SelectOption, index: number) {
     return (
       <div
         key={option.value}
@@ -146,27 +157,40 @@ export function Select({
     );
   }
 
+  function renderEntries() {
+    let index = 0;
+    return entries.map((entry, entryIndex) =>
+      isGroup(entry) ? (
+        <div
+          key={`group-${entryIndex}`}
+          role="group"
+          aria-labelledby={`${baseId}-group-${entryIndex}`}
+        >
+          <div className={styles.groupLabel} id={`${baseId}-group-${entryIndex}`}>
+            {entry.label}
+          </div>
+          {entry.options.map((option) => renderOption(option, index++))}
+        </div>
+      ) : (
+        renderOption(entry, index++)
+      ),
+    );
+  }
+
   return (
-    <div
-      className={[styles.root, className].filter(Boolean).join(" ")}
-      ref={rootRef}
-    >
+    <div className={styles.root} ref={rootRef}>
       <button
         type="button"
         id={id}
         role="combobox"
-        className={styles.trigger}
+        className={[styles.trigger, className].filter(Boolean).join(" ")}
         data-value={value}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? `${baseId}-listbox` : undefined}
         aria-label={ariaLabel}
         aria-activedescendant={
-          open && activeValue
-            ? `${baseId}-option-${indexOf.get(
-                flat.find((option) => option.value === activeValue) ?? flat[0],
-              )}`
-            : undefined
+          open && activeIndex >= 0 ? `${baseId}-option-${activeIndex}` : undefined
         }
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={handleKeyDown}
@@ -181,25 +205,7 @@ export function Select({
           role="listbox"
           aria-label={ariaLabel}
         >
-          {entries.map((entry, entryIndex) =>
-            isGroup(entry) ? (
-              <div
-                key={`group-${entryIndex}`}
-                role="group"
-                aria-labelledby={`${baseId}-group-${entryIndex}`}
-              >
-                <div
-                  className={styles.groupLabel}
-                  id={`${baseId}-group-${entryIndex}`}
-                >
-                  {entry.label}
-                </div>
-                {entry.options.map(renderOption)}
-              </div>
-            ) : (
-              renderOption(entry)
-            ),
-          )}
+          {renderEntries()}
         </div>
       )}
     </div>

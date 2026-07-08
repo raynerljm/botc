@@ -1,4 +1,5 @@
 .wrapper {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;

@@ -148,4 +148,40 @@ describe("Select", () => {
 
     expect(screen.getByRole("button", { name: "After" })).toHaveFocus();
   });
+
+  it("applies a caller's className to the trigger itself, not a wrapping element — so callers styling it as a box (border/padding/background) don't end up with a double box", () => {
+    render(<Harness />);
+
+    render(
+      <Select
+        aria-label="Custom"
+        className="my-custom-class"
+        value=""
+        onChange={vi.fn()}
+        entries={FLAT_ENTRIES}
+      />,
+    );
+
+    const trigger = screen.getByRole("combobox", { name: "Custom" });
+    expect(trigger).toHaveClass("my-custom-class");
+    expect(trigger.parentElement).not.toHaveClass("my-custom-class");
+  });
+
+  it("scrolls the keyboard-highlighted option into view as it moves, so a long list never leaves the highlight scrolled out of sight", async () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      const user = userEvent.setup();
+      render(<Harness />);
+      const trigger = screen.getByRole("combobox", { name: "Claim" });
+
+      trigger.focus();
+      await user.keyboard("{ArrowDown}");
+
+      expect(scrollIntoView).toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
 });
