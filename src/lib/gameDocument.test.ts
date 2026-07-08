@@ -666,6 +666,20 @@ describe("createGame", () => {
     expect(game.claimsCollapsed).toBe(false);
     expect(game.endGamePanelCollapsed).toBeNull();
   });
+
+  it("starts with the Night List and Day Phase side panels expanded (issue #168)", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.nightListCollapsed).toBe(false);
+    expect(game.dayPhaseCollapsed).toBe(false);
+  });
 });
 
 describe("firstNightEnded (issues #68, #79)", () => {

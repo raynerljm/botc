@@ -118,6 +118,64 @@ describe("Day phase: recording a nomination", () => {
   });
 });
 
+describe("Day phase: collapsing the panel (issue #168)", () => {
+  it("keeps the glanceable block-holder status visible even while collapsed", () => {
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"], {
+      dayPhaseCollapsed: true,
+    });
+    const [nominator, nominee, voter1, voter2] = game.players;
+    const withBlock: GameDocument = {
+      ...game,
+      nominations: [
+        {
+          id: "n1",
+          nominatorId: nominator.id,
+          nomineeId: nominee.id,
+          votes: [voter1.id, voter2.id],
+          threshold: 2,
+          isExile: false,
+        },
+      ],
+    };
+    renderDayPhase(withBlock);
+
+    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(screen.getByText(`On the block: ${nominee.name}`)).toBeInTheDocument();
+  });
+
+
+  it("hides the body while collapsed before the first night ends, but keeps the heading reachable", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 0, dayPhaseCollapsed: true });
+    renderDayPhase(game);
+
+    expect(screen.queryByText(/Begins once the first night ends/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Day phase" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the nomination form and record while collapsed during an active day", () => {
+    const game = gameWith(["washerwoman", "imp"], { dayPhaseCollapsed: true });
+    renderDayPhase(game);
+
+    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Day 1" })).toBeInTheDocument();
+  });
+
+  it("toggles the persisted collapsed state via the heading", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"]);
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Day 1" }));
+
+    expect(latest).toEqual({ ...game, dayPhaseCollapsed: true });
+  });
+});
+
 describe("Day phase: vote tally and threshold", () => {
   it("shows the live tally against the threshold, with a meets-threshold indicator", async () => {
     const user = userEvent.setup();

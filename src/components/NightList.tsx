@@ -13,6 +13,7 @@ import {
 
 import { CharacterToken } from "./CharacterToken";
 import { Checkbox } from "./Checkbox";
+import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./NightList.module.css";
 
 export interface NightListProps {
@@ -34,6 +35,10 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
 
   const nightNumber = currentNightNumber(game);
   const phase = phaseForNight(nightNumber);
+
+  function toggleCollapsed(collapsed: boolean) {
+    onChange({ ...game, nightListCollapsed: collapsed });
+  }
 
   function startNight() {
     onChange({ ...game, nightOpen: true, nightChecked: [], nightUnskipped: [] });
@@ -64,10 +69,15 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   if (!game.nightOpen) {
     return (
       <section className={styles.panel} aria-label="Night list">
-        <h2 className={styles.heading}>Night list</h2>
-        <button type="button" className={styles.startNight} onClick={startNight}>
-          Start {phaseLabel(phase, nightNumber)}
-        </button>
+        <CollapsibleSection
+          title="Night list"
+          collapsed={game.nightListCollapsed}
+          onToggleCollapsed={toggleCollapsed}
+        >
+          <button type="button" className={styles.startNight} onClick={startNight}>
+            Start {phaseLabel(phase, nightNumber)}
+          </button>
+        </CollapsibleSection>
       </section>
     );
   }
@@ -85,102 +95,109 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
 
   return (
     <section className={styles.panel} aria-label="Night list">
-      <div className={styles.header}>
-        <h2 className={styles.heading}>{phaseLabel(phase, nightNumber)}</h2>
-        <p className={styles.progress} role="status">
-          {checkedCount}/{countable.length} done
-        </p>
-      </div>
+      <CollapsibleSection
+        title={phaseLabel(phase, nightNumber)}
+        collapsed={game.nightListCollapsed}
+        onToggleCollapsed={toggleCollapsed}
+      >
+        <label className={styles.showAll}>
+          <Checkbox checked={showAll} onChange={setShowAll} />
+          Show all
+        </label>
 
-      <label className={styles.showAll}>
-        <Checkbox checked={showAll} onChange={setShowAll} />
-        Show all
-      </label>
+        <ol className={styles.entries}>
+          {entries.map((entry) => {
+            // An acts-as entry's physical token is the acting player's own
+            // character (e.g. the Philosopher) — the target (`characterId`)
+            // only supplies the borrowed ability's name and reminder text
+            // (CONTEXT.md: Acts as; issue #17 AC).
+            const actingCharacter = entry.actingCharacterId
+              ? characterById.get(entry.actingCharacterId)
+              : undefined;
+            const character =
+              actingCharacter ??
+              (entry.characterId ? characterById.get(entry.characterId) : undefined);
+            const accessibleName = actingCharacter
+              ? `${entry.playerName} — ${actingCharacter.name} as ${entry.label}`
+              : entry.playerName
+                ? `${entry.label} — ${entry.playerName}`
+                : entry.label;
 
-      <ol className={styles.entries}>
-        {entries.map((entry) => {
-          // An acts-as entry's physical token is the acting player's own
-          // character (e.g. the Philosopher) — the target (`characterId`)
-          // only supplies the borrowed ability's name and reminder text
-          // (CONTEXT.md: Acts as; issue #17 AC).
-          const actingCharacter = entry.actingCharacterId
-            ? characterById.get(entry.actingCharacterId)
-            : undefined;
-          const character =
-            actingCharacter ??
-            (entry.characterId ? characterById.get(entry.characterId) : undefined);
-          const accessibleName = actingCharacter
-            ? `${entry.playerName} — ${actingCharacter.name} as ${entry.label}`
-            : entry.playerName
-              ? `${entry.label} — ${entry.playerName}`
-              : entry.label;
-
-          return (
-            <li
-              key={entry.id}
-              className={styles.entry}
-              data-dead={entry.dead || undefined}
-              data-skipped={entry.skipped || undefined}
-              data-checked={checkedIds.has(entry.id) || undefined}
-            >
-              <label className={styles.entryMain}>
-                <Checkbox
-                  aria-label={accessibleName}
-                  checked={checkedIds.has(entry.id)}
-                  // A skipped (dead, not un-skipped) entry isn't part of
-                  // tonight's checklist — un-skip it first to act on it,
-                  // rather than letting it silently check off "done" state
-                  // for something the storyteller never actually did.
-                  disabled={entry.skipped}
-                  onChange={() => toggleChecked(entry.id)}
-                />
-                <span className={styles.entryToken}>
-                  {character && <CharacterToken character={character} />}
-                </span>
-                <span className={styles.entryBody}>
-                  <span className={styles.entryTitle}>
-                    {actingCharacter && entry.playerName ? (
-                      <>
-                        {entry.playerName} — {actingCharacter.name} as {entry.label}
-                      </>
-                    ) : (
-                      <>
-                        {entry.label}
-                        {entry.playerName && (
-                          <span className={styles.entryPlayer}>
-                            {" "}
-                            — {entry.playerName}
-                          </span>
-                        )}
-                      </>
-                    )}
-                    {entry.isDrunk && (
-                      <span className={styles.note}> (actually the Drunk)</span>
-                    )}
-                    {entry.skipped && (
-                      <span className={styles.skippedBadge}> (skipped)</span>
-                    )}
+            return (
+              <li
+                key={entry.id}
+                className={styles.entry}
+                data-dead={entry.dead || undefined}
+                data-skipped={entry.skipped || undefined}
+                data-checked={checkedIds.has(entry.id) || undefined}
+              >
+                <label className={styles.entryMain}>
+                  <Checkbox
+                    aria-label={accessibleName}
+                    checked={checkedIds.has(entry.id)}
+                    // A skipped (dead, not un-skipped) entry isn't part of
+                    // tonight's checklist — un-skip it first to act on it,
+                    // rather than letting it silently check off "done" state
+                    // for something the storyteller never actually did.
+                    disabled={entry.skipped}
+                    onChange={() => toggleChecked(entry.id)}
+                  />
+                  <span className={styles.entryToken}>
+                    {character && <CharacterToken character={character} />}
                   </span>
-                  <span className={styles.entryReminder}>{entry.reminderText}</span>
-                </span>
-              </label>
-              {entry.dead && (
-                <button
-                  type="button"
-                  className={styles.unskip}
-                  onClick={() => toggleUnskipped(entry.id)}
-                >
-                  {entry.skipped ? "Un-skip" : "Skip"}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+                  <span className={styles.entryBody}>
+                    <span className={styles.entryTitle}>
+                      {actingCharacter && entry.playerName ? (
+                        <>
+                          {entry.playerName} — {actingCharacter.name} as {entry.label}
+                        </>
+                      ) : (
+                        <>
+                          {entry.label}
+                          {entry.playerName && (
+                            <span className={styles.entryPlayer}>
+                              {" "}
+                              — {entry.playerName}
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {entry.isDrunk && (
+                        <span className={styles.note}> (actually the Drunk)</span>
+                      )}
+                      {entry.skipped && (
+                        <span className={styles.skippedBadge}> (skipped)</span>
+                      )}
+                    </span>
+                    <span className={styles.entryReminder}>{entry.reminderText}</span>
+                  </span>
+                </label>
+                {entry.dead && (
+                  <button
+                    type="button"
+                    className={styles.unskip}
+                    onClick={() => toggleUnskipped(entry.id)}
+                  >
+                    {entry.skipped ? "Un-skip" : "Skip"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ol>
 
-      <button type="button" className={styles.endNight} onClick={endNight}>
-        End {phaseLabel(phase, nightNumber)}
-      </button>
+        <button type="button" className={styles.endNight} onClick={endNight}>
+          End {phaseLabel(phase, nightNumber)}
+        </button>
+      </CollapsibleSection>
+
+      {/* Kept outside CollapsibleSection, unlike the checklist itself — a
+          storyteller collapsing this panel to reclaim circle width (issue
+          #168) still needs this glanceable "how much is left" count without
+          re-expanding the whole entries list (code review finding). */}
+      <p className={styles.progress} role="status">
+        {checkedCount}/{countable.length} done
+      </p>
     </section>
   );
 }

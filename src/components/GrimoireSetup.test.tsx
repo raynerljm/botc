@@ -2759,3 +2759,32 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     ).toBe("washerwoman");
   });
 });
+
+describe("collapsing the Night List/Day Phase side panels reclaims circle width (issue #168)", () => {
+  it("flags the layout for the circle to reclaim width only once both side panels are collapsed", async () => {
+    const { user, circle } = await completeSetup();
+    const layout = circle.parentElement as HTMLElement;
+    expect(layout).not.toHaveAttribute("data-side-collapsed");
+
+    await user.click(screen.getByRole("button", { name: "Night list" }));
+    expect(layout).not.toHaveAttribute("data-side-collapsed");
+
+    await user.click(screen.getByRole("button", { name: "Day phase" }));
+    expect(layout).toHaveAttribute("data-side-collapsed", "true");
+
+    // Reopening either one gives the width back to the side column.
+    await user.click(screen.getByRole("button", { name: "Night list" }));
+    expect(layout).not.toHaveAttribute("data-side-collapsed");
+  });
+
+  it("persists each panel's collapsed state across a reload", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Night list" }));
+    await user.click(screen.getByRole("button", { name: "Day phase" }));
+
+    const reloaded = loadGame()!;
+    expect(reloaded.nightListCollapsed).toBe(true);
+    expect(reloaded.dayPhaseCollapsed).toBe(true);
+  });
+});
