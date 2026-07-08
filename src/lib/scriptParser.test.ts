@@ -76,6 +76,20 @@ describe("parseScript: invalid input", () => {
     if (result.ok) return;
     expect(result.errors).toEqual([{ type: "not-array" }]);
   });
+
+  it("reports an empty array as an empty script", () => {
+    const result = parseScript("[]");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors).toEqual([{ type: "empty-script" }]);
+  });
+
+  it("reports a script with only a _meta entry as an empty script", () => {
+    const result = parseScript(JSON.stringify([{ id: "_meta" }]));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors).toEqual([{ type: "empty-script" }]);
+  });
 });
 
 describe("parseScript: homebrew characters", () => {
