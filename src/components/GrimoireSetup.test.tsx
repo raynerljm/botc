@@ -974,13 +974,75 @@ describe("travellers addable at setup with alignment", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides the action once every traveller token has been added", () => {
+  it("still offers to add a traveller once every built traveller token has been added, and even in a game built with 0 travellers (issue #119)", () => {
     const game = makeGame({ playerCount: 2 });
     render(<GrimoireSetup game={game} />);
 
+    expect(game.travellerBag).toHaveLength(0);
     expect(
-      screen.queryByRole("button", { name: "Add traveller" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
+  });
+
+  it("lists every traveller-team character, not just the ones built into the traveller bag, in a 0-traveller game", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await user.selectOptions(
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to the circle" }));
+
+    const reloaded = loadGame()!;
+    const traveller = reloaded.players.find((p) => p.isTraveller)!;
+    expect(traveller.characterId).toBe("scapegoat");
+    // Picked from the wider dataset, not a pre-built physical token — the
+    // bag (still empty beforehand) is untouched.
+    expect(reloaded.travellerBag).toHaveLength(0);
+  });
+
+  it("returns a removed traveller's token to the bag so the same traveller can be re-added (issue #119)", async () => {
+    const { user, circle } = await completeSetup(2, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("scapegoat")!,
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await user.selectOptions(
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to the circle" }));
+
+    expect(loadGame()!.travellerBag).toHaveLength(0);
+
+    const seat3 = within(circle)
+      .getByText("Traveller 1")
+      .closest("[data-player-id]") as HTMLElement;
+    await user.click(within(seat3).getByText("Traveller 1"));
+    await removePlayerAndConfirm(user, seat3);
+
+    const afterRemoval = loadGame()!;
+    expect(afterRemoval.players.some((p) => p.isTraveller)).toBe(false);
+    expect(afterRemoval.travellerBag.map((t) => t.characterId)).toEqual([
+      "scapegoat",
+    ]);
+
+    // Re-add: the returned token's character is still offered.
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await user.selectOptions(
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to the circle" }));
+
+    const final = loadGame()!;
+    expect(final.players.filter((p) => p.isTraveller)).toHaveLength(1);
+    expect(final.travellerBag).toHaveLength(0);
   });
 
   it("hides 'Add traveller' while a draw session is active, so its select can't leak the traveller bag mid-draw (issue #111)", async () => {
@@ -1033,9 +1095,12 @@ describe("travellers addable at setup with alignment", () => {
     await user.click(screen.getByRole("button", { name: "Add to the circle" }));
 
     expect(screen.getByText("0/2 seats assigned")).toBeInTheDocument();
+    // The built traveller bag is now empty, but the action stays offered —
+    // a traveller may join at any time, even beyond what was built (issue
+    // #119).
     expect(
-      screen.queryByRole("button", { name: "Add traveller" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
 
     const seat3 = screen.getByLabelText("Seat 3 name").closest("li")!;
     expect(within(seat3).getByText("Scapegoat")).toBeInTheDocument();
