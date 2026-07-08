@@ -761,7 +761,7 @@ describe("demonBluffs step (issue #155)", () => {
     });
 
     const step = screen.getByRole("group", { name: "Demon bluffs" });
-    await user.selectOptions(
+    await selectOption(user, 
       within(step).getByLabelText("Bluff slot 1"),
       "washerwoman",
     );

@@ -1036,7 +1036,7 @@ describe("travellers addable at setup with alignment", () => {
     render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Bootlegger",
     );
@@ -1053,7 +1053,7 @@ describe("travellers addable at setup with alignment", () => {
     render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -1075,7 +1075,7 @@ describe("travellers addable at setup with alignment", () => {
     ]);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -1097,7 +1097,7 @@ describe("travellers addable at setup with alignment", () => {
 
     // Re-add: the returned token's character is still offered.
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -2738,13 +2738,13 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       scriptCharacters: getEditionCharacters("tb"),
     });
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(screen.getByLabelText("Assign seat 1 manually"), "Imp");
-    await user.selectOptions(screen.getByLabelText("Assign seat 2 manually"), "Chef");
+    await selectOption(user, screen.getByLabelText("Assign seat 1 manually"), "Imp");
+    await selectOption(user, screen.getByLabelText("Assign seat 2 manually"), "Chef");
     await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: "Demon bluffs" });
-    await user.selectOptions(within(step).getByLabelText("Bluff slot 1"), "Washerwoman");
+    await selectOption(user, within(step).getByLabelText("Bluff slot 1"), "Washerwoman");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(within(dialog).getByRole("button", { name: /close/i }));
 
@@ -2754,6 +2754,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       null,
     ]);
     const boardPanel = screen.getByRole("region", { name: "Demon bluffs" });
-    expect(within(boardPanel).getByLabelText("Bluff slot 1")).toHaveValue("washerwoman");
+    expect(
+      within(boardPanel).getByLabelText("Bluff slot 1").dataset.value,
+    ).toBe("washerwoman");
   });
 });
