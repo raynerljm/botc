@@ -797,10 +797,12 @@ export function GrimoireBoard({
                       )}
                     </span>
                     {isHiddenDrunk && (
-                      <span className={styles.drunkNote}>(actually the Drunk)</span>
+                      <span className={styles.note}>(actually the Drunk)</span>
                     )}
                     {player.isTraveller && (
-                      <span className={styles.note}>{player.travellerAlignment}</span>
+                      <span className={styles.noteCapitalized}>
+                        {player.travellerAlignment}
+                      </span>
                     )}
                     {player.claim && (
                       <span className={styles.claimBadge}>

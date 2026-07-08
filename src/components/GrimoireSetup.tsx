@@ -12,6 +12,7 @@ import {
 import { executionNominations } from "@/lib/dayPhase";
 import {
   anchoredReminderPosition,
+  defaultPlayerName,
   DRUNK_ID,
   firstNightEnded,
   insertAtSeat,
@@ -264,7 +265,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const player = currentGame.players.find((p) => p.id === playerId);
     if (!player) return;
     const trimmed = player.name.trim();
-    const normalized = trimmed === "" ? `Player ${player.seat}` : trimmed;
+    const normalized = trimmed === "" ? defaultPlayerName(player.seat) : trimmed;
     if (normalized === player.name) return;
     renamePlayer(playerId, normalized);
   }

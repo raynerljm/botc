@@ -189,17 +189,16 @@ describe("GrimoireBoard rendering", () => {
     expect(screen.getByText(/actually the Drunk/i)).toBeInTheDocument();
   });
 
-  // .note carries text-transform: capitalize for the traveller-alignment
-  // note ("good" -> "Good") — applying it to the Drunk's parenthesized note
-  // mangled it into "(Actually The Drunk)". The Drunk note must use its own,
-  // untransformed class instead.
-  it("renders the Drunk note in a class distinct from the capitalized .note class", () => {
+  // Capitalize is opt-in (.noteCapitalized) rather than the .note default —
+  // applying it to every .note mangled the Drunk's parenthesized note into
+  // "(Actually The Drunk)". The Drunk note must render plain .note, not the
+  // capitalized variant used by the traveller-alignment note.
+  it("renders the Drunk note without the capitalize modifier applied to the traveller-alignment note", () => {
     renderBoard([makePlayer({ isDrunk: true })]);
 
     const note = screen.getByText("(actually the Drunk)");
-    expect(styles.drunkNote).toBeTruthy();
-    expect(note.className).toBe(styles.drunkNote);
-    expect(note.className).not.toBe(styles.note);
+    expect(styles.noteCapitalized).toBeTruthy();
+    expect(note.className.split(" ")).not.toContain(styles.noteCapitalized);
   });
 
   it("shows a traveller's alignment", () => {
