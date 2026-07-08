@@ -21,7 +21,6 @@ export function formatStartTimeSGT(createdAt: string): string {
   return `${startTimeFormatter.format(date)} SGT`;
 }
 
-// en-CA formats as YYYY-MM-DD directly, so no field reassembly is needed.
 const dateStampFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: SGT_TIME_ZONE,
   year: "numeric",
@@ -33,10 +32,17 @@ const dateStampFormatter = new Intl.DateTimeFormat("en-CA", {
 // display string. A UTC timestamp in the 16:00-24:00 window is already the
 // next day in SGT (+8h), so a raw ISO slice would date it a day behind what
 // the games list (and this) shows.
+//
+// Built from formatToParts rather than the formatter's plain output: en-CA
+// conventionally renders as YYYY-MM-DD, but that's an ICU convention, not a
+// guarantee — a different separator would land in a downloaded filename.
 export function formatDateStampSGT(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "unknown-date";
-  return dateStampFormatter.format(date);
+  const parts = dateStampFormatter.formatToParts(date);
+  const part = (type: "year" | "month" | "day") =>
+    parts.find((p) => p.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 function formatDurationMs(ms: number): string {
