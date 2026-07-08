@@ -47,12 +47,13 @@ import styles from "./BagBuilder.module.css";
 const RELAXED_VALIDATION_IDS = new Set(["legion", "riot", "atheist", "summoner"]);
 
 // Setup characters whose bracket falls through to isFreeform (no structured
-// count delta parses out) despite describing a seating/behavioral
+// count delta parses out) despite describing a seating or alignment
 // constraint rather than a distribution change — Marionette's "[You
-// neighbor the Demon]" is a placement rule, not a Townsfolk/Outsider/Minion
-// swap, so it must not relax count validation the way Legion/Atheist's
-// genuine distribution-breaking brackets do.
-const SEATING_CONSTRAINT_IDS = new Set(["marionette"]);
+// neighbor the Demon]" is a placement rule and Bounty Hunter's "[1
+// Townsfolk is evil]" is an alignment note, neither a Townsfolk/Outsider/
+// Minion swap, so they must not relax count validation the way
+// Legion/Atheist's genuine distribution-breaking brackets do.
+const SEATING_CONSTRAINT_IDS = new Set(["marionette", "bountyhunter"]);
 
 // Characters whose "+the X" requirement is fulfilled automatically rather
 // than merely warned about (Huntsman brings its own Damsel; Choirboy just

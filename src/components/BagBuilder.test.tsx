@@ -628,6 +628,23 @@ describe("special flow: Legion/Riot/Atheist/Summoner relax validation (AC4)", ()
     const minionsCounter = screen.getByText(/^Minions \d+\/\d+$/);
     expect(minionsCounter).toHaveAttribute("data-state");
   });
+
+  it("also does not relax validation for Bounty Hunter's alignment-note bracket", async () => {
+    // Bounty Hunter's "[1 Townsfolk is evil]" bracket falls through to
+    // isFreeform for the same reason Marionette's does, but it's an
+    // alignment note, not a distribution change — official team counts
+    // stay standard, so it must not relax validation either.
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={characters("bountyhunter", "washerwoman")} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Bounty Hunter/ }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    const townsfolkCounter = screen.getByText(/^Townsfolk \d+\/\d+$/);
+    expect(townsfolkCounter).toHaveAttribute("data-state");
+  });
 });
 
 describe("active jinxes among selected characters (AC5)", () => {
@@ -809,9 +826,10 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
       />,
     );
 
-    // Marionette alone leaves Townsfolk/Minion under target; unlike Legion's
-    // freeform bracket, Marionette's seating constraint must not relax
-    // validation, so the mismatch dialog should still fire.
+    // Marionette alone leaves Townsfolk/Demon under target (it's a Minion
+    // itself, so Minions match); unlike Legion's freeform bracket,
+    // Marionette's seating constraint must not relax validation, so the
+    // mismatch dialog should still fire.
     await user.click(screen.getByRole("button", { name: /^Marionette/ }));
     await user.click(
       screen.getByRole("button", { name: /Continue to seating/i }),
