@@ -803,6 +803,31 @@ describe("demonBluffs step (issue #155)", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("traps Tab inside the 'Show to Demon' reveal, not the outer walkthrough dialog behind it (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
+
+    // The reveal's only focusable control is its own Close button. The
+    // outer walkthrough dialog's Tab trap scans its whole subtree (no
+    // portal separates the two dialogs), so without deferring to the
+    // topmost dialog entirely, the outer's trap could fight the inner
+    // one over where Tab should wrap.
+    const closeButton = screen.getByRole("dialog", { name: /demon bluffs/i }).querySelector(
+      "button",
+    ) as HTMLElement;
+    expect(document.activeElement).toBe(closeButton);
+    await user.tab();
+    expect(document.activeElement).toBe(closeButton);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(closeButton);
+  });
+
   it("resolves answered via Confirm, without producing any reminder", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({

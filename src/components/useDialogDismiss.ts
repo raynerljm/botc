@@ -7,12 +7,14 @@ import { useEffect, type RefObject } from "react";
 const FOCUSABLE_SELECTOR =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-// Every mounted dialog's own token, most-recently-opened last — so Escape
-// only ever dismisses the topmost one. Needed since issue #155: the setup
-// walkthrough's Demon bluffs step can open "Show to Demon" as a second
-// dialog nested inside the walkthrough's own, and both mount this hook —
-// without this, a single Escape press reached both document-level
-// listeners and closed the walkthrough right along with the reveal.
+// Every mounted dialog's own token, most-recently-opened last — so only the
+// topmost dialog's Escape-dismiss and Tab-trap ever act on a keypress.
+// Needed since issue #155: the setup walkthrough's Demon bluffs step can
+// open "Show to Demon" as a second dialog nested inside the walkthrough's
+// own (no portal separates them), so both mount this hook and both would
+// otherwise react to the same keydown — Escape closing both at once, or the
+// outer's Tab trap (which scans its whole subtree, including the nested
+// dialog) fighting the inner one for which element Tab should wrap at.
 const openDialogs: symbol[] = [];
 
 // Shared accessible-dialog behavior for every overlay in the app
@@ -32,10 +34,11 @@ export function useDialogDismiss(
     openDialogs.push(token);
 
     function handleKeyDown(event: KeyboardEvent) {
+      // An outer dialog's listener stays registered the whole time a nested
+      // one is open — defer entirely to the topmost so neither Escape nor
+      // the Tab trap below ever double-acts on the same keypress.
+      if (openDialogs[openDialogs.length - 1] !== token) return;
       if (event.key === "Escape") {
-        // Only the topmost dialog dismisses — an outer dialog's own listener
-        // would otherwise also fire on the same keypress and close both.
-        if (openDialogs[openDialogs.length - 1] !== token) return;
         event.preventDefault();
         onDismiss();
         return;
@@ -81,7 +84,8 @@ export function useDialogDismiss(
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      openDialogs.splice(openDialogs.indexOf(token), 1);
+      const index = openDialogs.indexOf(token);
+      if (index !== -1) openDialogs.splice(index, 1);
       focusRecovery.disconnect();
       // The trigger can be gone by the time this runs — e.g. confirming
       // "Delete game" or "Remove player" removes the very row/token that
