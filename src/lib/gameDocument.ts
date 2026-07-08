@@ -16,11 +16,13 @@ import { normalizeCharacterId } from "./scriptParser";
 // again for issue #113 (Nomination gained the required `threshold` field),
 // again for issue #114 (Nomination gained the required `isExile` field),
 // and again for issue #108 (GameDocument gained the required `drawSession`
-// field), and again for issue #168 (GameDocument gained the required
-// `nightListCollapsed`/`dayPhaseCollapsed` fields) — a document saved under
-// an older shape must be rejected by gameStorage's version check rather than
-// loaded with any of these fields silently undefined.
-export const GAME_SCHEMA_VERSION = 15;
+// field), again for issue #168 (GameDocument gained the required
+// `nightListCollapsed`/`dayPhaseCollapsed` fields), and again for issue #165
+// (GameDocument gained the required `lastEndedNightSnapshot` field) — a
+// document saved under an older shape must be rejected by gameStorage's
+// version check rather than loaded with any of these fields silently
+// undefined.
+export const GAME_SCHEMA_VERSION = 16;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -133,6 +135,17 @@ export interface Nomination {
   // nomination, or spends a ghost vote (CONTEXT.md: Exile), and that must
   // hold even if the nominee later leaves the roster entirely (issue #114).
   isExile: boolean;
+}
+
+// Night-phase state captured immediately before "End night" clears it, so a
+// "back" control can reopen the just-ended night without losing its
+// checklist or the day's nominations (issue #165). Single-slot rather than a
+// history stack, matching ADR 0002's snapshot-not-event-log stance — only
+// the most recently ended night can be undone.
+export interface EndedNightSnapshot {
+  nightChecked: string[];
+  nightUnskipped: string[];
+  nominations: Nomination[];
 }
 
 export interface Player {
@@ -251,6 +264,12 @@ export interface GameDocument {
   // only") — cleared whenever a night ends and the next day begins (issue
   // #20 AC: "nomination eligibility resets at dawn").
   nominations: Nomination[];
+  // Snapshot of nightChecked/nightUnskipped/nominations as they stood right
+  // before the most recent "End night" cleared them, or null once no
+  // ended-night is available to undo (never ended one yet, or the reopen
+  // control already consumed it). Lets "back" restore the just-ended night
+  // instead of reopening it blank (issue #165).
+  lastEndedNightSnapshot: EndedNightSnapshot | null;
   // Collapsed/expanded state for the board's secondary panels, persisted so
   // it survives a reload (issue #79: a 15-player game's always-expanded
   // panels push mid-game controls several screen-heights below the board).
@@ -651,6 +670,7 @@ export function createGame({
     nightChecked: [],
     nightUnskipped: [],
     nominations: [],
+    lastEndedNightSnapshot: null,
     demonBluffsCollapsed: false,
     claimsCollapsed: false,
     endGamePanelCollapsed: null,
