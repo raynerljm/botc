@@ -43,12 +43,22 @@ function isStringRecord(value: unknown): value is Record<string, number> {
   );
 }
 
+// What's actually on disk: identical to BagBuilderDraft except
+// `autoAddedIds` may be absent — drafts saved before issue #129 predate the
+// field. Kept distinct from BagBuilderDraft (rather than making the field
+// optional there too) so every other reader of a *loaded* draft can still
+// rely on `autoAddedIds` always being an array, per loadBagBuilderDraft's
+// own default below.
+type StoredBagBuilderDraft = Omit<BagBuilderDraft, "autoAddedIds"> & {
+  autoAddedIds?: string[];
+};
+
 // A hand-edited or otherwise malformed draft must fall back to "no draft"
 // rather than crash the bag builder on mount — field-by-field, since
 // `selectedIds` in particular needs to be a real string array before it's
 // safe to hand to `new Set(...)` (a plain string would iterate as
 // characters instead of throwing).
-function isDraft(value: unknown): value is BagBuilderDraft {
+function isDraft(value: unknown): value is StoredBagBuilderDraft {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;
   return (
