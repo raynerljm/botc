@@ -23,6 +23,13 @@ export interface ScriptMeta {
   teensyville?: boolean;
 }
 
+// The single source of truth for "is this script Teensyville" — every
+// consumer (library scripts, custom/uploaded scripts) reads this instead of
+// re-deriving `meta.teensyville === true` independently.
+export function isTeensyvilleScript(meta: ScriptMeta): boolean {
+  return meta.teensyville === true;
+}
+
 // meta.almanac comes from user-provided script JSON (upload/paste), so any
 // consumer rendering it as a link href must check this first — otherwise a
 // javascript: URL could be persisted and executed on click.
@@ -51,7 +58,8 @@ export type ScriptParseError =
   | { type: "invalid-json" }
   | { type: "not-array" }
   | { type: "unknown-character"; raw: string }
-  | { type: "invalid-homebrew"; index: number; missingFields: string[] };
+  | { type: "invalid-homebrew"; index: number; missingFields: string[] }
+  | { type: "empty-script" };
 
 export type ScriptParseResult =
   | { ok: true; script: ParsedScript }
@@ -67,6 +75,8 @@ export function describeScriptParseError(error: ScriptParseError): string {
       return `Unknown character id: "${error.raw}".`;
     case "invalid-homebrew":
       return `Entry ${error.index + 1} is missing required fields: ${error.missingFields.join(", ")}.`;
+    case "empty-script":
+      return "This script has no characters.";
   }
 }
 
@@ -260,6 +270,10 @@ export function parseScript(jsonText: string): ScriptParseResult {
     characterIds.add(character.id);
     return true;
   });
+
+  if (deduped.length === 0) {
+    return { ok: false, errors: [{ type: "empty-script" }] };
+  }
 
   return {
     ok: true,

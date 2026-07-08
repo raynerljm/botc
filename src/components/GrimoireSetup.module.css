@@ -75,6 +75,20 @@
   margin-bottom: 0.75rem;
 }
 
+.bagShortfall {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--team-minion);
+  border-radius: 0.5rem;
+  color: var(--team-minion);
+}
+
+.bagLeftover {
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
 .startDraw {
   min-height: 2.75rem;
   padding: 0.6rem 1.1rem;
@@ -279,6 +293,17 @@
     "circle"
     "dayphase";
   gap: 1rem;
+}
+
+/* The bare `[hidden]` UA default loses to this class's own `display: grid`
+   above in a real browser — an author rule always beats a UA rule of equal
+   specificity, regardless of source order — so `hidden={...}` (issue #110's
+   last-seat guard, the walkthrough overlay) silently failed to hide this
+   element. jsdom doesn't reproduce that gap, which is how it went unnoticed
+   until driving the app in Chromium. A same-file rule one selector more
+   specific than `.circleLayout` wins outright and needs no `!important`. */
+.circleLayout[hidden] {
+  display: none;
 }
 
 .nightListArea {

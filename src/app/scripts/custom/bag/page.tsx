@@ -4,15 +4,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-import { ScriptSheet } from "@/components/ScriptSheet";
-import { ShareScriptButton } from "@/components/ShareScriptButton";
+import { BagBuilder } from "@/components/BagBuilder";
 import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
 import { resolveStoredScript } from "@/lib/customScripts";
 import { describeScriptParseError, isTeensyvilleScript } from "@/lib/scriptParser";
 
 import styles from "./page.module.css";
 
-function CustomScriptContent() {
+function CustomBagContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const { stored, result } = resolveStoredScript(id);
@@ -20,29 +19,20 @@ function CustomScriptContent() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <Link href="/" className={styles.back}>
-          ← Scripts
+        <Link
+          href={id ? `/scripts/custom?id=${id}` : "/"}
+          className={styles.back}
+        >
+          ← {stored ? stored.name : "Scripts"}
         </Link>
+        {/* Same name the script's own sheet page titles itself with
+            (custom/page.tsx) — the storyteller's locally-assigned name,
+            not the uploaded JSON's possibly-absent/possibly-different
+            _meta.name — so the two pages, and the game this bag creates,
+            never disagree about which script this is. */}
         {stored && <h1 className={styles.title}>{stored.name}</h1>}
         {result?.ok && isTeensyvilleScript(result.script.meta) && (
           <TeensyvilleBadge />
-        )}
-        {result?.ok && stored && (
-          <ShareScriptButton
-            // The script's own JSON may have no _meta.name — fall back to
-            // the name the storyteller assigned when saving it locally
-            // (customScripts.ts), same as the heading above does.
-            meta={{ ...result.script.meta, name: result.script.meta.name ?? stored.name }}
-            characters={result.script.characters}
-          />
-        )}
-        {result?.ok && stored && (
-          <Link
-            href={`/scripts/custom/bag?id=${stored.id}`}
-            className={styles.buildBag}
-          >
-            Build the bag →
-          </Link>
         )}
       </header>
       {!stored && (
@@ -58,21 +48,26 @@ function CustomScriptContent() {
           ))}
         </ul>
       )}
-      {result && result.ok && (
-        <ScriptSheet
-          meta={result.script.meta}
+      {result && result.ok && stored && (
+        <BagBuilder
+          key={stored.id}
           characters={result.script.characters}
-          jinxes={result.script.jinxes}
+          scriptId={stored.id}
+          scriptName={stored.name}
+          almanacUrl={result.script.meta.almanac}
+          firstNightOrder={result.script.meta.firstNight}
+          otherNightOrder={result.script.meta.otherNight}
+          isTeensyville={isTeensyvilleScript(result.script.meta)}
         />
       )}
     </main>
   );
 }
 
-export default function CustomScriptPage() {
+export default function CustomBagPage() {
   return (
     <Suspense fallback={null}>
-      <CustomScriptContent />
+      <CustomBagContent />
     </Suspense>
   );
 }

@@ -8,6 +8,7 @@ import {
 import { listLibraryScripts } from "./scriptLibrary";
 import {
   computeActiveJinxes,
+  isTeensyvilleScript,
   type ActiveJinx,
   type ScriptMeta,
 } from "./scriptParser";
@@ -51,7 +52,7 @@ function toSummary(
     source,
     characterCount,
     travellerCount,
-    isTeensyville: script.meta.teensyville === true,
+    isTeensyville: isTeensyvilleScript(script.meta),
   };
 }
 

@@ -82,18 +82,37 @@ function characterToRaw(character: Character): unknown {
   return raw;
 }
 
+function scriptEntries(
+  meta: ScriptMeta,
+  characters: Character[],
+): unknown[] {
+  const metaRaw = metaToRaw(meta);
+  return [
+    ...(metaRaw ? [metaRaw] : []),
+    ...characters.map(characterToRaw),
+  ];
+}
+
 // Takes only the script's own data — never a GameDocument — so a shared
 // script structurally cannot leak grimoire/game state.
 export function encodeScriptForShare(
   meta: ScriptMeta,
   characters: Character[],
 ): string {
-  const metaRaw = metaToRaw(meta);
-  const entries = [
-    ...(metaRaw ? [metaRaw] : []),
-    ...characters.map(characterToRaw),
-  ];
-  return compressToEncodedURIComponent(JSON.stringify(entries));
+  return compressToEncodedURIComponent(
+    JSON.stringify(scriptEntries(meta, characters)),
+  );
+}
+
+// The same script-tool JSON shape encodeScriptForShare compresses into a
+// URL fragment, but uncompressed — for saving a received share link's
+// script as a custom script, whose rawText is stored (and re-parsed) as
+// plain script-tool JSON, not the share encoding.
+export function scriptToRawJson(
+  meta: ScriptMeta,
+  characters: Character[],
+): string {
+  return JSON.stringify(scriptEntries(meta, characters));
 }
 
 export function decodeScriptForShare(encoded: string): ScriptParseResult {

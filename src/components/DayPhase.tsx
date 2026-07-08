@@ -52,17 +52,20 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
 
   function recordNomination(event: FormEvent) {
     event.preventDefault();
+    const nominee = playerById.get(nomineeId);
+    if (!nominee) return;
     const nomination: Nomination = {
       id: crypto.randomUUID(),
       nominatorId,
       nomineeId,
       votes: [],
+      threshold: nominationThreshold(nominee, game.players),
+      isExile: nominee.isTraveller,
     };
     onChange({ ...game, nominations: [...game.nominations, nomination] });
   }
 
   function toggleVote(nomination: Nomination, player: Player) {
-    const nominee = playerById.get(nomination.nomineeId);
     const alreadyVoted = nomination.votes.includes(player.id);
     const votes = alreadyVoted
       ? nomination.votes.filter((id) => id !== player.id)
@@ -70,7 +73,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     const nominations = game.nominations.map((n) =>
       n.id === nomination.id ? { ...n, votes } : n,
     );
-    const isExecution = !!nominee && !nominee.isTraveller;
+    const isExecution = !nomination.isExile;
 
     // Recording a dead player's vote on an execution spends their ghost
     // vote; un-recording it restores the vote, but only when no *other*
@@ -82,12 +85,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     if (player.dead && isExecution) {
       const ghostVoteSpent = !alreadyVoted
         ? true
-        : hasSpentGhostVoteElsewhereToday(
-            game.nominations,
-            game.players,
-            player.id,
-            nomination.id,
-          );
+        : hasSpentGhostVoteElsewhereToday(game.nominations, player.id, nomination.id);
       onChange({
         ...game,
         nominations,
@@ -115,6 +113,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         <label className={styles.field}>
           Nominator
           <select
+            className={styles.select}
             value={nominatorId}
             onChange={(event) => setNominatorId(event.target.value)}
           >
@@ -132,6 +131,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         <label className={styles.field}>
           Nominee
           <select
+            className={styles.select}
             value={nomineeId}
             onChange={(event) => setNomineeId(event.target.value)}
           >
@@ -157,7 +157,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
           const nominee = playerById.get(nomination.nomineeId);
           if (!nominee) return null;
 
-          const threshold = nominationThreshold(nominee, game.players);
+          const threshold = nomination.threshold;
           const tally = nomination.votes.length;
           const meetsThreshold = tally >= threshold;
           const isOpen = nomination.id === openNomination?.id;
@@ -166,7 +166,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
             <li key={nomination.id} className={styles.nomination}>
               <p className={styles.nominationHeading}>
                 {nominator?.name ?? "Unknown"} → {nominee.name}
-                {nominee.isTraveller && " (exile)"}
+                {nomination.isExile && " (exile)"}
               </p>
               <p
                 className={styles.tally}
@@ -187,7 +187,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                     // is already spent so the storyteller can see it before
                     // choosing to record (or not record) the vote anyway.
                     const alreadySpent =
-                      player.dead && !voted && !canRecordVote(player, nominee);
+                      player.dead && !voted && !canRecordVote(player, nomination.isExile);
                     return (
                       <label key={player.id} className={styles.voter}>
                         <input
@@ -200,7 +200,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                           <span className={styles.note}>
                             {" "}
                             (
-                            {nominee.isTraveller
+                            {nomination.isExile
                               ? "vote free"
                               : `ghost vote${alreadySpent ? " — already spent" : ""}`}
                             )

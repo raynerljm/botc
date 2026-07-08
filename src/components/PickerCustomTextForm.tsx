@@ -33,12 +33,15 @@ export function PickerCustomTextForm({
       <label>
         {label}
         <input
+          className={styles.input}
           type="text"
           value={text}
           onChange={(event) => setText(event.target.value)}
         />
       </label>
-      <button type="submit">{submitLabel}</button>
+      <button type="submit" className={styles.submit}>
+        {submitLabel}
+      </button>
     </form>
   );
 }

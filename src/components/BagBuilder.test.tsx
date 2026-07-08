@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveBagBuilderDraft } from "@/lib/bagBuilderDraft";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
@@ -18,6 +19,14 @@ const tb = getEditionCharacters("tb");
 function characters(...ids: string[]) {
   return ids.map((id) => getCharacter(id)!);
 }
+
+// Every scriptId="tb" test below would otherwise inherit whatever draft the
+// previous one persisted to localStorage (issue #118's own persistence
+// feature) — clear it the same way clearGames() already keeps games from
+// leaking between tests.
+afterEach(() => {
+  localStorage.clear();
+});
 
 describe("player count and official target counts", () => {
   it("shows the official targets for the default 5-player count before any selection", () => {
@@ -78,6 +87,59 @@ describe("player count and official target counts", () => {
     await user.clear(playerCountInput);
 
     expect(playerCountInput).toHaveValue(null);
+  });
+});
+
+describe("Teensyville player count cap", () => {
+  it("caps the player count input at 6 for a Teensyville script", () => {
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
+
+  it("clamps a typed-in count above 6 back down to 6 on blur", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "15");
+    await user.tab();
+
+    expect(playerCountInput).toHaveValue(6);
+  });
+
+  it("leaves a regular script's player count uncapped at 6", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute(
+      "max",
+      "15",
+    );
+  });
+
+  it("clamps a draft's stale above-6 player count on mount, instead of showing an out-of-range value", () => {
+    // Simulates a draft saved before the script gained (or was recognized
+    // as) Teensyville status, or written back when isTeensyville was false.
+    saveBagBuilderDraft("no-greater-joy", {
+      playerCount: 10,
+      travellerCount: 0,
+      selectedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+    });
+
+    render(
+      <BagBuilder
+        characters={tb}
+        scriptId="no-greater-joy"
+        scriptName="No Greater Joy"
+        isTeensyville
+      />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(6);
   });
 });
 
@@ -825,3 +887,104 @@ describe("continue to seating hands off into a new game (issue #12)", () => {
     expect(push).toHaveBeenCalledWith("/game");
   });
 });
+
+describe("in-progress builder state survives reload / browser-back (issue #118)", () => {
+  it("restores player count, traveller count, and selected characters on remount", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "12");
+    await user.tab(); // blur, so the typed count is committed/clamped
+
+    const travellerCountInput = screen.getByLabelText("Traveller count");
+    await user.clear(travellerCountInput);
+    await user.type(travellerCountInput, "2");
+    await user.tab();
+
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(screen.getByRole("button", { name: /^Baron/ }));
+
+    // A reload/browser-back remounts the component fresh — nothing here
+    // simulates the browser itself, just that this instance is gone and a
+    // brand-new one takes its place, the same as remounting after
+    // navigating away and back.
+    unmount();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(12);
+    expect(screen.getByLabelText("Traveller count")).toHaveValue(2);
+    expect(
+      screen.getByRole("button", { name: /^Imp/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: /^Baron/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps a script's draft separate from a different script's builder", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    unmount();
+
+    render(
+      <BagBuilder
+        characters={characters("imp", "baron")}
+        scriptId="other-script"
+        scriptName="Other Script"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /^Imp/ }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("starts fresh (no draft to restore) when the page hasn't identified a script", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(5);
+  });
+
+  it("clears the draft once it becomes a real game, so a later build for the same script starts from defaults instead of the finished game's choices (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "12");
+    await user.tab();
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+    expect(push).toHaveBeenCalledWith("/game");
+
+    // The storyteller ends that game and comes back to build an unrelated
+    // new one for the same script — a fresh mount must not inherit the
+    // finished game's player count or selection.
+    unmount();
+    render(
+      <BagBuilder characters={tb} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(5);
+    expect(
+      screen.getByRole("button", { name: /^Imp/ }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+});
+

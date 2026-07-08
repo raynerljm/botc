@@ -94,6 +94,7 @@ export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
                 </span>
                 <select
                   aria-label={`Bluff slot ${index + 1}`}
+                  className={styles.slotSelect}
                   value={bluffs[index] ?? ""}
                   onChange={(event) => setSlot(index, event.target.value || null)}
                 >

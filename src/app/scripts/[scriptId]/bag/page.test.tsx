@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import BagBuilderPage, { generateStaticParams } from "./page";
@@ -36,5 +36,32 @@ describe("bag builder page", () => {
 
   it("404s for an unknown script id", async () => {
     await expect(renderBagPage("does-not-exist")).rejects.toThrow();
+  });
+
+  it("marks a Teensyville script's designation and caps its player count at 6", async () => {
+    await renderBagPage("no-greater-joy");
+
+    expect(screen.getByText("Teensyville")).toBeInTheDocument();
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
+
+  it("does not cap a regular script's player count below 15", async () => {
+    await renderBagPage("tb");
+
+    expect(screen.queryByText("Teensyville")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "15");
+  });
+
+  it("renders the Teensyville designation for a Teensyville script, not for a regular one (issue #120)", async () => {
+    await renderBagPage("no-greater-joy");
+    expect(
+      screen.getByRole("heading", { name: /No Greater Joy/ }),
+    ).toHaveTextContent(/teensyville/i);
+
+    cleanup();
+    await renderBagPage("tb");
+    expect(
+      screen.getByRole("heading", { name: "Trouble Brewing" }),
+    ).not.toHaveTextContent(/teensyville/i);
   });
 });

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 
 import { ScriptSheet } from "@/components/ScriptSheet";
 import { ShareScriptButton } from "@/components/ShareScriptButton";
+import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
+import { isTeensyvilleScript } from "@/lib/scriptParser";
 import { getScriptById, listScriptSummaries } from "@/lib/scripts";
 
 import styles from "./page.module.css";
@@ -37,7 +39,10 @@ export default async function ScriptSheetPage({ params }: Props) {
         <Link href="/" className={styles.back}>
           ← Scripts
         </Link>
-        <h1 className={styles.title}>{script.name}</h1>
+        <h1 className={styles.title}>
+          {script.name}
+          {isTeensyvilleScript(script.meta) && <TeensyvilleBadge />}
+        </h1>
         <ShareScriptButton meta={script.meta} characters={script.characters} />
         <Link href={`/scripts/${scriptId}/bag`} className={styles.buildBag}>
           Build the bag →

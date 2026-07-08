@@ -26,6 +26,7 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  min-height: 2.75rem;
 }
 
 .board {
@@ -55,6 +56,20 @@
   /* Only plays on mount (a newly-placed reminder) — dragging an existing
      one just updates its left/top style on the same element, no remount. */
   animation: chip-in 200ms ease;
+}
+
+/* `transform` gives every .tokenWrap/.reminderWrap its own stacking
+   context, so a menuBody's own z-index (below) only ever wins against its
+   own siblings, never against a neighbouring seat's tokenWrap or the
+   sticky Day/Night panels beside the board — those paint later in the DOM
+   and so paint on top regardless (issue #117). Raising the *wrap itself*
+   above the ambient z-index:auto level, only while its menu is open, is
+   what actually wins that comparison. `data-menu-open` is written from the
+   same `openMenu` state that already drives each menu's `open` attribute,
+   so at most one wrap carries this at a time. */
+.tokenWrap[data-menu-open],
+.reminderWrap[data-menu-open] {
+  z-index: 20;
 }
 
 @keyframes chip-in {
@@ -242,6 +257,32 @@
   border-radius: 0.5rem;
   color: var(--foreground);
   min-height: 2.75rem;
+}
+
+.textInput {
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  min-height: 2.75rem;
+}
+
+.menuButton {
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menuButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .markDead {

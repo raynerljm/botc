@@ -46,6 +46,8 @@
   font-size: 0.9rem;
   display: grid;
   gap: 0.25rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .submit {

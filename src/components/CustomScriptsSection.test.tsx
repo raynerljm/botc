@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,13 +32,37 @@ describe("CustomScriptsSection", () => {
     );
   });
 
-  it("removes a script from the list", async () => {
-    const saved = saveCustomScript({ rawText: "[]", name: "Removable" });
+  it("requires confirmation before removing a script, and does nothing on cancel", async () => {
+    const saved = saveCustomScript({ rawText: '["imp"]', name: "Removable" });
     render(<CustomScriptsSection />);
     const user = userEvent.setup();
 
     await screen.findByRole("link", { name: /Removable/ });
     await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    // Not removed yet — Remove opens a confirmation, it doesn't delete on the spot.
+    expect(
+      JSON.parse(window.localStorage.getItem("botc:custom-scripts")!),
+    ).toContainEqual(expect.objectContaining({ id: saved.id }));
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(
+      JSON.parse(window.localStorage.getItem("botc:custom-scripts")!),
+    ).toContainEqual(expect.objectContaining({ id: saved.id }));
+  });
+
+  it("removes a script from the list once removal is confirmed", async () => {
+    const saved = saveCustomScript({ rawText: '["imp"]', name: "Removable" });
+    render(<CustomScriptsSection />);
+    const user = userEvent.setup();
+
+    await screen.findByRole("link", { name: /Removable/ });
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
 
     await waitFor(() =>
       expect(

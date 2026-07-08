@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCharacter } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
 import { clearGames, loadGame } from "@/lib/gameStorage";
+import { decodeScriptForShare } from "@/lib/scriptShare";
 
 import { GrimoireSetup } from "./GrimoireSetup";
+import { mockClipboard } from "./testHelpers";
 
 const routerBack = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -151,8 +153,8 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
 
     // Seat 1's turn: two face-down tokens, no identity visible in the draw
-    // itself (a manual-assign dropdown for the *other* unassigned seat is
-    // allowed to list names — that's storyteller-driven, not a blind draw).
+    // itself. (The other unassigned seat's manual-assign dropdown is hidden
+    // too while any draw is active — see the dedicated issue #111 test.)
     const drawRegion = screen.getByRole("region", { name: "Bag draw" });
     expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
     let faceDownTokens = screen.getAllByRole("button", {
@@ -212,6 +214,42 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     const finalGame = loadGame()!;
     expect(finalGame.bag).toHaveLength(0);
     expect(finalGame.players[1].characterId).toBe(secondDrawn.id);
+  });
+
+  it('ignores a double-click on "Start bag draw" instead of instantly drawing seat 1\'s token (issue #111)', () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Start bag draw" }),
+      { detail: 1 },
+    );
+    // The second click of a double-click gesture — mirrors chooseTokenOnClick's
+    // event.detail guard (see its comment for why detail: 2 means "not a
+    // fresh tap").
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+      { detail: 2 },
+    );
+
+    expect(screen.queryByRole("heading", { name: washerwoman.name })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: imp.name })).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+
+    // Seat 1 still gets its own choose-your-own-token ritual — a real,
+    // separate tap actually draws.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+      { detail: 1 },
+    );
+
+    const drawnName = [washerwoman.name, imp.name].find((name) =>
+      screen.queryByRole("heading", { name }),
+    );
+    expect(drawnName).toBeDefined();
   });
 
   it("keeps every already-drawn seat's identity hidden while another seat is mid-draw", async () => {
@@ -297,43 +335,30 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     expect(screen.getByLabelText("Seat 1 name")).toBeInTheDocument();
   });
 
-  it("ignores a tap on a token that's since been manually assigned to another seat", async () => {
+  it("hides every seat's manual-assign select while a draw session is active, so bag composition never appears on screen (issue #111)", async () => {
     const user = userEvent.setup();
-    // A single official token so seat 2's manual-assign dropdown and seat
-    // 1's face-down token are racing over the exact same token.
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const baron = getCharacter("baron")!;
     const game = makeGame({
-      playerCount: 2,
-      selectedCharacters: [getCharacter("washerwoman")!],
+      playerCount: 3,
+      selectedCharacters: [washerwoman, imp, baron],
     });
     render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
-    const faceDownToken = screen.getAllByRole("button", {
-      name: /Face-down token/,
-    })[0];
 
-    // Before tapping, the storyteller manually grabs the same (only) token
-    // for the other seat instead — the face-down button on screen is now
-    // stale.
-    await user.selectOptions(
-      screen.getByLabelText("Assign seat 2 manually"),
-      "Washerwoman",
-    );
-
-    // Tapping the now-stale token must not double-assign it or crash —
-    // it's simply ignored, and the grid resyncs to what's actually left
-    // (zero tokens) instead of leaving the stale button on screen forever.
-    await user.click(faceDownToken);
-
-    expect(screen.queryByRole("heading", { name: "Washerwoman" })).not.toBeInTheDocument();
+    // Seat 1 is drawing — neither seat 2's nor seat 1's own manual-assign
+    // select renders, and none of the remaining bag's character names
+    // appear anywhere on the page (not just inside the draw region), so the
+    // drawing player can't read what's left, and the last-remaining seat's
+    // own dropdown can't leak its own character early.
     expect(
-      screen.queryByRole("button", { name: /Face-down token/ }),
+      screen.queryByLabelText(/Assign seat \d manually/),
     ).not.toBeInTheDocument();
-
-    const reloaded = loadGame()!;
-    expect(reloaded.players[0].characterId).toBeNull();
-    expect(reloaded.players[1].characterId).toBe("washerwoman");
-    expect(reloaded.bag).toHaveLength(0);
+    expect(screen.queryByText(washerwoman.name)).not.toBeInTheDocument();
+    expect(screen.queryByText(imp.name)).not.toBeInTheDocument();
+    expect(screen.queryByText(baron.name)).not.toBeInTheDocument();
   });
 
   it("keeps the grimoire board and end-game controls hidden behind the reveal when the very last seat is drawn", async () => {
@@ -369,10 +394,68 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
-    // Draw session is over — the board is back.
+    // Issue #110: the last seat's "Hide & pass" must not open the board
+    // directly — the drawer is still holding the device. The hand-off
+    // guard stays up until the storyteller explicitly takes over.
+    expect(
+      screen.queryByRole("region", { name: "Grimoire circle" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Card hidden. Return the device to the storyteller."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Export game" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open the grimoire" }),
+    );
+
+    // Only the explicit take-over opens the board.
     expect(
       screen.getByRole("region", { name: "Grimoire circle" }),
     ).toBeInTheDocument();
+  });
+
+  it("matches every other seat's hand-off on the last seat: no identity visible until the storyteller explicitly takes over (issue #110)", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    const lastDrawnName = [washerwoman.name, imp.name].find((name) =>
+      screen.queryByRole("heading", { name }),
+    )!;
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    // Same privacy contract as every other seat's "Card hidden" guard: no
+    // player name, character name, or seat control leaks through — the
+    // board stays mounted (its own session-only state is worth keeping)
+    // but hidden from the accessibility tree, so query it the same way the
+    // "Grimoire circle" checks above do rather than by raw text.
+    expect(
+      screen.queryByRole("heading", { name: lastDrawnName }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start bag draw" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open the grimoire" }),
+    );
+    expect(loadGame()!.bag).toHaveLength(0);
   });
 
   it("keeps export and end-game controls reachable through a private reveal (issue #21 AC), hiding them only during the pass-around itself", async () => {
@@ -602,6 +685,108 @@ describe("draw session survives a reload (issue #108)", () => {
   });
 });
 
+describe("recovering from a bag shorter than the seat count (issue #118 AC1)", () => {
+  it("surfaces the shortfall up front, before any draws happen", () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [washerwoman, imp],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    expect(
+      screen.getByText(/bag is short 1 token for 3 unassigned seats/i),
+    ).toBeInTheDocument();
+    // Still recoverable/playable for the two seats the bag *can* fill —
+    // never blocking (ADR 0003) — and a way back to bag-building is on
+    // screen from the moment the shortfall is knowable, not just once the
+    // bag actually runs dry mid-ritual.
+    expect(
+      screen.getByRole("button", { name: "Start bag draw" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Trouble Brewing/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("never opens a draw with zero tokens once the bag runs dry mid-ritual — ends the draw and re-surfaces the shortfall instead", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [washerwoman, imp],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    // Seat 1 draws.
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Seat 2 draws — the bag is now empty, one seat still unassigned.
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    expect(
+      screen.getByText(/Pass the device to Player 3/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Never a "tap a token to draw" prompt with nothing to tap — the draw
+    // session ends and the shortfall (now for the one remaining seat) is
+    // surfaced on the ordinary setup screen instead, which still offers a
+    // way back to bag-building (the existing back button).
+    expect(screen.queryByText(/tap a token to draw/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Face-down token/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/bag is short 1 token for 1 unassigned seat\b/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Trouble Brewing/ }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("surfacing the leftover bag after an over-sized bag's draw (issue #118 AC2)", () => {
+  it("shows which token(s) stayed in the bag once every seat is filled", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const imp = getCharacter("imp")!;
+    const game = makeGame({
+      playerCount: 1,
+      selectedCharacters: [washerwoman, imp],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    expect(screen.queryByText(/left in the bag/i)).not.toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      washerwoman.name,
+    );
+
+    expect(screen.getByText("1/1 seats assigned")).toBeInTheDocument();
+    expect(
+      screen.getByText(`Left in the bag: ${imp.name}`),
+    ).toBeInTheDocument();
+  });
+
+  it("shows nothing extra once the bag empties out exactly", async () => {
+    await completeSetup(2, [getCharacter("washerwoman")!, getCharacter("imp")!]);
+
+    expect(screen.queryByText(/left in the bag/i)).not.toBeInTheDocument();
+  });
+});
+
 describe("naming the drawn seat's player (issue #54)", () => {
   it("saves a name picked from the regular players list as the drawn seat's player name", async () => {
     const user = userEvent.setup();
@@ -706,30 +891,29 @@ describe("manual assignment mode (mixable with draw)", () => {
     });
     render(<GrimoireSetup game={game} />);
 
-    // Manually assign the middle seat before touching the draw at all.
+    // Manually assign seats 2 and 3 up front — manual assignment isn't
+    // offered once a draw session starts (issue #111) — leaving only seat 1
+    // for the blind draw ritual.
     await user.selectOptions(
       screen.getByLabelText("Assign seat 2 manually"),
       "Baron",
     );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 3 manually"),
+      "Imp",
+    );
 
-    // The draw flow still targets the lowest unassigned seat (seat 1).
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
     expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
-    // Seat 3 is the only one left — finish it manually instead of drawing.
-    const remainingOption = within(
-      screen.getByLabelText("Assign seat 3 manually"),
-    )
-      .getAllByRole("option")
-      .find((option) => option.textContent !== "Choose a character…")!;
-    await user.selectOptions(
-      screen.getByLabelText("Assign seat 3 manually"),
-      remainingOption.textContent!,
+    // Seat 1 was the only seat left, so the hand-off guard has no next seat
+    // to pass to — the storyteller explicitly takes the device back.
+    await user.click(
+      screen.getByRole("button", { name: "Open the grimoire" }),
     );
 
     expect(screen.getByText("3/3 seats assigned")).toBeInTheDocument();
@@ -776,6 +960,17 @@ describe("travellers addable at setup with alignment", () => {
   it("hides the action once every traveller token has been added", () => {
     const game = makeGame({ playerCount: 2 });
     render(<GrimoireSetup game={game} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Add traveller" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides 'Add traveller' while a draw session is active, so its select can't leak the traveller bag mid-draw (issue #111)", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
 
     expect(
       screen.queryByRole("button", { name: "Add traveller" }),
@@ -1146,6 +1341,8 @@ describe("mid-game token management (issue #15)", () => {
           nominatorId: game.players[1].id,
           nomineeId: game.players[1].id,
           votes: [game.players[0].id, game.players[1].id],
+          threshold: 1,
+          isExile: false,
         },
       ],
     };
@@ -1169,6 +1366,46 @@ describe("mid-game token management (issue #15)", () => {
     await removePlayerAndConfirm(user, seat1Wrap);
 
     expect(loadGame()!.nominations[0].votes).toEqual([game.players[1].id]);
+  });
+
+  it("doesn't badge a seat for an exile call — exile calls don't count as nominations for the board's badges (issue #114)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("washerwoman")!, getCharacter("imp")!],
+    });
+    const withExileCall = {
+      ...game,
+      nominations: [
+        {
+          id: "n1",
+          nominatorId: game.players[0].id,
+          nomineeId: game.players[1].id,
+          votes: [],
+          threshold: 1,
+          isExile: true,
+        },
+      ],
+    };
+    render(<GrimoireSetup game={withExileCall} />);
+
+    for (let seat = 1; seat <= 2; seat++) {
+      const remainingOption = within(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+      )
+        .getAllByRole("option")
+        .find((option) => option.textContent !== "Choose a character…")!;
+      await user.selectOptions(
+        screen.getByLabelText(`Assign seat ${seat} manually`),
+        remainingOption.textContent!,
+      );
+    }
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const seat2Wrap = circle.querySelectorAll("[data-player-id]")[1] as HTMLElement;
+    expect(within(seat1Wrap).queryByText("Nominator")).not.toBeInTheDocument();
+    expect(within(seat2Wrap).queryByText("Nominee")).not.toBeInTheDocument();
   });
 
   it("reveals the Drunk, showing the real character openly from then on", async () => {
@@ -1564,6 +1801,42 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
     expect(
       screen.getByRole("button", { name: /share via qr/i }),
     ).toBeInTheDocument();
+  });
+
+  it("shares the script, not the bag — the payload is every script character, with no bag composition or Drunk stand-in (issue #109)", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    mockClipboard(writeText);
+
+    // A 2-of-4 bag: the Drunk (masquerading as the Chef stand-in) and the
+    // Imp are in play; Washerwoman and Empath are on the script but not in
+    // the bag. The share must carry all four script characters — and never
+    // the Chef, which exists only as game state.
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("drunk")!, getCharacter("imp")!],
+      standIn: getCharacter("chef")!,
+      scriptCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("empath")!,
+        getCharacter("drunk")!,
+        getCharacter("imp")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: /share via qr/i }));
+    await user.click(screen.getByRole("button", { name: /copy link/i }));
+
+    const url = writeText.mock.calls[0][0] as string;
+    const decoded = decodeScriptForShare(new URL(url).hash.slice(1));
+    if (!decoded.ok) throw new Error("shared payload failed to decode");
+    expect(decoded.script.characters.map((c) => c.id)).toEqual([
+      "washerwoman",
+      "empath",
+      "drunk",
+      "imp",
+    ]);
   });
 });
 

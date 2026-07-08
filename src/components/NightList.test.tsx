@@ -98,7 +98,7 @@ describe("Night list: starting and ending a night", () => {
       night: 0,
       nightOpen: true,
       nominations: [
-        { id: "n1", nominatorId: "p1", nomineeId: "p2", votes: [] },
+        { id: "n1", nominatorId: "p1", nomineeId: "p2", votes: [], threshold: 1, isExile: false },
       ],
     });
     let latest = game;

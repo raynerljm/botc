@@ -41,7 +41,7 @@ export function ReminderPicker({
 
   return (
     <div className={styles.picker} role="dialog" aria-label="Add reminder">
-      <button type="button" onClick={onCancel}>
+      <button type="button" className={styles.cancelButton} onClick={onCancel}>
         Cancel
       </button>
 

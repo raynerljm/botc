@@ -27,45 +27,69 @@ export function nominationTally(nomination: Nomination): number {
   return nomination.votes.length;
 }
 
-// Folds today's nominations in the order they were recorded: a nomination
-// only takes the block once its own tally meets its threshold, and only
-// unseats the current block-holder by strictly beating their tally — an
-// exact tie clears the block instead of leaving it be (CONTEXT.md: On the
-// block). A nomination short of its own threshold never touches the block,
-// even if its tally happens to match the current holder's.
+// Nominations that count as executions — every nomination except exile
+// calls, which are unlimited per day and never compete for the block
+// (CONTEXT.md: Exile, issue #114). The single place that draws the
+// exile/execution boundary, so every consumer below shares one answer.
+export function executionNominations(nominations: Nomination[]): Nomination[] {
+  return nominations.filter((nomination) => !nomination.isExile);
+}
+
+// Folds today's nominations in the order they were recorded, tracking the
+// high-water tally among nominations that met their own threshold — not
+// just the current block-holder's tally. A nomination only takes the block
+// by strictly beating the high-water mark; an exact tie clears the block
+// but leaves the high-water mark standing, so a later nomination matching
+// that same tied tally still doesn't take it — only a strictly higher tally
+// ever does (CONTEXT.md: On the block). A nomination short of its own
+// threshold never touches the block or the high-water mark, even if its
+// tally happens to match either. Each nomination's threshold is the one
+// snapshotted on it at vote time (issue #113) — never recomputed against
+// the current player list, so a mid-day death can't rewrite a past tally
+// or move the block. The high-water mark advances even for a nomination
+// whose nominee has since left the roster entirely (mid-game removal,
+// distinct from merely dying) — only the block-holder itself has to still
+// exist to be creditable, or a later nomination could retake the block by
+// merely matching a tally that only seems forgotten because its holder is
+// gone (still the same bug this fold exists to prevent). An exile call
+// never enters this fold at all — it isn't an execution, doesn't compete
+// for the block, and is unlimited per day (CONTEXT.md: Exile, issue #114).
 export function computeBlock(
   nominations: Nomination[],
   players: Player[],
 ): string | null {
-  let block: { nomineeId: string; tally: number } | null = null;
+  let blockNomineeId: string | null = null;
+  let highWater = -1;
 
-  for (const nomination of nominations) {
-    const nominee = players.find((player) => player.id === nomination.nomineeId);
-    if (!nominee) continue;
-
+  for (const nomination of executionNominations(nominations)) {
     const tally = nominationTally(nomination);
-    if (tally < nominationThreshold(nominee, players)) continue;
+    if (tally < nomination.threshold) continue;
 
-    if (block === null || tally > block.tally) {
-      block = { nomineeId: nomination.nomineeId, tally };
-    } else if (tally === block.tally) {
-      block = null;
+    if (tally > highWater) {
+      highWater = tally;
+      const stillInPlay = players.some((player) => player.id === nomination.nomineeId);
+      blockNomineeId = stillInPlay ? nomination.nomineeId : null;
+    } else if (tally === highWater) {
+      blockNomineeId = null;
     }
   }
 
-  return block?.nomineeId ?? null;
+  return blockNomineeId;
 }
 
 // A dead player's one ghost vote only ever gates an execution vote — an
-// exile (Traveller nominee) neither needs nor spends it (CONTEXT.md: Exile
-// "ghost votes are not spent on it"), so a ghost with no votes left can
-// still vote on an exile, and voting on an exile never uses up the vote
-// they'd need for a later execution. Advisory only (ADR 0003) — nothing
-// in this file disables recording a vote based on this; it's for the
-// advisory label next to a dead voter's name.
-export function canRecordVote(voter: Player, nominee: Player): boolean {
+// exile neither needs nor spends it (CONTEXT.md: Exile "ghost votes are not
+// spent on it"), so a ghost with no votes left can still vote on an exile,
+// and voting on an exile never uses up the vote they'd need for a later
+// execution. Takes the nomination's snapshotted isExile rather than a live
+// nominee, for the same staleness reason as the rest of issue #114 — a
+// nomination stays whatever it was recorded as even if its nominee later
+// leaves the roster. Advisory only (ADR 0003) — nothing in this file
+// disables recording a vote based on this; it's for the advisory label next
+// to a dead voter's name.
+export function canRecordVote(voter: Player, isExile: boolean): boolean {
   if (!voter.dead) return true;
-  if (nominee.isTraveller) return true;
+  if (isExile) return true;
   return !voter.ghostVoteSpent;
 }
 
@@ -73,31 +97,38 @@ export function canRecordVote(voter: Player, nominee: Player): boolean {
 // *other* execution nomination recorded today. Un-checking a vote restores
 // `ghostVoteSpent` only when this really was the nomination that spent it —
 // not when an earlier (now-closed) nomination still holds their one vote
-// for the day, which would otherwise wrongly refund it.
+// for the day, which would otherwise wrongly refund it. An exile vote never
+// counts here either way (CONTEXT.md: Exile "ghost votes are not spent on
+// it").
 export function hasSpentGhostVoteElsewhereToday(
   nominations: Nomination[],
-  players: Player[],
   playerId: string,
   currentNominationId: string,
 ): boolean {
-  return nominations.some((nomination) => {
-    if (nomination.id === currentNominationId) return false;
-    if (!nomination.votes.includes(playerId)) return false;
-    const nominee = players.find((player) => player.id === nomination.nomineeId);
-    return !!nominee && !nominee.isTraveller;
-  });
+  return executionNominations(nominations).some(
+    (nomination) =>
+      nomination.id !== currentNominationId && nomination.votes.includes(playerId),
+  );
 }
 
+// An exile call never consumes the caller's once-per-day nomination —
+// exile calls are unlimited per day (CONTEXT.md: Exile, issue #114).
 export function hasNominatedToday(
   nominations: Nomination[],
   playerId: string,
 ): boolean {
-  return nominations.some((nomination) => nomination.nominatorId === playerId);
+  return executionNominations(nominations).some(
+    (nomination) => nomination.nominatorId === playerId,
+  );
 }
 
+// An exile call never marks its Traveller target as "already nominated" —
+// exile calls are unlimited per day (CONTEXT.md: Exile, issue #114).
 export function wasNominatedToday(
   nominations: Nomination[],
   playerId: string,
 ): boolean {
-  return nominations.some((nomination) => nomination.nomineeId === playerId);
+  return executionNominations(nominations).some(
+    (nomination) => nomination.nomineeId === playerId,
+  );
 }

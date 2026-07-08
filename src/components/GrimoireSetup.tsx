@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 
 import {
   characterPickerPool,
@@ -9,6 +9,7 @@ import {
   SEAT_HOLDING_TEAMS,
   type Character,
 } from "@/lib/characters";
+import { executionNominations } from "@/lib/dayPhase";
 import {
   anchoredReminderPosition,
   DRUNK_ID,
@@ -125,6 +126,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
     [game.characterPool],
   );
+  // Shared by every place a bag token needs a display name (the traveller
+  // select, manual-assign selects, the leftover-bag summary) — a token
+  // whose character somehow isn't in characterPool falls back to the raw id
+  // rather than rendering blank.
+  function tokenCharacterName(token: BagToken): string {
+    return characterById.get(token.characterId)?.name ?? token.characterId;
+  }
   // Only players/characterPool feed buildSetupWalkthroughSteps — passing
   // just those (not the whole `game`) skips a rebuild on every unrelated
   // autosave (moving a token, editing notes, ...).
@@ -146,20 +154,24 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
   // "used/available state visible ... as token badges" (issue #20 AC) —
   // computed once per render rather than per-token, since every token needs
-  // the same two sets.
-  const nominatorTodayIds = useMemo(
-    () => new Set(game.nominations.map((n) => n.nominatorId)),
+  // the same two sets. Shares dayPhase.ts's executionNominations so this
+  // agrees with the day panel's "already nominated" labels by construction
+  // — exile calls are excluded from both (CONTEXT.md: Exile, issue #114).
+  const todaysExecutionNominations = useMemo(
+    () => executionNominations(game.nominations),
     [game.nominations],
+  );
+  const nominatorTodayIds = useMemo(
+    () => new Set(todaysExecutionNominations.map((n) => n.nominatorId)),
+    [todaysExecutionNominations],
   );
   const nomineeTodayIds = useMemo(
-    () => new Set(game.nominations.map((n) => n.nomineeId)),
-    [game.nominations],
+    () => new Set(todaysExecutionNominations.map((n) => n.nomineeId)),
+    [todaysExecutionNominations],
   );
 
-  // Sharing from the grimoire shares what's actually in this game — the
-  // characterPool (CONTEXT.md: Script) — rather than re-resolving the
-  // original script file, which for a library script would require
-  // filesystem access this client component doesn't have.
+  // Referentially stable meta for ShareScriptButton, so opening the dialog
+  // doesn't re-encode on unrelated game updates.
   const shareableScriptMeta = useMemo(
     () => ({ name: game.scriptName }),
     [game.scriptName],
@@ -187,6 +199,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     (p) => p.characterId !== null,
   ).length;
   const nextUnassignedSeat = nextUnassignedSeatOf(game);
+  // A bag built shorter than the seat count (ADR 0003 permits the warned
+  // "Continue anyway") must still be recoverable rather than instructing a
+  // player to draw from an empty bag (issue #118): surfaced as soon as it's
+  // knowable, not just once the bag actually runs dry mid-ritual.
+  const unassignedSeatCount = officialSeats.length - assignedCount;
+  const bagEmpty = game.bag.length === 0;
+  const bagShortfall = Math.max(0, unassignedSeatCount - game.bag.length);
+  // Every token still sitting in the bag once the draw has filled every
+  // seat (an over-sized bag, ADR 0003's warned "Continue anyway") — the
+  // storyteller can only otherwise find this by elimination (issue #118).
+  const leftoverBagCharacterNames = game.bag.map(tokenCharacterName);
 
   function update(next: GameDocument) {
     gameRef.current = next;
@@ -556,7 +579,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   function startDraw() {
     const currentGame = gameRef.current;
     const seat = nextUnassignedSeatOf(currentGame);
-    if (!seat) return;
+    // No token left for a seat means no draw to start (issue #118) — the
+    // setup screen's shortfall notice owns that recovery path.
+    if (!seat || currentGame.bag.length === 0) return;
     setTokenOrder(shuffleTokens(currentGame.bag));
     update({
       ...currentGame,
@@ -577,8 +602,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const session = currentGame.drawSession;
     if (session?.stage !== "choosing") return;
     const token = currentGame.bag.find((t) => t.id === tokenId);
-    // The tapped token can already be gone from the bag if it was manually
-    // assigned to a different seat while still shown face-down here —
+    // Defensive: the tapped token isn't necessarily still in the bag by the
+    // time this runs (e.g. a future change reintroduces a way to mutate the
+    // bag mid-draw, the way manual assignment used to before issue #111) —
     // reshuffle the grid from what's actually left rather than leaving a
     // dead, stale button on screen.
     if (!token) {
@@ -598,33 +624,60 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
-  // The privacy guard only matters when someone else still needs to draw —
-  // the last seat's reveal simply ends the session once hidden.
+  // A double-click on "Start bag draw" (or "Ready to draw") lands its
+  // second click right where this token grid just replaced the button —
+  // event.detail (the browser's own click count, tracked by screen position
+  // and timing regardless of which element ends up under the pointer) is 2
+  // for that click, so it's ignored instead of instantly drawing the token
+  // (issue #111). A deliberate, separate tap is always its own fresh
+  // detail: 1 click.
+  function chooseTokenOnClick(
+    event: MouseEvent<HTMLButtonElement>,
+    tokenId: string,
+  ) {
+    if (event.detail > 1) return;
+    chooseToken(tokenId);
+  }
+
+  // Every seat's reveal — including the last — goes through the same
+  // privacy guard before the device changes hands (issue #110): the last
+  // seat has no next seat to pass to, but the drawer must still lose sight
+  // of the card before the grimoire (everyone else's identity) can open.
   function hideAndPass() {
     const currentGame = gameRef.current;
     const session = currentGame.drawSession;
     if (!session) return;
-    update({
-      ...currentGame,
-      drawSession: nextUnassignedSeatOf(currentGame)
-        ? { ...session, stage: "hidden" }
-        : null,
-    });
+    update({ ...currentGame, drawSession: { ...session, stage: "hidden" } });
   }
 
+  // The bag can run dry between two seats' turns (a bag built shorter than
+  // the seat count, ADR 0003's warned "Continue anyway") — with no token
+  // left for the next seat, end the draw here instead of opening a
+  // "choosing" stage with an empty token grid (issue #118). The setup
+  // screen's own shortfall notice (bagShortfall below) takes it from there.
   function readyForNextDraw() {
-    if (nextUnassignedSeatOf(gameRef.current)) {
-      startDraw();
-    } else {
-      update({ ...gameRef.current, drawSession: null });
+    const currentGame = gameRef.current;
+    if (!nextUnassignedSeatOf(currentGame)) return;
+    if (currentGame.bag.length === 0) {
+      update({ ...currentGame, drawSession: null });
+      return;
     }
+    startDraw();
+  }
+
+  // Ends the draw session once the storyteller has the device back — the
+  // last seat's hand-off has no next seat to pass to, so it can't reuse
+  // readyForNextDraw's "draw again" flow. Persisted through gameRef like
+  // every other draw-stage transition.
+  function openGrimoire() {
+    update({ ...gameRef.current, drawSession: null });
   }
 
   // Shares the draw's own bag, so a token taken here can't also be drawn.
-  // Builds off gameRef.current like every other draw-stage transition —
-  // spreading the render-closed `game` here could write a stale drawSession
-  // (e.g. back to "choosing") over a token tap that landed in the same tick
-  // (Cursor review finding).
+  // Only reachable while `draw` is null — its one call site (the manual-
+  // assign select) doesn't render during an active draw (issue #111) — but
+  // still builds off gameRef.current like every other multi-update handler,
+  // so it can never spread a stale snapshot (Cursor review finding).
   function assignManually(playerId: string, tokenId: string) {
     const currentGame = gameRef.current;
     const token = currentGame.bag.find((t) => t.id === tokenId);
@@ -780,10 +833,25 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         {assignedCount}/{officialSeats.length} seats assigned
       </p>
 
-      {!draw && nextUnassignedSeat && game.bag.length > 0 && (
+      {!draw && bagShortfall > 0 && (
+        <p className={styles.bagShortfall} role="alert">
+          The bag is short {bagShortfall} token{bagShortfall === 1 ? "" : "s"}{" "}
+          for {unassignedSeatCount} unassigned seat
+          {unassignedSeatCount === 1 ? "" : "s"}. Go back to bag-building to
+          add more characters.
+        </p>
+      )}
+
+      {!draw && nextUnassignedSeat && !bagEmpty && (
         <button type="button" className={styles.startDraw} onClick={startDraw}>
           Start bag draw
         </button>
+      )}
+
+      {setupComplete && !screenObscured && leftoverBagCharacterNames.length > 0 && (
+        <p className={styles.bagLeftover}>
+          Left in the bag: {leftoverBagCharacterNames.join(", ")}
+        </p>
       )}
 
       {draw && drawingSeat && (
@@ -800,7 +868,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       type="button"
                       className={styles.faceDownToken}
                       aria-label={`Face-down token ${index + 1}`}
-                      onClick={() => chooseToken(token.id)}
+                      onClick={(event) => chooseTokenOnClick(event, token.id)}
                     />
                   </li>
                 ))}
@@ -840,10 +908,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
           {draw.stage === "hidden" && (
             <div className={styles.privacyGuard}>
-              {/* No next seat only happens when the last seat's reveal was
-                  resumed as this guard after a reload (a live last reveal
-                  ends the session on Hide & pass) — the honest instruction
-                  then is to hand back, and the button ends the ritual. */}
+              {/* Every reveal — the last seat's included (issue #110) —
+                  lands on this guard, live or resumed from a reload. With
+                  no next seat to pass to, the honest instruction is to hand
+                  back, and the button ends the ritual. */}
               <p>
                 {nextUnassignedSeat
                   ? `Card hidden. Pass the device to ${nextUnassignedSeat.name}.`
@@ -852,7 +920,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               <button
                 type="button"
                 className={styles.drawAction}
-                onClick={readyForNextDraw}
+                onClick={nextUnassignedSeat ? readyForNextDraw : openGrimoire}
               >
                 {nextUnassignedSeat ? "Ready to draw" : "Open the grimoire"}
               </button>
@@ -861,7 +929,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </div>
       )}
 
-      {!screenObscured && game.travellerBag.length > 0 && !travellerFormOpen && (
+      {/* Gated on `!draw`, not just `!screenObscured` — screenObscured
+          deliberately treats the 'choosing' stage as safe for most controls,
+          but the traveller select below lists travellerBag by name, which
+          is exactly the kind of bag-composition leak issue #111 closed for
+          the official bag's manual-assign selects. */}
+      {!draw && game.travellerBag.length > 0 && !travellerFormOpen && (
         <button
           type="button"
           className={styles.addTraveller}
@@ -871,7 +944,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </button>
       )}
 
-      {!screenObscured && travellerFormOpen && (
+      {!draw && travellerFormOpen && (
         <form className={styles.travellerForm} onSubmit={addTraveller}>
           <label>
             Traveller character
@@ -881,8 +954,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             >
               {game.travellerBag.map((token) => (
                 <option key={token.id} value={token.id}>
-                  {characterById.get(token.characterId)?.name ??
-                    token.characterId}
+                  {tokenCharacterName(token)}
                 </option>
               ))}
             </select>
@@ -1151,7 +1223,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       )}
                     </div>
                   )}
-                  {!character && (
+                  {!character && draw && (
+                    // A draw session is active — bag composition is the
+                    // storyteller's secret, and this select would list every
+                    // remaining character (including, for the last
+                    // unassigned seat, letting it read its own character
+                    // before the reveal) to whoever's holding the device
+                    // mid-draw (issue #111).
+                    <p className={styles.assignedPlaceholder}>
+                      Draw in progress
+                    </p>
+                  )}
+                  {!character && !draw && (
                     <label>
                       Assign seat {player.seat} manually
                       <select
@@ -1164,8 +1247,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                         <option value="">Choose a character…</option>
                         {game.bag.map((token) => (
                           <option key={token.id} value={token.id}>
-                            {characterById.get(token.characterId)?.name ??
-                              token.characterId}
+                            {tokenCharacterName(token)}
                           </option>
                         ))}
                       </select>
@@ -1184,9 +1266,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           drawing player can't see it. */}
       {!passAroundHidden && (
         <>
+          {/* Share scriptCharacters — the script, the public reference
+              document — never characterPool: bag composition is the
+              storyteller's core secret (issue #109). */}
           <ShareScriptButton
             meta={shareableScriptMeta}
-            characters={game.characterPool}
+            characters={game.scriptCharacters}
           />
           <EndGamePanel
             game={game}

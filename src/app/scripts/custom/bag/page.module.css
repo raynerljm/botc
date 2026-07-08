@@ -24,17 +24,6 @@
 .title {
   font-size: 1.75rem;
   color: var(--accent);
-  flex: 1;
-}
-
-.buildBag {
-  padding: 0.5rem 0.9rem;
-  background: var(--accent);
-  color: var(--background);
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 0.95rem;
-  white-space: nowrap;
 }
 
 .message {
