@@ -95,6 +95,58 @@ describe("InfoTokenLibrary", () => {
     });
   });
 
+  it("hides character-gated cards whose character isn't in the script", () => {
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    expect(
+      within(dialog).queryByRole("button", { name: "The Damsel is in play" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "This player attacked" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a character-gated card once its character is in the script", () => {
+    const damsel = getCharacter("damsel")!;
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([damsel])}
+        onShow={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    expect(
+      within(dialog).getByRole("button", { name: "The Damsel is in play" }),
+    ).toBeInTheDocument();
+  });
+
+  it("always shows the basic always-available cards", () => {
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    expect(
+      within(dialog).getByRole("button", { name: "Make your choice" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Use your ability?" }),
+    ).toBeInTheDocument();
+  });
+
   it("lets the storyteller go back to the library from the attach step", async () => {
     const user = userEvent.setup();
     render(
