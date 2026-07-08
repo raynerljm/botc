@@ -240,6 +240,34 @@ describe("GrimoireBoard rendering", () => {
     expect(wrap.style.top).toBe("34%");
   });
 
+  // Issue #167 code review finding: a hand-edited or legacy-schema game
+  // document isn't guaranteed to have positions within clampPct's [4,96]
+  // range (gameDocument.ts's anchoredReminderPosition already defends
+  // against this for its anchor input). An unclamped out-of-range stored
+  // position would render off the clamped drag surface and, on pickup,
+  // make the drag's start position disagree with where the token is
+  // actually grabbed — reproducing the "jumps on pickup" bug for legacy
+  // data instead of the original in-range case.
+  it("clamps an out-of-range stored position instead of rendering the token off the pad", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", seat: 1, position: { x: 150, y: -20 } }),
+    ]);
+
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap.style.left).toBe("96%");
+    expect(wrap.style.top).toBe("4%");
+  });
+
+  it("clamps an out-of-range stored reminder position the same way", () => {
+    const { container } = renderBoard([makePlayer()], {
+      reminders: [makeReminder({ id: "r1", position: { x: 150, y: -20 } })],
+    });
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    expect(wrap.style.left).toBe("96%");
+    expect(wrap.style.top).toBe("4%");
+  });
+
   it("badges a player who has already nominated or been nominated today (issue #20)", () => {
     const { container } = renderBoard(
       [
@@ -749,6 +777,35 @@ describe("drag", () => {
 
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 170 }));
     expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 40 });
+  });
+
+  // Issue #167 code review finding: dragging a token whose stored position
+  // was out of range (legacy/hand-edited data) used to disagree with where
+  // the token was actually grabbed, since the raw stored value fed the
+  // drag's start position while the token itself rendered clamped. Now that
+  // rendering clamps the stored position too, picking it up at its
+  // displayed (already-clamped) spot must behave like any other drag — no
+  // jump to the clamp edge on the first move.
+  it("doesn't jump when dragging a token whose stored position was out of range", () => {
+    const { container, onMove } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 150, y: 40 } }),
+    ]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    // Clamped to 96% (384px on the 400px board) per the earlier rendering test.
+    expect(wrap.style.left).toBe("96%");
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 384, clientY: 160 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 344, clientY: 160 }));
+
+    // A 40px (10%) move left from the clamped edge, not a jump elsewhere.
+    expect(wrap.style.left).toBe("86%");
+
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 344, clientY: 160 }));
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 86, y: 40 });
   });
 });
 
