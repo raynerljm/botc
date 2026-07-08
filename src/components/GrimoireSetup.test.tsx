@@ -1992,7 +1992,8 @@ describe("a reopened night stays coherent with roster changes made after End nig
 
     // Fortune Teller also acts on the first night, so its entry stays
     // visible without needing "Show all" once the night reopens.
-    await user.selectOptions(
+    await selectOption(
+      user,
       within(seat1Wrap).getByLabelText(/swap character/i),
       "fortuneteller",
     );
@@ -2040,8 +2041,8 @@ describe("a reopened night stays coherent with roster changes made after End nig
     await user.click(screen.getByRole("button", { name: /End First night/ }));
 
     const [p1, p2, p3] = loadGame()!.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), p1.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), p2.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), p1.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), p2.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     await user.click(screen.getByRole("checkbox", { name: p3.name }));
 
@@ -2069,15 +2070,15 @@ describe("a reopened night stays coherent with roster changes made after End nig
     await user.click(screen.getByRole("button", { name: /End First night/ }));
 
     const [p1, p2, p3] = loadGame()!.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), p1.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), p2.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), p1.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), p2.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
 
     await user.click(screen.getByRole("button", { name: "Start Night 2" }));
     await user.click(screen.getByRole("button", { name: /End Night 2/ }));
 
-    await user.selectOptions(screen.getByLabelText("Nominator"), p3.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), p1.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), p3.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), p1.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     const dayTwoNominations = loadGame()!.nominations;
     expect(dayTwoNominations).toHaveLength(1);
