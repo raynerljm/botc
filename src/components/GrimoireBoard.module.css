@@ -198,12 +198,33 @@
 .playerName {
   font-size: 0.75rem;
   color: var(--muted);
+  /* An unbroken name (no spaces to wrap on) used to render as one line
+     however wide it needed to be, cutting across the circle and painting
+     over neighbouring tokens/labels and the Claims panel. Clamping to two
+     lines with an ellipsis bounds both width and height so it can never
+     grow past its own row, regardless of wrap points. */
+  max-width: 6rem;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
 }
 
 .note {
   font-size: 0.7rem;
   color: var(--muted);
   text-transform: capitalize;
+}
+
+/* Same look as .note, minus the capitalize — that transform is meant for
+   the traveller-alignment note ("good" -> "Good"), but ".note" is also used
+   for the Drunk's "(actually the Drunk)" note, where capitalize mangles the
+   parenthesized phrase into "(Actually The Drunk)". */
+.drunkNote {
+  font-size: 0.7rem;
+  color: var(--muted);
 }
 
 .claimBadge {

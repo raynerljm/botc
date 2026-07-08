@@ -128,6 +128,23 @@ describe("seat list generated from player count", () => {
 
     expect(seat1Name).toHaveValue("Alice");
   });
+
+  it("trims a renamed seat on blur and falls back to \"Player N\" when emptied", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    const seat1Name = screen.getByLabelText("Seat 1 name");
+    await user.clear(seat1Name);
+    await user.type(seat1Name, "  Bob  ");
+    await user.tab();
+    expect(seat1Name).toHaveValue("Bob");
+
+    await user.clear(seat1Name);
+    await user.type(seat1Name, "   ");
+    await user.tab();
+    expect(seat1Name).toHaveValue("Player 1");
+  });
 });
 
 describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
@@ -1729,6 +1746,31 @@ describe("the first visible grimoire (issue #12)", () => {
     await user.type(seat1Name, "Alice");
 
     expect(loadGame()!.players[0].name).toBe("Alice");
+  });
+
+  it("trims and falls back to \"Player N\" when a token's name is emptied on blur", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Imp",
+    );
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Token = within(circle).getByText("Player 1").closest("div")!;
+    await user.click(within(circle).getByText("Player 1"));
+    const seat1Name = within(seat1Token).getByLabelText(/player name/i);
+    await user.clear(seat1Name);
+    await user.type(seat1Name, "   ");
+    await user.tab();
+
+    expect(seat1Name).toHaveValue("Player 1");
+    expect(loadGame()!.players[0].name).toBe("Player 1");
   });
 });
 

@@ -7,6 +7,7 @@ import type { Player, ReminderToken } from "@/lib/gameDocument";
 
 import { ClaimsList } from "./ClaimsList";
 import { GrimoireBoard } from "./GrimoireBoard";
+import styles from "./GrimoireBoard.module.css";
 
 function makeReminder(overrides: Partial<ReminderToken> = {}): ReminderToken {
   return {
@@ -73,6 +74,7 @@ function pointerEvent(
 function makeHandlers() {
   return {
     onRename: vi.fn(),
+    onRenameCommit: vi.fn(),
     onMove: vi.fn(),
     onReCircle: vi.fn(),
     onReorderSeat: vi.fn(),
@@ -187,6 +189,19 @@ describe("GrimoireBoard rendering", () => {
     expect(screen.getByText(/actually the Drunk/i)).toBeInTheDocument();
   });
 
+  // .note carries text-transform: capitalize for the traveller-alignment
+  // note ("good" -> "Good") — applying it to the Drunk's parenthesized note
+  // mangled it into "(Actually The Drunk)". The Drunk note must use its own,
+  // untransformed class instead.
+  it("renders the Drunk note in a class distinct from the capitalized .note class", () => {
+    renderBoard([makePlayer({ isDrunk: true })]);
+
+    const note = screen.getByText("(actually the Drunk)");
+    expect(styles.drunkNote).toBeTruthy();
+    expect(note.className).toBe(styles.drunkNote);
+    expect(note.className).not.toBe(styles.note);
+  });
+
   it("shows a traveller's alignment", () => {
     const { container } = renderBoard([
       makePlayer({ isTraveller: true, travellerAlignment: "evil", characterId: "imp" }),
@@ -259,6 +274,18 @@ describe("token menu", () => {
     fireEvent.change(nameInput, { target: { value: "Zed" } });
 
     expect(handlers.onRename).toHaveBeenLastCalledWith("p1", "Zed");
+  });
+
+  it("commits the rename when the name field loses focus", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const nameInput = screen.getByLabelText(/player name/i);
+    fireEvent.change(nameInput, { target: { value: "Zed" } });
+    fireEvent.blur(nameInput);
+
+    expect(handlers.onRenameCommit).toHaveBeenCalledWith("p1");
   });
 
   it("marks a player dead and shows a shroud", async () => {

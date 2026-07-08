@@ -52,6 +52,10 @@ export interface GrimoireBoardProps {
   nominatorTodayIds?: ReadonlySet<string>;
   nomineeTodayIds?: ReadonlySet<string>;
   onRename: (playerId: string, name: string) => void;
+  // Fired when the name field loses focus, so a normalization (trim,
+  // fall back to "Player N" if left blank) can land as one committed edit
+  // instead of fighting the user's cursor on every keystroke of onRename.
+  onRenameCommit: (playerId: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
   onReorderSeat: (playerId: string, direction: "earlier" | "later") => void;
@@ -172,6 +176,7 @@ export function GrimoireBoard({
   nominatorTodayIds,
   nomineeTodayIds,
   onRename,
+  onRenameCommit,
   onMove,
   onReCircle,
   onReorderSeat,
@@ -792,7 +797,7 @@ export function GrimoireBoard({
                       )}
                     </span>
                     {isHiddenDrunk && (
-                      <span className={styles.note}>(actually the Drunk)</span>
+                      <span className={styles.drunkNote}>(actually the Drunk)</span>
                     )}
                     {player.isTraveller && (
                       <span className={styles.note}>{player.travellerAlignment}</span>
@@ -825,6 +830,7 @@ export function GrimoireBoard({
                         type="text"
                         value={player.name}
                         onChange={(event) => onRename(player.id, event.target.value)}
+                        onBlur={() => onRenameCommit(player.id)}
                       />
                     </label>
 
