@@ -17,6 +17,7 @@ import {
   insertAtSeat,
   livePlayerPosition,
   parkBeside,
+  resumeDrawSession,
   shuffleTokens,
   withRestoredReminder,
   type Alignment,
@@ -48,14 +49,13 @@ export interface GrimoireSetupProps {
   game: GameDocument;
 }
 
-type DrawStage = "choosing" | "revealed" | "hidden";
-
-interface DrawState {
-  seatId: string;
-  stage: DrawStage;
-  // Shuffled once per seat's turn — tokens are face-down either way, but
-  // this keeps faith with the physical bag-draw ritual (issue #12 AC).
-  tokenOrder: BagToken[];
+// The seat whose turn the next draw is — official seats only (travellers
+// never come from this bag). A plain function of a document (rather than
+// only a render-time const) so the draw-stage handlers can re-derive it
+// from gameRef.current, the same stale-snapshot defense the rest of this
+// file's multi-update handlers use.
+function nextUnassignedSeatOf(game: GameDocument): Player | undefined {
+  return game.players.find((p) => !p.isTraveller && p.characterId === null);
 }
 
 // Seat numbers aren't necessarily contiguous — removing a player (issue #15)
@@ -85,7 +85,12 @@ function seatPositionOptions(
 
 export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const router = useRouter();
-  const [game, setGame] = useState(initialGame);
+  // A remount is where a persisted mid-reveal draw session gets coerced back
+  // to the privacy guard (issue #108) — see resumeDrawSession.
+  const [game, setGame] = useState(() => ({
+    ...initialGame,
+    drawSession: resumeDrawSession(initialGame.drawSession),
+  }));
   // Mirrors `game`, updated synchronously by every update() call — lets a
   // handler that fires more than once per click (the setup walkthrough's
   // Confirm can add two reminders, then resolve the step) build each next
@@ -93,8 +98,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // closed over, without moving the saveGame() side effect (which
   // synchronously dispatches a DOM event) inside a setState updater, which
   // would fire while React is still rendering (React warns and can tear).
-  const gameRef = useRef(initialGame);
-  const [draw, setDraw] = useState<DrawState | null>(null);
+  const gameRef = useRef(game);
+  // The face-down grid's display order, reshuffled at the start of each
+  // seat's turn (and freshly on a remount resuming mid-choosing — the only
+  // time the mount-time value is ever rendered) — tokens are face-down
+  // either way, but this keeps faith with the physical bag-draw ritual
+  // (issue #12 AC). Session-only on purpose: the order is presentation, not
+  // game state, so the document's drawSession doesn't carry it.
+  const [tokenOrder, setTokenOrder] = useState<BagToken[]>(() =>
+    initialGame.drawSession?.stage === "choosing"
+      ? shuffleTokens(initialGame.bag)
+      : [],
+  );
   const [travellerFormOpen, setTravellerFormOpen] = useState(false);
   const [travellerTokenId, setTravellerTokenId] = useState("");
   const [travellerAlignment, setTravellerAlignment] =
@@ -173,14 +188,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     [game.characterPool],
   );
 
+  // The in-flight draw ritual, read straight from the document so every
+  // transition below persists it — a reload restores the same mask instead
+  // of silently ending the ritual into an open grimoire (issue #108).
+  const draw = game.drawSession;
+
   // Travellers (added later, task #6) don't come from this bag draw.
   const officialSeats = game.players.filter((p) => !p.isTraveller);
   const assignedCount = officialSeats.filter(
     (p) => p.characterId !== null,
   ).length;
-  const nextUnassignedSeat = officialSeats.find(
-    (p) => p.characterId === null,
-  );
+  const nextUnassignedSeat = nextUnassignedSeatOf(game);
   // A bag built shorter than the seat count (ADR 0003 permits the warned
   // "Continue anyway") must still be recoverable rather than instructing a
   // player to draw from an empty bag (issue #118): surfaced as soon as it's
@@ -219,8 +237,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     };
   }
 
+  // The one non-draw handler reachable while a draw transition may have
+  // just landed in the same tick (the seat-name inputs during "choosing",
+  // the reveal's name picker) — builds off gameRef.current so a rename can
+  // never revert a newer drawSession/bag/assignment write with a stale
+  // spread (Cursor review finding). Handlers only reachable from the board
+  // (hidden throughout the draw) keep the plain render-closure pattern.
   function renamePlayer(playerId: string, name: string) {
-    update({ ...game, players: updatePlayer(playerId, { name }) });
+    const currentGame = gameRef.current;
+    update({
+      ...currentGame,
+      players: currentGame.players.map((player) =>
+        player.id === playerId ? { ...player, name } : player,
+      ),
+    });
   }
 
   function movePlayer(playerId: string, position: PlayerPosition) {
@@ -541,12 +571,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  // Begins the next seat's turn. Like every draw-stage transition below,
+  // builds off gameRef.current rather than the `game` this render closed
+  // over, so an update that landed in the same tick (a rename from the
+  // reveal's name picker, another handler's write) can never be reverted by
+  // spreading a stale snapshot (the same defense chooseToken documents).
   function startDraw() {
-    if (!nextUnassignedSeat || bagEmpty) return;
-    setDraw({
-      seatId: nextUnassignedSeat.id,
-      stage: "choosing",
-      tokenOrder: shuffleTokens(game.bag),
+    const currentGame = gameRef.current;
+    const seat = nextUnassignedSeatOf(currentGame);
+    // No token left for a seat means no draw to start (issue #118) — the
+    // setup screen's shortfall notice owns that recovery path.
+    if (!seat || currentGame.bag.length === 0) return;
+    setTokenOrder(shuffleTokens(currentGame.bag));
+    update({
+      ...currentGame,
+      drawSession: { seatId: seat.id, stage: "choosing" },
     });
   }
 
@@ -554,10 +593,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // taps on different face-down tokens landing before React re-renders (a
   // fast double-tap) would otherwise both commit from the same stale bag
   // snapshot, and the second update() would silently overwrite the first's
-  // removal instead of compounding it (code review finding).
+  // removal instead of compounding it (code review finding). The stage guard
+  // closes the rest of that race: the first tap moves the persisted stage to
+  // "revealed" synchronously, so the second tap can't assign the same seat a
+  // second token.
   function chooseToken(tokenId: string) {
-    if (!draw) return;
     const currentGame = gameRef.current;
+    const session = currentGame.drawSession;
+    if (session?.stage !== "choosing") return;
     const token = currentGame.bag.find((t) => t.id === tokenId);
     // Defensive: the tapped token isn't necessarily still in the bag by the
     // time this runs (e.g. a future change reintroduces a way to mutate the
@@ -565,7 +608,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     // reshuffle the grid from what's actually left rather than leaving a
     // dead, stale button on screen.
     if (!token) {
-      setDraw({ ...draw, tokenOrder: shuffleTokens(currentGame.bag) });
+      setTokenOrder(shuffleTokens(currentGame.bag));
       return;
     }
 
@@ -573,12 +616,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ...currentGame,
       bag: currentGame.bag.filter((t) => t.id !== token.id),
       players: currentGame.players.map((player) =>
-        player.id === draw.seatId
+        player.id === session.seatId
           ? { ...player, ...tokenAssignmentPatch(token) }
           : player,
       ),
+      drawSession: { ...session, stage: "revealed" },
     });
-    setDraw({ ...draw, stage: "revealed" });
   }
 
   // A double-click on "Start bag draw" (or "Ready to draw") lands its
@@ -601,8 +644,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // seat has no next seat to pass to, but the drawer must still lose sight
   // of the card before the grimoire (everyone else's identity) can open.
   function hideAndPass() {
-    if (!draw) return;
-    setDraw({ ...draw, stage: "hidden" });
+    const currentGame = gameRef.current;
+    const session = currentGame.drawSession;
+    if (!session) return;
+    update({ ...currentGame, drawSession: { ...session, stage: "hidden" } });
   }
 
   // The bag can run dry between two seats' turns (a bag built shorter than
@@ -611,36 +656,45 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // "choosing" stage with an empty token grid (issue #118). The setup
   // screen's own shortfall notice (bagShortfall below) takes it from there.
   function readyForNextDraw() {
-    if (!nextUnassignedSeat) return;
-    if (bagEmpty) {
-      setDraw(null);
+    const currentGame = gameRef.current;
+    if (!nextUnassignedSeatOf(currentGame)) return;
+    if (currentGame.bag.length === 0) {
+      update({ ...currentGame, drawSession: null });
       return;
     }
-    setDraw({
-      seatId: nextUnassignedSeat.id,
-      stage: "choosing",
-      tokenOrder: shuffleTokens(game.bag),
-    });
+    startDraw();
   }
 
   // Ends the draw session once the storyteller has the device back — the
   // last seat's hand-off has no next seat to pass to, so it can't reuse
-  // readyForNextDraw's "draw again" flow.
+  // readyForNextDraw's "draw again" flow. Persisted through gameRef like
+  // every other draw-stage transition.
   function openGrimoire() {
-    setDraw(null);
+    update({ ...gameRef.current, drawSession: null });
   }
 
+  // Shares the draw's own bag, so a token taken here can't also be drawn.
   // Only reachable while `draw` is null — its one call site (the manual-
-  // assign select) doesn't render during an active draw (issue #111) — so,
-  // unlike chooseToken, there's no in-flight draw session to reconcile here.
+  // assign select) doesn't render during an active draw (issue #111) — but
+  // still builds off gameRef.current like every other multi-update handler,
+  // so it can never spread a stale snapshot (Cursor review finding).
   function assignManually(playerId: string, tokenId: string) {
-    const token = game.bag.find((t) => t.id === tokenId);
+    const currentGame = gameRef.current;
+    const token = currentGame.bag.find((t) => t.id === tokenId);
     if (!token) return;
 
     update({
-      ...game,
-      bag: game.bag.filter((t) => t.id !== token.id),
-      players: updatePlayer(playerId, tokenAssignmentPatch(token)),
+      ...currentGame,
+      bag: currentGame.bag.filter((t) => t.id !== token.id),
+      players: currentGame.players.map((player) =>
+        player.id === playerId
+          ? { ...player, ...tokenAssignmentPatch(token) }
+          : player,
+      ),
+      drawSession:
+        currentGame.drawSession?.seatId === playerId
+          ? null
+          : currentGame.drawSession,
     });
   }
 
@@ -808,7 +862,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 {drawingSeat.name}, tap a token to draw
               </p>
               <ul className={styles.tokenGrid}>
-                {draw.tokenOrder.map((token, index) => (
+                {tokenOrder.map((token, index) => (
                   <li key={token.id}>
                     <button
                       type="button"
@@ -854,6 +908,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
           {draw.stage === "hidden" && (
             <div className={styles.privacyGuard}>
+              {/* Every reveal — the last seat's included (issue #110) —
+                  lands on this guard, live or resumed from a reload. With
+                  no next seat to pass to, the honest instruction is to hand
+                  back, and the button ends the ritual. */}
               <p>
                 {nextUnassignedSeat
                   ? `Card hidden. Pass the device to ${nextUnassignedSeat.name}.`
@@ -1215,7 +1273,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             meta={shareableScriptMeta}
             characters={game.scriptCharacters}
           />
-          <EndGamePanel game={game} onChange={update} />
+          <EndGamePanel
+            game={game}
+            // Merged onto gameRef.current, not this render's `game` — the
+            // panel is reachable mid-draw, so a stale full-document write
+            // could revert a draw transition from the same tick (Cursor
+            // review finding). The panel emits patches for the same reason.
+            onChange={(patch) => update({ ...gameRef.current, ...patch })}
+          />
         </>
       )}
       {pendingRemovePlayer && (

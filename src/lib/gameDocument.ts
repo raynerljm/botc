@@ -14,11 +14,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // required `anchorPlayerId` field), again for issue #79 (GameDocument
 // gained `demonBluffsCollapsed`/`claimsCollapsed`/`endGamePanelCollapsed`),
 // again for issue #113 (Nomination gained the required `threshold` field),
-// and again for issue #114 (Nomination gained the required `isExile` field)
-// — a document saved under an older shape must be rejected by gameStorage's
-// version check rather than loaded with any of these fields silently
-// undefined.
-export const GAME_SCHEMA_VERSION = 13;
+// again for issue #114 (Nomination gained the required `isExile` field),
+// and again for issue #108 (GameDocument gained the required `drawSession`
+// field) — a document saved under an older shape must be rejected by
+// gameStorage's version check rather than loaded with any of these fields
+// silently undefined.
+export const GAME_SCHEMA_VERSION = 14;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -37,6 +38,37 @@ export interface BagToken {
   // True for the extra Townsfolk-styled token that stands in for the Drunk —
   // the player believes they are that Townsfolk (CONTEXT.md: Stand-in).
   isDrunkStandIn: boolean;
+}
+
+// One seat's turn in the pass-the-device bag draw (CONTEXT.md: Bag draw):
+// choosing face-down tokens, privately looking at the drawn character, or
+// holding the "pass the device on" privacy guard. Persisted in the game
+// document — not React state — because the session is what keeps
+// already-drawn identities masked, and a mid-ritual reload must restore
+// that mask rather than render an open grimoire (issue #108).
+export type DrawStage = "choosing" | "revealed" | "hidden";
+
+export interface DrawSession {
+  seatId: string;
+  stage: DrawStage;
+}
+
+// How a persisted draw session comes back after a remount. A reload can't
+// know who is holding the device, so a session saved mid-reveal resumes at
+// the "hidden" privacy guard instead of re-rendering the identity — the
+// drawn character was already committed to the seat when the reveal opened,
+// so nothing is lost but the on-screen card. Written as an allowlist
+// ("choosing" is the only stage safe to re-render) rather than coercing the
+// one known-dangerous stage, so a future privacy-sensitive stage resumes at
+// the guard by default instead of needing this line remembered — the same
+// fail-closed reasoning as GrimoireSetup's screenObscured.
+export function resumeDrawSession(
+  drawSession: DrawSession | null,
+): DrawSession | null {
+  if (drawSession === null || drawSession.stage === "choosing") {
+    return drawSession;
+  }
+  return { ...drawSession, stage: "hidden" };
 }
 
 // Free-drag position as a percentage of the board's width/height. Null means
@@ -159,6 +191,10 @@ export interface GameDocument {
   // regardless of this flag.
   setupWalkthroughOffered: boolean;
   setupWalkthroughSteps: Record<string, SetupWalkthroughStepStatus>;
+  // The in-flight bag draw, or null when no draw ritual is underway. Lives
+  // in the document (ADR 0001: one serializable JSON object holds the
+  // game's entire state) so the privacy mask survives a reload (issue #108).
+  drawSession: DrawSession | null;
   // Undrawn/unassigned tokens, kept separate so a Traveller added later
   // never competes with the official-team draw pool (CONTEXT.md: Bag).
   bag: BagToken[];
@@ -578,6 +614,7 @@ export function createGame({
     reminders: [],
     setupWalkthroughOffered: false,
     setupWalkthroughSteps: {},
+    drawSession: null,
     bag: officialTokens,
     travellerBag: travellerTokens,
     characterPool,

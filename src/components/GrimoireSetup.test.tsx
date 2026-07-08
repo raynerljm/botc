@@ -484,6 +484,207 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
   });
 });
 
+describe("draw session survives a reload (issue #108)", () => {
+  // Simulates a page reload the same way GamePage does on a real
+  // navigation: tear down the component instance entirely and remount
+  // fresh from the persisted document.
+  function reload(unmount: () => void) {
+    unmount();
+    render(<GrimoireSetup game={loadGame() as GameDocument} />);
+  }
+
+  it("keeps drawn seats masked and the ritual alive after a reload at the 'Card hidden' screen", async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("baron")!,
+    ];
+    const game = makeGame({ playerCount: 3, selectedCharacters: candidates });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+
+    reload(unmount);
+
+    // The privacy guard is restored — the ritual did not silently end into
+    // an open grimoire.
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start bag draw" }),
+    ).not.toBeInTheDocument();
+
+    // Seat 1's identity (one of the candidates) stays behind the mask: no
+    // token art, no character name, and no manual-assign dropdowns listing
+    // the remaining bag.
+    candidates.forEach((c) => {
+      expect(screen.queryByText(c.name)).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByLabelText(/Assign seat \d manually/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+
+    // The ritual continues where it left off: the next player confirms and
+    // draws from the remaining bag.
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+  });
+
+  it("resumes a mid-reveal reload at the privacy guard instead of re-rendering the drawn identity", async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("baron")!,
+    ];
+    const game = makeGame({ playerCount: 3, selectedCharacters: candidates });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    const seat1Character = candidates.find((c) =>
+      screen.queryByRole("heading", { name: c.name }),
+    )!;
+    expect(seat1Character).toBeDefined();
+
+    // Reload while the private reveal is on-screen: whoever holds the device
+    // after the remount is unknown, so the card must not come back.
+    reload(unmount);
+
+    expect(
+      screen.queryByRole("heading", { name: seat1Character.name }),
+    ).not.toBeInTheDocument();
+    candidates.forEach((c) => {
+      expect(screen.queryByText(c.name)).not.toBeInTheDocument();
+      expect(screen.queryByText(c.ability)).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Card hidden\. Pass the device to/),
+    ).toBeInTheDocument();
+
+    // The drawn character was committed when the reveal opened, so the seat
+    // stays assigned and the ritual carries on with the next player.
+    expect(loadGame()!.players[0].characterId).toBe(seat1Character.id);
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+  });
+
+  it("never shows the '(actually the Drunk)' note after a mid-ritual reload", async () => {
+    const user = userEvent.setup();
+    // Only the Drunk is selected, so its Librarian stand-in is the bag's
+    // sole token — seat 1's draw is guaranteed to be the disguised Drunk,
+    // deterministically, with seat 2 still unassigned to keep the ritual
+    // (and its privacy guard) alive across the reload.
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("librarian")!,
+    });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    expect(
+      screen.getByRole("heading", { name: "Librarian" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    reload(unmount);
+
+    expect(loadGame()!.players[0].isDrunk).toBe(true);
+    expect(screen.queryByText("(actually the Drunk)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Librarian")).not.toBeInTheDocument();
+  });
+
+  it("resumes a mid-choosing reload with the face-down grid for the same seat", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
+
+    reload(unmount);
+
+    // Choosing is the safe stage — the same seat's face-down grid is simply
+    // back, with nothing assigned and nothing revealed.
+    expect(screen.getByText(/Player 1.*tap a token/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+    expect(
+      screen.queryByRole("button", { name: "Start bag draw" }),
+    ).not.toBeInTheDocument();
+
+    // The ritual is still live end-to-end: seat 1 can draw right away.
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    expect(loadGame()!.players[0].characterId).not.toBeNull();
+  });
+
+  it("resumes the last seat's mid-reveal reload at the guard, ending the ritual only on an explicit tap", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    // Seat 1 draws and passes; seat 2 (the last seat) draws and is
+    // mid-reveal when the reload hits.
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+
+    reload(unmount);
+
+    // The finished board (which would show every seat's identity) stays
+    // hidden — role queries respect `hidden`, matching how the live
+    // last-seat reveal asserts the same thing — and with no next seat to
+    // pass to, the guard says to hand back instead.
+    expect(
+      screen.queryByRole("region", { name: "Grimoire circle" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Washerwoman" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Imp" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Card hidden\. Return the device to the storyteller\./),
+    ).toBeInTheDocument();
+
+    // Only the explicit tap opens the finished grimoire.
+    await user.click(screen.getByRole("button", { name: "Open the grimoire" }));
+    expect(
+      screen.getByRole("region", { name: "Grimoire circle" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("recovering from a bag shorter than the seat count (issue #118 AC1)", () => {
   it("surfaces the shortfall up front, before any draws happen", () => {
     const washerwoman = getCharacter("washerwoman")!;

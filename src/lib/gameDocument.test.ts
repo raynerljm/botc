@@ -12,8 +12,10 @@ import {
   insertAtSeat,
   isEndGamePanelCollapsed,
   nextPadReminderPosition,
+  resumeDrawSession,
   shuffleTokens,
   withRestoredReminder,
+  type DrawSession,
   type GameDocument,
   type Player,
   type ReminderToken,
@@ -724,5 +726,45 @@ describe("isEndGamePanelCollapsed (issue #79)", () => {
     expect(
       isEndGamePanelCollapsed(gameWith({ night: 0, endGamePanelCollapsed: false })),
     ).toBe(false);
+  });
+});
+
+describe("resumeDrawSession (issue #108)", () => {
+  const session = (stage: DrawSession["stage"]): DrawSession => ({
+    seatId: "p1",
+    stage,
+  });
+
+  it("resumes the safe choosing stage as-is", () => {
+    expect(resumeDrawSession(session("choosing"))).toEqual(session("choosing"));
+  });
+
+  it("resumes every other stage at the hidden privacy guard, failing closed — a mid-reveal reload never re-renders the identity", () => {
+    const unsafeStages = [
+      "revealed",
+      "hidden",
+      // A stage this code has never heard of (schema-version skew, or a
+      // future privacy-sensitive stage) must also land on the guard.
+      "someFutureStage" as DrawSession["stage"],
+    ] as const;
+    for (const stage of unsafeStages) {
+      expect(resumeDrawSession(session(stage))).toEqual(session("hidden"));
+    }
+  });
+
+  it("leaves 'no draw underway' alone", () => {
+    expect(resumeDrawSession(null)).toBeNull();
+  });
+
+  it("starts a new game with no draw session", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman", "imp"),
+      standIn: null,
+      extraCopies: {},
+    });
+    expect(game.drawSession).toBeNull();
   });
 });
