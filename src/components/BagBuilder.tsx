@@ -54,15 +54,21 @@ const AUTO_ADD_TARGET_ID: Record<string, string> = { huntsman: "damsel" };
 // Expands a selection with every auto-add target whose trigger is present —
 // shared by a direct toggle and by Randomize, so a trigger ending up in the
 // bag always brings its target along regardless of how it got selected.
-function applyAutoAdds(ids: Set<string>): Set<string> {
+// Also reports which target ids were newly added by this call (as opposed
+// to already present, e.g. from a manual pick) — callers use that to track
+// auto-add provenance, so a trigger's later deselection only sweeps out a
+// target it actually brought in (issue #129).
+function applyAutoAdds(ids: Set<string>): { next: Set<string>; added: string[] } {
   let next = ids;
+  const added: string[] = [];
   for (const [triggerId, targetId] of Object.entries(AUTO_ADD_TARGET_ID)) {
     if (next.has(triggerId) && !next.has(targetId)) {
       if (next === ids) next = new Set(ids);
       next.add(targetId);
+      added.push(targetId);
     }
   }
-  return next;
+  return { next, added };
 }
 
 const DRUNK_ID = "drunk";
@@ -179,6 +185,12 @@ export function BagBuilder({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(initialDraft?.selectedIds ?? []),
   );
+  // Provenance for the subset of `selectedIds` an auto-add (Huntsman →
+  // Damsel) put there, as opposed to a deliberate pick — see toggleCharacter
+  // and handleRandomize (issue #129).
+  const [autoAddedIds, setAutoAddedIds] = useState<Set<string>>(
+    new Set(initialDraft?.autoAddedIds ?? []),
+  );
   const [modifierChoices, setModifierChoices] = useState<
     Record<string, number>
   >(initialDraft?.modifierChoices ?? {});
@@ -201,6 +213,7 @@ export function BagBuilder({
       playerCount,
       travellerCount,
       selectedIds: Array.from(selectedIds),
+      autoAddedIds: Array.from(autoAddedIds),
       modifierChoices,
       extraCopies,
       standInId,
@@ -210,6 +223,7 @@ export function BagBuilder({
     playerCount,
     travellerCount,
     selectedIds,
+    autoAddedIds,
     modifierChoices,
     extraCopies,
     standInId,
@@ -303,17 +317,36 @@ export function BagBuilder({
     );
   }
   function toggleCharacter(character: Character) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const autoAddId = AUTO_ADD_TARGET_ID[normalizeCharacterId(character.id)];
-      if (next.has(character.id)) {
-        next.delete(character.id);
-        if (autoAddId) next.delete(autoAddId);
-        return next;
+    const autoAddId = AUTO_ADD_TARGET_ID[normalizeCharacterId(character.id)];
+    if (selectedIds.has(character.id)) {
+      // Only sweep the auto-add target out too if it's still exactly the
+      // one this trigger brought in — a target picked deliberately, before
+      // or independently of the trigger, survives the trigger's deselection
+      // (issue #129).
+      const sweepAutoAddTarget = autoAddId !== undefined && autoAddedIds.has(autoAddId);
+      const next = new Set(selectedIds);
+      next.delete(character.id);
+      if (sweepAutoAddTarget) next.delete(autoAddId!);
+      setSelectedIds(next);
+      if (autoAddedIds.has(character.id) || sweepAutoAddTarget) {
+        setAutoAddedIds((prev) => {
+          const nextAutoAdded = new Set(prev);
+          nextAutoAdded.delete(character.id);
+          if (sweepAutoAddTarget) nextAutoAdded.delete(autoAddId!);
+          return nextAutoAdded;
+        });
       }
-      next.add(character.id);
-      return applyAutoAdds(next);
-    });
+    } else {
+      const { next, added } = applyAutoAdds(new Set(selectedIds).add(character.id));
+      setSelectedIds(next);
+      if (added.length > 0) {
+        setAutoAddedIds((prev) => {
+          const nextAutoAdded = new Set(prev);
+          added.forEach((id) => nextAutoAdded.add(id));
+          return nextAutoAdded;
+        });
+      }
+    }
     // A modifier choice or extra-copies count only makes sense for the
     // selection it was made under — clear it so re-selecting the character
     // later starts from its default rather than a stale prior choice.
@@ -353,11 +386,18 @@ export function BagBuilder({
     }
     // Randomize can pick a trigger character (e.g. Huntsman) the same as a
     // direct toggle can — bring its auto-add target along either way.
-    current = applyAutoAdds(current);
-    setSelectedIds(current);
+    const { next, added } = applyAutoAdds(current);
+    setSelectedIds(next);
+    if (added.length > 0) {
+      setAutoAddedIds((prev) => {
+        const nextAutoAdded = new Set(prev);
+        added.forEach((id) => nextAutoAdded.add(id));
+        return nextAutoAdded;
+      });
+    }
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.
-    if (standInId && current.has(standInId)) setStandInId(null);
+    if (standInId && next.has(standInId)) setStandInId(null);
   }
 
   function handleContinue() {

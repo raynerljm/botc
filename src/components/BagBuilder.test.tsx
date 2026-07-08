@@ -125,6 +125,7 @@ describe("Teensyville player count cap", () => {
       playerCount: 10,
       travellerCount: 0,
       selectedIds: [],
+      autoAddedIds: [],
       modifierChoices: {},
       extraCopies: {},
       standInId: null,
@@ -481,6 +482,23 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
     expect(
       screen.getByText("Huntsman needs Damsel in the bag."),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a manually-selected Damsel when the Huntsman is deselected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman", "damsel")} />);
+
+    // Deliberate manual pick, before Huntsman is ever touched.
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+    // No-op: Damsel is already in the bag, so nothing changes.
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    // Deselect: only an auto-added Damsel should leave with the Huntsman.
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("brings the Damsel along when Randomize itself picks the Huntsman", async () => {

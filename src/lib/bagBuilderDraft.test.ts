@@ -15,6 +15,7 @@ function draft(overrides: Partial<Parameters<typeof saveBagBuilderDraft>[1]> = {
     playerCount: 9 as number | "",
     travellerCount: 1 as number | "",
     selectedIds: ["imp", "baron"],
+    autoAddedIds: [] as string[],
     modifierChoices: { baron: 0 },
     extraCopies: { villageidiot: 1 },
     standInId: "chef",
@@ -70,5 +71,21 @@ describe("bag-builder draft persistence", () => {
     localStorage.setItem("botc:bagBuilderDraft:tb", "{not json");
 
     expect(loadBagBuilderDraft("tb")).toBeNull();
+  });
+
+  it("round-trips auto-add provenance", () => {
+    saveBagBuilderDraft("tb", draft({ autoAddedIds: ["damsel"] }));
+
+    expect(loadBagBuilderDraft("tb")?.autoAddedIds).toEqual(["damsel"]);
+  });
+
+  it("restores a pre-#129 draft with no autoAddedIds field as having none known, instead of dropping it", () => {
+    const legacyDraft: Record<string, unknown> = { ...draft() };
+    delete legacyDraft.autoAddedIds;
+    localStorage.setItem("botc:bagBuilderDraft:tb", JSON.stringify(legacyDraft));
+
+    const loaded = loadBagBuilderDraft("tb");
+    expect(loaded?.autoAddedIds).toEqual([]);
+    expect(loaded?.selectedIds).toEqual(["imp", "baron"]);
   });
 });
