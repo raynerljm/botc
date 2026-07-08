@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import type { Player, ReminderToken } from "@/lib/gameDocument";
+import { getSelectOptions, openListbox, selectOption } from "@/testUtils/selectOption";
 
 import { ClaimsList } from "./ClaimsList";
 import { GrimoireBoard } from "./GrimoireBoard";
@@ -438,7 +439,7 @@ describe("claims", () => {
     const handlers = renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/claim/i), "librarian");
+    await selectOption(user, screen.getByLabelText(/claim/i), "librarian");
 
     expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", "librarian");
   });
@@ -448,7 +449,7 @@ describe("claims", () => {
     const handlers = renderBoard([makePlayer({ claim: "librarian" })]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/claim/i), "");
+    await selectOption(user, screen.getByLabelText(/claim/i), "");
 
     expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", null);
   });
@@ -472,7 +473,7 @@ describe("acts-as (issue #17)", () => {
     const handlers = renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/acts as/i), "librarian");
+    await selectOption(user, screen.getByLabelText(/acts as/i), "librarian");
 
     expect(handlers.onSetActsAs).toHaveBeenCalledWith("p1", "librarian");
   });
@@ -482,7 +483,7 @@ describe("acts-as (issue #17)", () => {
     const handlers = renderBoard([makePlayer({ actsAs: "librarian" })]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/acts as/i), "");
+    await selectOption(user, screen.getByLabelText(/acts as/i), "");
 
     expect(handlers.onSetActsAs).toHaveBeenCalledWith("p1", null);
   });
@@ -503,6 +504,18 @@ describe("acts-as (issue #17)", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
     expect(within(summary).queryByText(/acts as/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps an acts-as target visible instead of silently resetting to 'Not acting as anyone' when it isn't in claimOptions (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ actsAs: "poisoner" })]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/acts as/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
   });
 });
 
@@ -1322,7 +1335,7 @@ describe("swap character", () => {
     const handlers = renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/swap character/i), "imp");
+    await selectOption(user, screen.getByLabelText(/swap character/i), "imp");
 
     expect(handlers.onSwapCharacter).toHaveBeenCalledWith("p1", "imp");
   });
@@ -1344,9 +1357,8 @@ describe("swap character", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    const options = within(
-      screen.getByLabelText(/swap character/i),
-    ).getAllByRole("option");
+    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Angel")).toBe(false);
   });
@@ -1356,9 +1368,8 @@ describe("swap character", () => {
     renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    const options = within(
-      screen.getByLabelText(/swap character/i),
-    ).getAllByRole("option");
+    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
   });
@@ -1374,10 +1385,11 @@ describe("swap character", () => {
     ]);
 
     await user.click(screen.getByText("Alice"));
-    const select = screen.getByLabelText<HTMLSelectElement>(/swap character/i);
+    const select = screen.getByLabelText(/swap character/i);
 
-    expect(select.value).toBe("scapegoat");
-    const options = within(select).getAllByRole("option");
+    expect(select.dataset.value).toBe("scapegoat");
+    const listbox = await openListbox(user, select);
+    const options = within(listbox).getAllByRole("option");
     expect(options.some((o) => o.textContent === "Washerwoman")).toBe(false);
     expect(options.some((o) => o.textContent === "Beggar")).toBe(true);
   });
@@ -1387,9 +1399,8 @@ describe("swap character", () => {
     renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    const options = within(
-      screen.getByLabelText(/swap character/i),
-    ).getAllByRole("option");
+    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Beggar")).toBe(false);
   });
@@ -1400,11 +1411,12 @@ describe("swap character", () => {
 
     await user.click(screen.getByText("Alice"));
     const select = screen.getByLabelText(/swap character/i);
-    const options = within(select).getAllByRole("option");
-    const townsfolkGroup = within(select).getByRole("group", {
+    const listbox = await openListbox(user, select);
+    const options = within(listbox).getAllByRole("option");
+    const townsfolkGroup = within(listbox).getByRole("group", {
       name: /townsfolk/i,
     });
-    const demonGroup = within(select).getByRole("group", { name: /demons/i });
+    const demonGroup = within(listbox).getByRole("group", { name: /demons/i });
 
     // characterById (the script pool) only has washerwoman and imp — each is
     // first in its own team's group, with the rest of the dataset after.
@@ -1869,13 +1881,6 @@ describe("board sizing (issue #78)", () => {
 });
 
 describe("claim option parity with the Claims panel (issue #75)", () => {
-  function optionValues(select: HTMLElement) {
-    return Array.from(select.querySelectorAll("option")).map((o) => ({
-      value: (o as HTMLOptionElement).value,
-      label: (o as HTMLOptionElement).text,
-    }));
-  }
-
   it("offers the token menu's claim select the exact same options as the Claims panel select, given the same script", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer()]);
@@ -1893,7 +1898,9 @@ describe("claim option parity with the Claims panel (issue #75)", () => {
     );
     const panelSelect = within(panelContainer).getByRole("combobox");
 
-    expect(optionValues(panelSelect)).toEqual(optionValues(boardSelect));
+    expect(await getSelectOptions(user, panelSelect)).toEqual(
+      await getSelectOptions(user, boardSelect),
+    );
   });
 
   it("both selects render the same orphaned-claim fallback option when the stored claim isn't in claimOptions", async () => {
@@ -1913,8 +1920,10 @@ describe("claim option parity with the Claims panel (issue #75)", () => {
     );
     const panelSelect = within(panelContainer).getByRole("combobox");
 
-    expect(boardSelect).toHaveValue("poisoner");
-    expect(panelSelect).toHaveValue("poisoner");
-    expect(optionValues(panelSelect)).toEqual(optionValues(boardSelect));
+    expect(boardSelect.dataset.value).toBe("poisoner");
+    expect(panelSelect.dataset.value).toBe("poisoner");
+    expect(await getSelectOptions(user, panelSelect)).toEqual(
+      await getSelectOptions(user, boardSelect),
+    );
   });
 });

@@ -21,3 +21,9 @@
   cursor: pointer;
   min-height: 2.75rem;
 }
+
+.showAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}

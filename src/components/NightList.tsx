@@ -12,6 +12,7 @@ import {
 } from "@/lib/nightList";
 
 import { CharacterToken } from "./CharacterToken";
+import { Checkbox } from "./Checkbox";
 import styles from "./NightList.module.css";
 
 export interface NightListProps {
@@ -92,11 +93,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       </div>
 
       <label className={styles.showAll}>
-        <input
-          type="checkbox"
-          checked={showAll}
-          onChange={(event) => setShowAll(event.target.checked)}
-        />
+        <Checkbox checked={showAll} onChange={setShowAll} />
         Show all
       </label>
 
@@ -127,8 +124,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
               data-checked={checkedIds.has(entry.id) || undefined}
             >
               <label className={styles.entryMain}>
-                <input
-                  type="checkbox"
+                <Checkbox
                   aria-label={accessibleName}
                   checked={checkedIds.has(entry.id)}
                   // A skipped (dead, not un-skipped) entry isn't part of

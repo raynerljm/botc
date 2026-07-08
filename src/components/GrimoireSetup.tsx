@@ -42,7 +42,9 @@ import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import { NightList } from "./NightList";
 import { PlayerNamePicker } from "./PlayerNamePicker";
+import { RadioGroup } from "./RadioGroup";
 import styles from "./GrimoireSetup.module.css";
+import { Select } from "./Select";
 import { SetupWalkthrough, type SetupWalkthroughReminderInput } from "./SetupWalkthrough";
 import { ShareScriptButton } from "./ShareScriptButton";
 
@@ -1054,53 +1056,38 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         <form className={styles.travellerForm} onSubmit={addTraveller}>
           <label>
             Traveller character
-            <select
+            <Select
+              aria-label="Traveller character"
               value={travellerCharacterId}
-              onChange={(event) => setTravellerCharacterId(event.target.value)}
-            >
-              {travellerAddOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))}
-            </select>
+              onChange={setTravellerCharacterId}
+              entries={travellerAddOptions.map((character) => ({
+                value: character.id,
+                label: character.name,
+              }))}
+            />
           </label>
-          <fieldset>
-            <legend>Alignment</legend>
-            <label>
-              <input
-                type="radio"
-                name="traveller-alignment"
-                value="good"
-                checked={travellerAlignment === "good"}
-                onChange={() => setTravellerAlignment("good")}
-              />
-              Good
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="traveller-alignment"
-                value="evil"
-                checked={travellerAlignment === "evil"}
-                onChange={() => setTravellerAlignment("evil")}
-              />
-              Evil
-            </label>
-          </fieldset>
+          <RadioGroup
+            name="traveller-alignment"
+            legend="Alignment"
+            value={travellerAlignment}
+            onChange={setTravellerAlignment}
+            options={[
+              { value: "good", label: "Good" },
+              { value: "evil", label: "Evil" },
+            ]}
+          />
           <label>
             Seat position
-            <select
+            <Select
+              aria-label="Seat position"
               className={styles.select}
-              value={travellerSeat}
-              onChange={(event) => setTravellerSeat(Number(event.target.value))}
-            >
-              {seatPositionOptions(game.players).map((option) => (
-                <option key={option.seat} value={option.seat}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              value={String(travellerSeat)}
+              onChange={(next) => setTravellerSeat(Number(next))}
+              entries={seatPositionOptions(game.players).map((option) => ({
+                value: String(option.seat),
+                label: option.label,
+              }))}
+            />
           </label>
           <button type="submit" className={styles.formSubmit}>
             Add to the circle
@@ -1122,30 +1109,28 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         <form className={styles.travellerForm} onSubmit={addToken}>
           <label>
             Character
-            <select
+            <Select
+              aria-label="Character"
               value={tokenCharacterId}
-              onChange={(event) => setTokenCharacterId(event.target.value)}
-            >
-              {addTokenOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))}
-            </select>
+              onChange={setTokenCharacterId}
+              entries={addTokenOptions.map((character) => ({
+                value: character.id,
+                label: character.name,
+              }))}
+            />
           </label>
           <label>
             Seat position
-            <select
+            <Select
+              aria-label="Seat position"
               className={styles.select}
-              value={tokenSeat}
-              onChange={(event) => setTokenSeat(Number(event.target.value))}
-            >
-              {seatPositionOptions(game.players).map((option) => (
-                <option key={option.seat} value={option.seat}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              value={String(tokenSeat)}
+              onChange={(next) => setTokenSeat(Number(next))}
+              entries={seatPositionOptions(game.players).map((option) => ({
+                value: String(option.seat),
+                label: option.label,
+              }))}
+            />
           </label>
           <button type="submit">Add to the grimoire</button>
           <button type="button" onClick={() => setTokenFormOpen(false)}>
@@ -1350,21 +1335,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                   )}
                   {!character && !draw && (
                     <label>
-                      Assign seat {player.seat} manually
-                      <select
+                      {`Assign seat ${player.seat} manually`}
+                      <Select
+                        aria-label={`Assign seat ${player.seat} manually`}
                         className={styles.select}
                         value=""
-                        onChange={(event) =>
-                          assignManually(player.id, event.target.value)
-                        }
-                      >
-                        <option value="">Choose a character…</option>
-                        {game.bag.map((token) => (
-                          <option key={token.id} value={token.id}>
-                            {tokenCharacterName(token)}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(next) => assignManually(player.id, next)}
+                        entries={[
+                          { value: "", label: "Choose a character…" },
+                          ...game.bag.map((token) => ({
+                            value: token.id,
+                            label: tokenCharacterName(token),
+                          })),
+                        ]}
+                      />
                     </label>
                   )}
                 </li>

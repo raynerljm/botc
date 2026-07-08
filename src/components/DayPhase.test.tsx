@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { getCharacter, type Character } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
+import { getSelectOptions, selectOption } from "@/testUtils/selectOption";
 
 import { DayPhase } from "./DayPhase";
 
@@ -68,9 +69,9 @@ describe("Day phase: recording a nomination", () => {
     const game = gameWith(["washerwoman", "imp", "recluse"]);
     renderDayPhase(game);
 
-    const nominatorSelect = screen.getByLabelText("Nominator") as HTMLSelectElement;
-    const nomineeSelect = screen.getByLabelText("Nominee") as HTMLSelectElement;
-    expect(nominatorSelect.value).not.toBe(nomineeSelect.value);
+    const nominatorSelect = screen.getByLabelText("Nominator");
+    const nomineeSelect = screen.getByLabelText("Nominee");
+    expect(nominatorSelect.dataset.value).not.toBe(nomineeSelect.dataset.value);
   });
 
   it("records who nominated whom", async () => {
@@ -82,8 +83,8 @@ describe("Day phase: recording a nomination", () => {
     });
 
     const [nominator, nominee] = game.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
 
     expect(latest.nominations).toHaveLength(1);
@@ -94,7 +95,8 @@ describe("Day phase: recording a nomination", () => {
     });
   });
 
-  it("marks already-nominated players in the nominator and nominee options", () => {
+  it("marks already-nominated players in the nominator and nominee options", async () => {
+    const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse"]);
     const [p1, p2] = game.players;
     const withNomination = {
@@ -105,13 +107,13 @@ describe("Day phase: recording a nomination", () => {
     };
     renderDayPhase(withNomination);
 
-    const nominatorSelect = screen.getByLabelText("Nominator") as HTMLSelectElement;
-    const nomineeSelect = screen.getByLabelText("Nominee") as HTMLSelectElement;
+    const nominatorOptions = await getSelectOptions(user, screen.getByLabelText("Nominator"));
+    const nomineeOptions = await getSelectOptions(user, screen.getByLabelText("Nominee"));
     expect(
-      Array.from(nominatorSelect.options).find((o) => o.value === p1.id)?.text,
+      nominatorOptions.find((o) => o.value === p1.id)?.label,
     ).toContain("already nominated");
     expect(
-      Array.from(nomineeSelect.options).find((o) => o.value === p2.id)?.text,
+      nomineeOptions.find((o) => o.value === p2.id)?.label,
     ).toContain("already nominated");
   });
 });
@@ -127,8 +129,8 @@ describe("Day phase: vote tally and threshold", () => {
     });
 
     const [nominator, nominee, voter1, voter2] = game.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -174,8 +176,8 @@ describe("Day phase: vote tally and threshold", () => {
       latest = next;
     });
 
-    await user.selectOptions(screen.getByLabelText("Nominator"), game.players[0].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), "traveller-1");
+    await selectOption(user, screen.getByLabelText("Nominator"), game.players[0].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
 
     // 5 players total -> exile threshold 3, snapshotted onto the nomination.
@@ -194,8 +196,8 @@ describe("Day phase: the block", () => {
     });
 
     const [nominator, nominee, voter1, voter2] = game.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -216,8 +218,8 @@ describe("Day phase: the block", () => {
     });
 
     const [nominator, nominee, voter1, voter2] = game.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -254,8 +256,8 @@ describe("Day phase: the block", () => {
     const players = game.players;
 
     async function nominateAndVote(nomineeIndex: number, voterIndices: number[]) {
-      await user.selectOptions(screen.getByLabelText("Nominator"), players[0].id);
-      await user.selectOptions(
+      await selectOption(user, screen.getByLabelText("Nominator"), players[0].id);
+      await selectOption(user, 
         screen.getByLabelText("Nominee"),
         players[nomineeIndex].id,
       );
@@ -301,8 +303,8 @@ describe("Day phase: the block", () => {
     const players = game.players;
 
     // A nomination recorded at 7 living (threshold 4) falls short at 3/4.
-    await user.selectOptions(screen.getByLabelText("Nominator"), players[0].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), players[1].id);
+    await selectOption(user, screen.getByLabelText("Nominator"), players[0].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), players[1].id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     for (const voterIndex of [0, 1, 2]) {
@@ -372,8 +374,8 @@ describe("Day phase: exile calls never compete with the execution block (issue #
     const tessa = game.players.find((p) => p.id === "traveller-1")!;
 
     // 1. Alex calls exile on Tessa; 9 players total -> exile threshold 5.
-    await user.selectOptions(screen.getByLabelText("Nominator"), alex.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), tessa.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), alex.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), tessa.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     for (const voter of game.players.slice(0, 5)) {
@@ -386,13 +388,13 @@ describe("Day phase: exile calls never compete with the execution block (issue #
     // 2. Neither Alex's nomination nor Tessa's exile is "already nominated"
     // — exile calls are unlimited per day and don't spend the execution
     // once-per-day nomination gate.
-    const nominatorSelect = screen.getByLabelText("Nominator") as HTMLSelectElement;
-    const nomineeSelect = screen.getByLabelText("Nominee") as HTMLSelectElement;
+    const nominatorOptions = await getSelectOptions(user, screen.getByLabelText("Nominator"));
+    const nomineeOptions = await getSelectOptions(user, screen.getByLabelText("Nominee"));
     expect(
-      Array.from(nominatorSelect.options).find((o) => o.value === alex.id)?.text,
+      nominatorOptions.find((o) => o.value === alex.id)?.label,
     ).not.toContain("already nominated");
     expect(
-      Array.from(nomineeSelect.options).find((o) => o.value === tessa.id)?.text,
+      nomineeOptions.find((o) => o.value === tessa.id)?.label,
     ).not.toContain("already nominated");
 
     // 3. Alex (still eligible) nominates Harper for execution; 9 living
@@ -400,8 +402,8 @@ describe("Day phase: exile calls never compete with the execution block (issue #
     // exile's. Under the old bug, an equal-tallied nomination already in
     // the fold cleared the block on a tie — here Harper must still take
     // the block outright, since the exile never entered the fold at all.
-    await user.selectOptions(screen.getByLabelText("Nominator"), alex.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), harper.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), alex.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), harper.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     for (const voter of game.players.slice(0, 5)) {
@@ -426,8 +428,8 @@ describe("Day phase: ghost votes", () => {
     });
 
     const [nominator, nominee, ghost] = dead.players;
-    await user.selectOptions(screen.getByLabelText("Nominator"), nominator.id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), nominee.id);
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -478,8 +480,8 @@ describe("Day phase: ghost votes", () => {
       latest = next;
     });
 
-    await user.selectOptions(screen.getByLabelText("Nominator"), game.players[0].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), "traveller-1");
+    await selectOption(user, screen.getByLabelText("Nominator"), game.players[0].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -523,8 +525,8 @@ describe("Day phase: ghost votes", () => {
       latest = next;
     });
 
-    await user.selectOptions(screen.getByLabelText("Nominator"), game.players[0].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), "traveller-1");
+    await selectOption(user, screen.getByLabelText("Nominator"), game.players[0].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -552,8 +554,8 @@ describe("Day phase: ghost votes", () => {
       latest = next;
     });
 
-    await user.selectOptions(screen.getByLabelText("Nominator"), dead.players[0].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), dead.players[1].id);
+    await selectOption(user, screen.getByLabelText("Nominator"), dead.players[0].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), dead.players[1].id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -581,8 +583,8 @@ describe("Day phase: ghost votes", () => {
     const ghost = dead.players[2];
 
     // First nomination: the ghost votes, spending their one vote for the day.
-    await user.selectOptions(screen.getByLabelText("Nominator"), dead.players[0].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), dead.players[1].id);
+    await selectOption(user, screen.getByLabelText("Nominator"), dead.players[0].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), dead.players[1].id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
@@ -593,8 +595,8 @@ describe("Day phase: ghost votes", () => {
     // storyteller records — then un-records — the same ghost's vote here.
     // Un-checking must NOT refund the ghost vote, since the first
     // nomination still genuinely holds their one vote for the day.
-    await user.selectOptions(screen.getByLabelText("Nominator"), dead.players[3].id);
-    await user.selectOptions(screen.getByLabelText("Nominee"), dead.players[4].id);
+    await selectOption(user, screen.getByLabelText("Nominator"), dead.players[3].id);
+    await selectOption(user, screen.getByLabelText("Nominee"), dead.players[4].id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -614,7 +616,8 @@ describe("Day phase: ghost votes", () => {
 });
 
 describe("Day phase: dead players in the nominator and nominee pickers", () => {
-  it("advisory-labels a dead player in both pickers, without removing them", () => {
+  it("advisory-labels a dead player in both pickers, without removing them", async () => {
+    const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse"]);
     const dead: GameDocument = {
       ...game,
@@ -622,13 +625,13 @@ describe("Day phase: dead players in the nominator and nominee pickers", () => {
     };
     renderDayPhase(dead);
 
-    const nominatorSelect = screen.getByLabelText("Nominator") as HTMLSelectElement;
-    const nomineeSelect = screen.getByLabelText("Nominee") as HTMLSelectElement;
+    const nominatorOptions = await getSelectOptions(user, screen.getByLabelText("Nominator"));
+    const nomineeOptions = await getSelectOptions(user, screen.getByLabelText("Nominee"));
     expect(
-      Array.from(nominatorSelect.options).find((o) => o.value === dead.players[0].id)?.text,
+      nominatorOptions.find((o) => o.value === dead.players[0].id)?.label,
     ).toContain("(dead)");
     expect(
-      Array.from(nomineeSelect.options).find((o) => o.value === dead.players[0].id)?.text,
+      nomineeOptions.find((o) => o.value === dead.players[0].id)?.label,
     ).toContain("(dead)");
   });
 });

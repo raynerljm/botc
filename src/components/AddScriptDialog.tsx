@@ -7,6 +7,7 @@ import { saveCustomScript } from "@/lib/customScripts";
 import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
 
 import styles from "./AddScriptDialog.module.css";
+import { FilePickerButton } from "./FilePickerButton";
 
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,15 +63,14 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
     <details className={styles.dialog} ref={detailsRef}>
       <summary className={styles.summary}>Add a script</summary>
       <form className={styles.form} onSubmit={handleSubmit}>
-        <label htmlFor="script-file" className={styles.field}>
-          Upload a script-tool JSON file
-          <input
+        <div className={styles.field}>
+          <FilePickerButton
             id="script-file"
-            type="file"
+            buttonLabel="Upload a script-tool JSON file"
             accept=".json,application/json"
             onChange={handleFile}
           />
-        </label>
+        </div>
         <label htmlFor="script-text" className={styles.field}>
           Or paste script-tool JSON
           <textarea

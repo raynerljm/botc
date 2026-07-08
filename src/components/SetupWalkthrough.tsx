@@ -15,7 +15,9 @@ import {
 } from "@/lib/gameDocument";
 import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
+import { Checkbox } from "./Checkbox";
 import { DemonBluffsFields } from "./DemonBluffsPanel";
+import { Select } from "./Select";
 import styles from "./SetupWalkthrough.module.css";
 import { useDialogDismiss } from "./useDialogDismiss";
 
@@ -388,14 +390,18 @@ function PlayerPickControls({
     <div className={styles.controls}>
       <label>
         Player
-        <select value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
-          <option value="">Choose a player…</option>
-          {otherPlayers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {playerOptionLabel(p, characterById)}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Player"
+          value={playerId}
+          onChange={setPlayerId}
+          entries={[
+            { value: "", label: "Choose a player…" },
+            ...otherPlayers.map((p) => ({
+              value: p.id,
+              label: playerOptionLabel(p, characterById),
+            })),
+          ]}
+        />
       </label>
       <button
         type="button"
@@ -417,11 +423,7 @@ function ShowAllToggle({
 }) {
   return (
     <label>
-      <input
-        type="checkbox"
-        checked={showAll}
-        onChange={(e) => onChange(e.target.checked)}
-      />
+      <Checkbox checked={showAll} onChange={onChange} />
       Show all characters
     </label>
   );
@@ -472,46 +474,46 @@ function CharacterAndTwoPlayersControls({
     <div className={styles.controls}>
       <label>
         Character
-        <select
+        <Select
+          aria-label="Character"
           value={characterId}
-          onChange={(e) => setCharacterId(e.target.value)}
-        >
-          <option value="">Choose a character…</option>
-          {list.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCharacterId}
+          entries={[
+            { value: "", label: "Choose a character…" },
+            ...list.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </label>
       <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <label>
         {`Shown as ${step.trueLabel}`}
-        <select
+        <Select
+          aria-label={`Shown as ${step.trueLabel}`}
           value={truePlayerId}
-          onChange={(e) => setTruePlayerId(e.target.value)}
-        >
-          <option value="">Choose a player…</option>
-          {otherPlayers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {playerOptionLabel(p, characterById)}
-            </option>
-          ))}
-        </select>
+          onChange={setTruePlayerId}
+          entries={[
+            { value: "", label: "Choose a player…" },
+            ...otherPlayers.map((p) => ({
+              value: p.id,
+              label: playerOptionLabel(p, characterById),
+            })),
+          ]}
+        />
       </label>
       <label>
         {`Shown as ${step.falseLabel}`}
-        <select
+        <Select
+          aria-label={`Shown as ${step.falseLabel}`}
           value={falsePlayerId}
-          onChange={(e) => setFalsePlayerId(e.target.value)}
-        >
-          <option value="">Choose a player…</option>
-          {otherPlayers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {playerOptionLabel(p, characterById)}
-            </option>
-          ))}
-        </select>
+          onChange={setFalsePlayerId}
+          entries={[
+            { value: "", label: "Choose a player…" },
+            ...otherPlayers.map((p) => ({
+              value: p.id,
+              label: playerOptionLabel(p, characterById),
+            })),
+          ]}
+        />
       </label>
       <button
         type="button"
@@ -541,11 +543,7 @@ function ReminderToggleControls({
     <div className={styles.controls}>
       {note && <p>{note}</p>}
       <label>
-        <input
-          type="checkbox"
-          checked={placeReminder}
-          onChange={(e) => setPlaceReminder(e.target.checked)}
-        />
+        <Checkbox checked={placeReminder} onChange={setPlaceReminder} />
         {`Place "${reminderLabel}" reminder`}
       </label>
       <button type="button" onClick={() => onConfirm(placeReminder)}>
@@ -580,14 +578,15 @@ function BelievedDemonControls({
     <div className={styles.controls}>
       <label>
         Demon
-        <select value={demonId} onChange={(e) => setDemonId(e.target.value)}>
-          <option value="">Choose a demon…</option>
-          {list.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Demon"
+          value={demonId}
+          onChange={setDemonId}
+          entries={[
+            { value: "", label: "Choose a demon…" },
+            ...list.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </label>
       <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <button
@@ -640,17 +639,15 @@ function StandInReassignControls({
       <p>{`Current stand-in: ${currentCharacterName}`}</p>
       <label>
         New stand-in
-        <select
+        <Select
+          aria-label="New stand-in"
           value={characterId}
-          onChange={(e) => setCharacterId(e.target.value)}
-        >
-          <option value="">Choose a character…</option>
-          {candidates.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCharacterId}
+          entries={[
+            { value: "", label: "Choose a character…" },
+            ...candidates.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </label>
       <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <button

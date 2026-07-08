@@ -6,6 +6,7 @@ import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
 import { clearGames, loadGame } from "@/lib/gameStorage";
 import { decodeScriptForShare } from "@/lib/scriptShare";
+import { getSelectOptions, openListbox, selectOption } from "@/testUtils/selectOption";
 
 import { GrimoireSetup } from "./GrimoireSetup";
 import { mockClipboard } from "./testHelpers";
@@ -40,11 +41,9 @@ beforeEach(() => {
 // also matching "Player 10" — escaping first is what keeps a name with
 // regex-special characters from building a broken pattern (code review
 // finding).
-function selectPlayerNamed(select: HTMLElement, name: string) {
+function playerNamedMatcher(name: string) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return within(select).getByRole("option", {
-    name: new RegExp(`^${escaped}\\b`),
-  });
+  return new RegExp(`^${escaped}\\b`);
 }
 
 function makeGame(overrides: Partial<Parameters<typeof createGame>[0]> = {}) {
@@ -73,15 +72,12 @@ async function completeSetup(
   render(<GrimoireSetup game={game} />);
 
   for (let seat = 1; seat <= playerCount; seat++) {
-    const remainingOption = within(
-      screen.getByLabelText(`Assign seat ${seat} manually`),
-    )
+    const trigger = screen.getByLabelText(`Assign seat ${seat} manually`);
+    const listbox = await openListbox(user, trigger);
+    const remainingOption = within(listbox)
       .getAllByRole("option")
       .find((option) => option.textContent !== "Choose a character…")!;
-    await user.selectOptions(
-      screen.getByLabelText(`Assign seat ${seat} manually`),
-      remainingOption.textContent!,
-    );
+    await user.click(remainingOption);
   }
 
   const circle = screen.getByRole("region", { name: "Grimoire circle" });
@@ -806,7 +802,7 @@ describe("surfacing the leftover bag after an over-sized bag's draw (issue #118 
 
     expect(screen.queryByText(/left in the bag/i)).not.toBeInTheDocument();
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       washerwoman.name,
     );
@@ -886,7 +882,7 @@ describe("manual assignment mode (mixable with draw)", () => {
     const game = makeGame({ playerCount: 2 });
     render(<GrimoireSetup game={game} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
@@ -906,7 +902,7 @@ describe("manual assignment mode (mixable with draw)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
@@ -931,11 +927,11 @@ describe("manual assignment mode (mixable with draw)", () => {
     // Manually assign seats 2 and 3 up front — manual assignment isn't
     // offered once a draw session starts (issue #111) — leaving only seat 1
     // for the blind draw ritual.
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Baron",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 3 manually"),
       "Imp",
     );
@@ -1040,7 +1036,7 @@ describe("travellers addable at setup with alignment", () => {
     render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Bootlegger",
     );
@@ -1057,7 +1053,7 @@ describe("travellers addable at setup with alignment", () => {
     render(<GrimoireSetup game={game} />);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -1079,7 +1075,7 @@ describe("travellers addable at setup with alignment", () => {
     ]);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -1101,7 +1097,7 @@ describe("travellers addable at setup with alignment", () => {
 
     // Re-add: the returned token's character is still offered.
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -1128,11 +1124,11 @@ describe("travellers addable at setup with alignment", () => {
     render(<GrimoireSetup game={gameWithTraveller()} />);
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Seat position"),
       "Before Player 1",
     );
@@ -1154,7 +1150,7 @@ describe("travellers addable at setup with alignment", () => {
     expect(screen.getByText("0/2 seats assigned")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Traveller character"),
       "Scapegoat",
     );
@@ -1206,7 +1202,7 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     });
     render(<GrimoireSetup game={game} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
@@ -1224,7 +1220,7 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
@@ -1252,11 +1248,11 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
     });
     render(<GrimoireSetup game={game} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Chef",
     );
@@ -1273,7 +1269,7 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
     const user = userEvent.setup();
     const { step } = await drunkBoard(user);
 
-    await user.selectOptions(
+    await selectOption(user, 
       within(step).getByLabelText(/new stand-in/i),
       "Grandmother",
     );
@@ -1292,7 +1288,7 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
     const user = userEvent.setup();
     const { step } = await drunkBoard(user);
 
-    await user.selectOptions(
+    await selectOption(user, 
       within(step).getByLabelText(/new stand-in/i),
       "Grandmother",
     );
@@ -1312,9 +1308,9 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
     const user = userEvent.setup();
     const { step } = await drunkBoard(user);
 
-    const options = Array.from(
-      within(step).getByLabelText(/new stand-in/i).querySelectorAll("option"),
-    ).map((o) => o.textContent);
+    const options = (
+      await getSelectOptions(user, within(step).getByLabelText(/new stand-in/i))
+    ).map((o) => o.label);
 
     expect(options).not.toContain("Chef");
     expect(options).toContain("Grandmother");
@@ -1426,7 +1422,7 @@ describe("mid-game token management (issue #15)", () => {
 
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.selectOptions(
+    await selectOption(user, 
       within(seat1Wrap).getByLabelText(/swap character/i),
       "imp",
     );
@@ -1441,7 +1437,7 @@ describe("mid-game token management (issue #15)", () => {
 
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.selectOptions(
+    await selectOption(user, 
       within(seat1Wrap).getByLabelText(/swap character/i),
       "baron",
     );
@@ -1498,15 +1494,12 @@ describe("mid-game token management (issue #15)", () => {
     render(<GrimoireSetup game={withNomination} />);
 
     for (let seat = 1; seat <= 2; seat++) {
-      const remainingOption = within(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-      )
+      const trigger = screen.getByLabelText(`Assign seat ${seat} manually`);
+      const listbox = await openListbox(user, trigger);
+      const remainingOption = within(listbox)
         .getAllByRole("option")
         .find((option) => option.textContent !== "Choose a character…")!;
-      await user.selectOptions(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-        remainingOption.textContent!,
-      );
+      await user.click(remainingOption);
     }
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
@@ -1539,15 +1532,12 @@ describe("mid-game token management (issue #15)", () => {
     render(<GrimoireSetup game={withExileCall} />);
 
     for (let seat = 1; seat <= 2; seat++) {
-      const remainingOption = within(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-      )
+      const trigger = screen.getByLabelText(`Assign seat ${seat} manually`);
+      const listbox = await openListbox(user, trigger);
+      const remainingOption = within(listbox)
         .getAllByRole("option")
         .find((option) => option.textContent !== "Choose a character…")!;
-      await user.selectOptions(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-        remainingOption.textContent!,
-      );
+      await user.click(remainingOption);
     }
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
@@ -1569,7 +1559,7 @@ describe("mid-game token management (issue #15)", () => {
     });
     const user = userEvent.setup();
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
@@ -1599,7 +1589,7 @@ describe("mid-game token management (issue #15)", () => {
     });
     const user = userEvent.setup();
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
@@ -1607,7 +1597,7 @@ describe("mid-game token management (issue #15)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const wrap = circle.querySelector("[data-player-id]") as HTMLElement;
     await user.click(within(wrap).getByText("Player 1"));
-    await user.selectOptions(within(wrap).getByLabelText(/swap character/i), "imp");
+    await selectOption(user, within(wrap).getByLabelText(/swap character/i), "imp");
 
     expect(loadGame()!.players[0].isDrunk).toBe(false);
     expect(within(wrap).queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
@@ -1629,15 +1619,12 @@ describe("mid-game token management (issue #15)", () => {
     render(<GrimoireSetup game={game} />);
 
     for (let seat = 1; seat <= playerCount; seat++) {
-      const remainingOption = within(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-      )
+      const trigger = screen.getByLabelText(`Assign seat ${seat} manually`);
+      const listbox = await openListbox(user, trigger);
+      const remainingOption = within(listbox)
         .getAllByRole("option")
         .find((option) => option.textContent !== "Choose a character…")!;
-      await user.selectOptions(
-        screen.getByLabelText(`Assign seat ${seat} manually`),
-        remainingOption.textContent!,
-      );
+      await user.click(remainingOption);
     }
 
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
@@ -1658,8 +1645,8 @@ describe("mid-game token management (issue #15)", () => {
     const { user } = await completeSetup();
 
     await user.click(screen.getByRole("button", { name: "Add character" }));
-    await user.selectOptions(screen.getByLabelText("Character"), "baron");
-    await user.selectOptions(
+    await selectOption(user, screen.getByLabelText("Character"), "baron");
+    await selectOption(user, 
       screen.getByLabelText("Seat position"),
       "Before Player 1",
     );
@@ -1690,7 +1677,7 @@ describe("mid-game token management (issue #15)", () => {
     const { user } = await completeSetup();
 
     await user.click(screen.getByRole("button", { name: "Add character" }));
-    await user.selectOptions(screen.getByLabelText("Character"), "baron");
+    await selectOption(user, screen.getByLabelText("Character"), "baron");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(
@@ -1716,8 +1703,8 @@ describe("mid-game token management (issue #15)", () => {
     await removePlayerAndConfirm(user, seat2Wrap);
 
     await user.click(screen.getByRole("button", { name: "Add character" }));
-    await user.selectOptions(screen.getByLabelText("Character"), "baron");
-    await user.selectOptions(
+    await selectOption(user, screen.getByLabelText("Character"), "baron");
+    await selectOption(user, 
       screen.getByLabelText("Seat position"),
       "At the end",
     );
@@ -1756,7 +1743,7 @@ describe("mid-game token management (issue #15)", () => {
     // collide with the existing seat-3 player).
     await user.click(screen.getByRole("button", { name: "Add character" }));
 
-    expect(screen.getByLabelText("Seat position")).toHaveValue("4");
+    expect(screen.getByLabelText("Seat position").dataset.value).toBe("4");
   });
 
   it("defaults the 'Add traveller' seat position to the true end, not the player count, after a removal left a gap", async () => {
@@ -1764,7 +1751,7 @@ describe("mid-game token management (issue #15)", () => {
 
     await user.click(screen.getByRole("button", { name: "Add traveller" }));
 
-    expect(screen.getByLabelText("Seat position")).toHaveValue("4");
+    expect(screen.getByLabelText("Seat position").dataset.value).toBe("4");
   });
 });
 
@@ -1796,7 +1783,7 @@ describe("acts-as (issue #17)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.selectOptions(within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
 
     const reloaded = loadGame()!;
     expect(reloaded.players[0].actsAs).toBe("empath");
@@ -1839,7 +1826,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.selectOptions(within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
 
     await user.click(screen.getByRole("button", { name: "Start First night" }));
     await user.click(
@@ -1852,7 +1839,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
 
     // Retarget mid-night — the new target's entry must not inherit the
     // Empath entry's checkmark; the wake for Fortune Teller was never done.
-    await user.selectOptions(
+    await selectOption(user, 
       within(seat1Wrap).getByLabelText(/acts as/i),
       "fortuneteller",
     );
@@ -1880,7 +1867,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
 
     // Fortune Teller also acts on the first night, so its entry stays
     // visible without needing "Show all".
-    await user.selectOptions(
+    await selectOption(user, 
       within(seat1Wrap).getByLabelText(/swap character/i),
       "fortuneteller",
     );
@@ -1928,7 +1915,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
 
     // Fortune Teller also acts on the first night, so its entry stays
     // visible without needing "Show all".
-    await user.selectOptions(
+    await selectOption(user, 
       within(seat1Wrap).getByLabelText(/swap character/i),
       "fortuneteller",
     );
@@ -1967,7 +1954,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    await user.selectOptions(within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
 
     await user.click(screen.getByRole("button", { name: "Start First night" }));
     await user.click(within(seat1Wrap).getByRole("button", { name: /mark dead/i }));
@@ -1976,7 +1963,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     const playerId = seated.players[0].id;
     expect(loadGame()!.nightUnskipped).toContain(`actsas:${playerId}`);
 
-    await user.selectOptions(
+    await selectOption(user, 
       within(seat1Wrap).getByLabelText(/acts as/i),
       "fortuneteller",
     );
@@ -2003,11 +1990,11 @@ describe("the first visible grimoire (issue #12)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
@@ -2015,10 +2002,17 @@ describe("the first visible grimoire (issue #12)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     // Each token's own menu also offers every script character as both a
     // swap-character and a claim option (including whichever character is
-    // already on-token), so text matches must skip <option> text to stay
-    // unambiguous.
-    const named = (text: string) =>
-      within(circle).getByText(text, { ignore: "option" });
+    // already on-token), and the custom Select's closed trigger itself
+    // displays the currently-selected option's text too — so text matches
+    // inside a combobox trigger (or a still-open listbox's <option>-role
+    // items) must be filtered out to stay unambiguous.
+    const named = (text: string) => {
+      const matches = within(circle)
+        .getAllByText(text)
+        .filter((el) => !el.closest("[role='combobox'], [role='option']"));
+      expect(matches).toHaveLength(1);
+      return matches[0];
+    };
     expect(named("Player 1")).toBeInTheDocument();
     expect(named("Player 2")).toBeInTheDocument();
     expect(named("Washerwoman")).toBeInTheDocument();
@@ -2037,11 +2031,11 @@ describe("the first visible grimoire (issue #12)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
@@ -2062,11 +2056,11 @@ describe("the first visible grimoire (issue #12)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
@@ -2195,11 +2189,11 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
 describe("reminder tokens (issue #14)", () => {
   async function completedBoard(user: ReturnType<typeof userEvent.setup>) {
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
@@ -2394,19 +2388,19 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       ],
     });
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Fortune Teller",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 3 manually"),
       "Chef",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 4 manually"),
       "Empath",
     );
@@ -2431,11 +2425,11 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       selectedCharacters: [getCharacter("imp")!, getCharacter("chef")!],
     });
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Imp",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Chef",
     );
@@ -2524,7 +2518,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       name: /fortune teller/i,
     });
     const playerSelect = within(step).getByLabelText("Player");
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -2545,7 +2539,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
     const playerSelect = within(step).getByLabelText("Player");
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(within(dialog).getByRole("button", { name: /close/i }));
 
@@ -2575,15 +2569,15 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       ],
     });
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 3 manually"),
       "Chef",
     );
@@ -2591,11 +2585,11 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /washerwoman/i });
-    await user.selectOptions(within(step).getByLabelText("Character"), "Chef");
+    await selectOption(user, within(step).getByLabelText("Character"), "Chef");
     const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
-    await user.selectOptions(trueSelect, selectPlayerNamed(trueSelect, "Player 2"));
+    await selectOption(user, trueSelect, playerNamedMatcher("Player 2"));
     const falseSelect = within(step).getByLabelText(/shown as wrong/i);
-    await user.selectOptions(falseSelect, selectPlayerNamed(falseSelect, "Player 3"));
+    await selectOption(user, falseSelect, playerNamedMatcher("Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -2620,7 +2614,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
     const playerSelect = within(step).getByLabelText("Player");
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     const firstPosition = (loadGame() as GameDocument).reminders.find(
       (r) => r.label === "Red herring",
@@ -2628,7 +2622,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
 
     await user.click(within(step).getByRole("button", { name: /redo/i }));
     const playerSelectAgain = within(step).getByLabelText("Player");
-    await user.selectOptions(playerSelectAgain, selectPlayerNamed(playerSelectAgain, "Player 4"));
+    await selectOption(user, playerSelectAgain, playerNamedMatcher("Player 4"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const reloaded = loadGame() as GameDocument;
@@ -2651,19 +2645,19 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       ],
     });
     const { unmount } = render(<GrimoireSetup game={game} />);
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 1 manually"),
       "Fortune Teller",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 2 manually"),
       "Imp",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 3 manually"),
       "Chef",
     );
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText("Assign seat 4 manually"),
       "Empath",
     );
@@ -2671,7 +2665,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
     const playerSelect = within(step).getByLabelText("Player");
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     // Simulate a page reload: tear down this component instance entirely
@@ -2685,7 +2679,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const step2 = within(dialog2).getByRole("group", { name: /fortune teller/i });
     await user.click(within(step2).getByRole("button", { name: /redo/i }));
     const playerSelect2 = within(step2).getByLabelText("Player");
-    await user.selectOptions(playerSelect2, selectPlayerNamed(playerSelect2, "Player 4"));
+    await selectOption(user, playerSelect2, playerNamedMatcher("Player 4"));
     await user.click(within(step2).getByRole("button", { name: /confirm/i }));
 
     const final = loadGame() as GameDocument;
@@ -2719,7 +2713,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: /fortune teller/i });
     const playerSelect = within(step).getByLabelText("Player");
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Player 3"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Player 3"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(screen.getByRole("button", { name: /close/i }));
 
@@ -2744,13 +2738,13 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       scriptCharacters: getEditionCharacters("tb"),
     });
     render(<GrimoireSetup game={game} />);
-    await user.selectOptions(screen.getByLabelText("Assign seat 1 manually"), "Imp");
-    await user.selectOptions(screen.getByLabelText("Assign seat 2 manually"), "Chef");
+    await selectOption(user, screen.getByLabelText("Assign seat 1 manually"), "Imp");
+    await selectOption(user, screen.getByLabelText("Assign seat 2 manually"), "Chef");
     await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
     const step = within(dialog).getByRole("group", { name: "Demon bluffs" });
-    await user.selectOptions(within(step).getByLabelText("Bluff slot 1"), "Washerwoman");
+    await selectOption(user, within(step).getByLabelText("Bluff slot 1"), "Washerwoman");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
     await user.click(within(dialog).getByRole("button", { name: /close/i }));
 
@@ -2760,6 +2754,8 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       null,
     ]);
     const boardPanel = screen.getByRole("region", { name: "Demon bluffs" });
-    expect(within(boardPanel).getByLabelText("Bluff slot 1")).toHaveValue("washerwoman");
+    expect(
+      within(boardPanel).getByLabelText("Bluff slot 1").dataset.value,
+    ).toBe("washerwoman");
   });
 });
