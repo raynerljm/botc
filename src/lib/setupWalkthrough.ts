@@ -8,6 +8,7 @@ import type { GameDocument, Player } from "./gameDocument";
 // enough data to render their own picker; resolving one only ever produces
 // ordinary reminder tokens — nothing here is a new persisted state kind.
 export type SetupWalkthroughStepKind =
+  | "demonBluffs"
   | "playerPick"
   | "characterAndTwoPlayers"
   | "neighborCheck"
@@ -16,16 +17,33 @@ export type SetupWalkthroughStepKind =
   | "review"
   | "generic";
 
-interface StepBase {
+// The id of the walkthrough's one script-level step (CONTEXT.md: Demon
+// bluffs — "exactly three slots, script-wide, not per-player"). Fixed and
+// exported so callers can key off it without restating the literal.
+export const DEMON_BLUFFS_STEP_ID = "demonBluffs";
+
+// Shared by every step kind, player-anchored or not.
+interface StepShared {
+  id: string;
+  title: string;
+  ruleText: string;
+}
+
+interface StepBase extends StepShared {
   // The holding player's id — stable across re-renders, since steps are
   // rebuilt fresh from players/characterPool every time.
-  id: string;
   characterId: string;
   characterName: string;
   playerId: string;
   playerName: string;
-  title: string;
-  ruleText: string;
+}
+
+// Unlike every other step kind, this one isn't anchored to a seat — Demon
+// bluffs are chosen once for the whole script, not per-player — so it
+// deliberately extends StepShared rather than StepBase, which every other
+// kind uses for its playerId/characterId fields.
+export interface DemonBluffsStep extends StepShared {
+  kind: "demonBluffs";
 }
 
 export interface PlayerPickStep extends StepBase {
@@ -66,6 +84,7 @@ export interface GenericStep extends StepBase {
 }
 
 export type SetupWalkthroughStep =
+  | DemonBluffsStep
   | PlayerPickStep
   | CharacterAndTwoPlayersStep
   | NeighborCheckStep
@@ -162,7 +181,18 @@ export function buildSetupWalkthroughSteps(
   const characterById = new Map(
     game.characterPool.map((c) => [c.id, c] as const),
   );
-  const steps: SetupWalkthroughStep[] = [];
+  // Always present, first, and regardless of who's in play — Demon bluffs
+  // are a script-wide decision, not conditioned on any character being
+  // seated (issue #155 AC: "whenever the walkthrough is shown").
+  const steps: SetupWalkthroughStep[] = [
+    {
+      id: DEMON_BLUFFS_STEP_ID,
+      kind: "demonBluffs",
+      title: "Demon bluffs",
+      ruleText:
+        "Choose the three not-in-play good characters to show the Demon on the first night.",
+    },
+  ];
 
   for (const player of seatSorted(game.players)) {
     if (!player.characterId) continue;

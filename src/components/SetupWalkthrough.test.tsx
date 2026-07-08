@@ -3,9 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { getCharacter } from "@/lib/characters";
-import type { Player } from "@/lib/gameDocument";
-import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
+import { getCharacter, getEditionCharacters } from "@/lib/characters";
+import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
+import { DEMON_BLUFFS_STEP_ID, type SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
 import { SetupWalkthrough } from "./SetupWalkthrough";
 
@@ -45,11 +45,32 @@ const characterPool = [
   getCharacter("baron")!,
 ];
 
+// Only the demonBluffs step needs a real GameDocument (it mounts
+// DemonBluffsFields, the same component the standalone board panel uses) —
+// every other step kind in this file ignores game/onChangeGame entirely.
+function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
+  const base = createGame({
+    scriptId: "tb",
+    scriptName: "Trouble Brewing",
+    playerCount: 3,
+    selectedCharacters: [
+      getCharacter("fortuneteller")!,
+      getCharacter("imp")!,
+      getCharacter("chef")!,
+    ],
+    standIn: null,
+    extraCopies: {},
+  });
+  return { ...base, ...overrides };
+}
+
 function renderWalkthrough(
   overrides: Partial<{
     steps: SetupWalkthroughStep[];
     players: Player[];
     stepStatuses: Record<string, "answered" | "skipped">;
+    game: GameDocument;
+    onChangeGame: ReturnType<typeof vi.fn>;
     onResolveStep: ReturnType<typeof vi.fn>;
     onReassignStandIn: ReturnType<typeof vi.fn>;
     onClose: ReturnType<typeof vi.fn>;
@@ -58,6 +79,8 @@ function renderWalkthrough(
   const onResolveStep = overrides.onResolveStep ?? vi.fn();
   const onReassignStandIn = overrides.onReassignStandIn ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
+  const onChangeGame = overrides.onChangeGame ?? vi.fn();
+  const game = overrides.game ?? makeGame();
   const players = overrides.players ?? [
     makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
     makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
@@ -71,12 +94,14 @@ function renderWalkthrough(
       stepStatuses={overrides.stepStatuses ?? {}}
       players={players}
       characterPool={characterPool}
+      game={game}
+      onChangeGame={onChangeGame}
       onResolveStep={onResolveStep}
       onReassignStandIn={onReassignStandIn}
       onClose={onClose}
     />,
   );
-  return { onResolveStep, onReassignStandIn, onClose, players, ...view };
+  return { onResolveStep, onReassignStandIn, onClose, onChangeGame, game, players, ...view };
 }
 
 // Player options now carry "Name — Role" (issue #56); select by the name
@@ -164,6 +189,8 @@ describe("SetupWalkthrough shell", () => {
             makePlayer({ id: "p3", seat: 3, name: "Cara", characterId: "chef" }),
           ]}
           characterPool={characterPool}
+          game={makeGame()}
+          onChangeGame={vi.fn()}
           onResolveStep={(stepId, status) =>
             setStepStatuses((current) => ({ ...current, [stepId]: status }))
           }
@@ -201,6 +228,8 @@ describe("SetupWalkthrough shell", () => {
                 makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
               ]}
               characterPool={characterPool}
+              game={makeGame()}
+              onChangeGame={vi.fn()}
               onResolveStep={vi.fn()}
               onReassignStandIn={vi.fn()}
               onClose={() => setOpen(false)}
@@ -690,5 +719,152 @@ describe("generic step (homebrew fallback)", () => {
     await user.click(within(step).getByRole("button", { name: /^done$/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
+  });
+});
+
+describe("demonBluffs step (issue #155)", () => {
+  const demonBluffsStep: SetupWalkthroughStep = {
+    id: DEMON_BLUFFS_STEP_ID,
+    kind: "demonBluffs",
+    title: "Demon bluffs",
+    ruleText:
+      "Choose the three not-in-play good characters to show the Demon on the first night.",
+  };
+
+  // A full script (not just the three characters in play) so there's a real
+  // "not in play good character" candidate to pick, matching
+  // DemonBluffsPanel.test.tsx's own fixture.
+  function bluffsGame(overrides: Partial<GameDocument> = {}): GameDocument {
+    return makeGame({ scriptCharacters: getEditionCharacters("tb"), ...overrides });
+  }
+
+  it("shows the same three bluff slots DemonBluffsPanel renders on the board", () => {
+    renderWalkthrough({ steps: [demonBluffsStep], game: bluffsGame() });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    expect(within(step).getByLabelText("Bluff slot 1")).toBeInTheDocument();
+    expect(within(step).getByLabelText("Bluff slot 2")).toBeInTheDocument();
+    expect(within(step).getByLabelText("Bluff slot 3")).toBeInTheDocument();
+  });
+
+  it("writes a picked bluff through onChangeGame, into the same game.demonBluffs DemonBluffsPanel reads", async () => {
+    const user = userEvent.setup();
+    const game = bluffsGame();
+    const { onChangeGame } = renderWalkthrough({
+      steps: [demonBluffsStep],
+      game,
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.selectOptions(
+      within(step).getByLabelText("Bluff slot 1"),
+      "washerwoman",
+    );
+
+    expect(onChangeGame).toHaveBeenCalledWith({
+      ...game,
+      demonBluffs: ["washerwoman", null, null],
+    });
+  });
+
+  it("offers 'Show to Demon' once a bluff is set, reusing the same full-screen reveal", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
+
+    expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
+  });
+
+  it("closes only the 'Show to Demon' reveal on Escape, not the whole walkthrough underneath it (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
+    expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    // Nesting this reveal (its own dialog) inside the walkthrough's own
+    // dialog means two useDialogDismiss instances are mounted at once —
+    // without the dialog stack, both fire on the same Escape and this
+    // outer onClose gets called too, kicking the storyteller out of the
+    // whole walkthrough over a reveal they only meant to dismiss.
+    expect(screen.queryByRole("dialog", { name: /demon bluffs/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Setup walkthrough" })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("traps Tab inside the 'Show to Demon' reveal, not the outer walkthrough dialog behind it (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
+
+    // The reveal's only focusable control is its own Close button. The
+    // outer walkthrough dialog's Tab trap scans its whole subtree (no
+    // portal separates the two dialogs), so without deferring to the
+    // topmost dialog entirely, the outer's trap could fight the inner
+    // one over where Tab should wrap.
+    const closeButton = screen.getByRole("dialog", { name: /demon bluffs/i }).querySelector(
+      "button",
+    ) as HTMLElement;
+    expect(document.activeElement).toBe(closeButton);
+    await user.tab();
+    expect(document.activeElement).toBe(closeButton);
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(closeButton);
+  });
+
+  it("resolves answered via Confirm, without producing any reminder", async () => {
+    const user = userEvent.setup();
+    const { onResolveStep } = renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    expect(onResolveStep).toHaveBeenCalledWith(DEMON_BLUFFS_STEP_ID, "answered", []);
+  });
+
+  it("can be skipped like any other step", async () => {
+    const user = userEvent.setup();
+    const { onResolveStep } = renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame(),
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    await user.click(within(step).getByRole("button", { name: /skip/i }));
+
+    expect(onResolveStep).toHaveBeenCalledWith(DEMON_BLUFFS_STEP_ID, "skipped", []);
+  });
+
+  it("hides the picker behind an Answered/Redo note once resolved, same as every other step", () => {
+    renderWalkthrough({
+      steps: [demonBluffsStep],
+      game: bluffsGame(),
+      stepStatuses: { demonBluffs: "answered" },
+    });
+
+    const step = screen.getByRole("group", { name: "Demon bluffs" });
+    expect(within(step).getByText(/answered/i)).toBeInTheDocument();
+    expect(within(step).queryByLabelText("Bluff slot 1")).not.toBeInTheDocument();
+
+    within(step).getByRole("button", { name: /redo/i });
   });
 });

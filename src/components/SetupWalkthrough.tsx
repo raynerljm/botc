@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { allCharacters, type Character, type Team } from "@/lib/characters";
 import {
@@ -8,12 +8,14 @@ import {
   heldCharacterIds,
   livePlayerPosition,
   parkBeside,
+  type GameDocument,
   type Player,
   type PlayerPosition,
   type SetupWalkthroughStepStatus,
 } from "@/lib/gameDocument";
 import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
+import { DemonBluffsFields } from "./DemonBluffsPanel";
 import styles from "./SetupWalkthrough.module.css";
 import { useDialogDismiss } from "./useDialogDismiss";
 
@@ -36,6 +38,13 @@ export interface SetupWalkthroughProps {
   // character pickers — same script-first precedent as issue #15's swap
   // picker and issue #14's reminder picker.
   characterPool: Character[];
+  // The whole document, plus a whole-document setter — needed only by the
+  // demonBluffs step, which mounts DemonBluffsFields (the same component the
+  // standalone board panel uses) rather than a narrower, step-specific
+  // control (issue #155). Every other step keeps using the narrower
+  // players/characterPool props above.
+  game: GameDocument;
+  onChangeGame: (next: GameDocument) => void;
   // Bundles the reminders a step produces with its resolution into one call
   // so re-answering a step (Redo) can atomically swap out its previous
   // reminders for the new ones — see GrimoireSetup.tsx's resolveWalkthroughStep.
@@ -114,6 +123,8 @@ interface StepPanelProps {
   status: SetupWalkthroughStepStatus | undefined;
   players: Player[];
   characterPool: Character[];
+  game: GameDocument;
+  onChangeGame: (next: GameDocument) => void;
   onResolveStep: SetupWalkthroughProps["onResolveStep"];
   onReassignStandIn: SetupWalkthroughProps["onReassignStandIn"];
 }
@@ -123,12 +134,19 @@ function StepPanel({
   status,
   players,
   characterPool,
+  game,
+  onChangeGame,
   onResolveStep,
   onReassignStandIn,
 }: StepPanelProps) {
   const [forceEditing, setForceEditing] = useState(false);
   const editing = forceEditing || status === undefined;
-  const otherPlayers = players.filter((p) => p.id !== step.playerId);
+  // A script-level step (demonBluffs, currently the only one) isn't anchored
+  // to any one player, so there's no "other players" to compute for it —
+  // checked structurally (any step kind without a playerId), not by name, so
+  // a future script-level kind doesn't need its own special case here too.
+  const otherPlayers =
+    "playerId" in step ? players.filter((p) => p.id !== step.playerId) : [];
   const characterById = new Map(characterPool.map((c) => [c.id, c] as const));
   // Every curated playerPick (Fortune Teller's red herring, Grandmother's
   // grandchild, the Evil Twin's counterpart) requires a good player by rule
@@ -181,6 +199,12 @@ function StepPanel({
 
       {editing && (
         <>
+          {step.kind === "demonBluffs" && (
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+              <DemonBluffsFields game={game} onChange={onChangeGame} />
+            </ConfirmOnlyControls>
+          )}
+
           {step.kind === "playerPick" && (
             <PlayerPickControls
               otherPlayers={goodOtherPlayers}
@@ -270,12 +294,9 @@ function StepPanel({
           )}
 
           {step.kind === "acknowledge" && (
-            <div className={styles.controls}>
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
               <p>{step.message}</p>
-              <button type="button" onClick={() => resolve("answered")}>
-                Confirm
-              </button>
-            </div>
+            </ConfirmOnlyControls>
           )}
 
           {step.kind === "review" && (
@@ -330,6 +351,26 @@ function StepPanel({
         </>
       )}
     </fieldset>
+  );
+}
+
+// Shared by the acknowledge and demonBluffs steps — both are just some
+// content (a message, or the bluff picker) plus a single, unconditional
+// Confirm — no fields to gate it on, unlike every other kind's controls.
+function ConfirmOnlyControls({
+  onConfirm,
+  children,
+}: {
+  onConfirm: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className={styles.controls}>
+      {children}
+      <button type="button" onClick={onConfirm}>
+        Confirm
+      </button>
+    </div>
   );
 }
 
@@ -668,6 +709,8 @@ export function SetupWalkthrough({
   stepStatuses,
   players,
   characterPool,
+  game,
+  onChangeGame,
   onResolveStep,
   onReassignStandIn,
   onClose,
@@ -711,6 +754,8 @@ export function SetupWalkthrough({
                 status={stepStatuses[step.id]}
                 players={players}
                 characterPool={characterPool}
+                game={game}
+                onChangeGame={onChangeGame}
                 onResolveStep={onResolveStep}
                 onReassignStandIn={onReassignStandIn}
               />

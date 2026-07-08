@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getCharacter } from "@/lib/characters";
+import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
 import { clearGames, loadGame } from "@/lib/gameStorage";
 import { decodeScriptForShare } from "@/lib/scriptShare";
@@ -2424,7 +2424,7 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     ).toBeInTheDocument();
   });
 
-  it("never offers the walkthrough when no in-play character needs one", async () => {
+  it("still offers the walkthrough for its Demon bluffs step even when no in-play character needs its own decision (issue #155)", async () => {
     const user = userEvent.setup();
     const game = makeGame({
       playerCount: 2,
@@ -2440,9 +2440,12 @@ describe("post-draw setup walkthrough (issue #26)", () => {
       "Chef",
     );
 
-    expect(
-      screen.queryByRole("region", { name: "Setup walkthrough offer" }),
-    ).not.toBeInTheDocument();
+    const offer = screen.getByRole("region", { name: "Setup walkthrough offer" });
+    expect(within(offer).getByText(/1 setup decision/i)).toBeInTheDocument();
+
+    await user.click(within(offer).getByRole("button", { name: /start walkthrough/i }));
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    expect(within(dialog).getByRole("group", { name: "Demon bluffs" })).toBeInTheDocument();
   });
 
   it("themes the walkthrough offer's buttons instead of leaving them bare (issue #74)", async () => {
@@ -2731,5 +2734,32 @@ describe("post-draw setup walkthrough (issue #26)", () => {
     const circleAfter = screen.getByRole("region", { name: "Grimoire circle" });
     await user.click(within(circleAfter).getByRole("button", { name: /undo/i }));
     expect((loadGame() as GameDocument).reminders).toHaveLength(1);
+  });
+
+  it("picking a bluff in the walkthrough's Demon bluffs step shows up on the standalone board panel too (issue #155)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [getCharacter("imp")!, getCharacter("chef")!],
+      scriptCharacters: getEditionCharacters("tb"),
+    });
+    render(<GrimoireSetup game={game} />);
+    await user.selectOptions(screen.getByLabelText("Assign seat 1 manually"), "Imp");
+    await user.selectOptions(screen.getByLabelText("Assign seat 2 manually"), "Chef");
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", { name: "Demon bluffs" });
+    await user.selectOptions(within(step).getByLabelText("Bluff slot 1"), "Washerwoman");
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+    await user.click(within(dialog).getByRole("button", { name: /close/i }));
+
+    expect((loadGame() as GameDocument).demonBluffs).toEqual([
+      "washerwoman",
+      null,
+      null,
+    ]);
+    const boardPanel = screen.getByRole("region", { name: "Demon bluffs" });
+    expect(within(boardPanel).getByLabelText("Bluff slot 1")).toHaveValue("washerwoman");
   });
 });

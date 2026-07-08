@@ -1156,9 +1156,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
       {setupComplete ? (
         <>
+          {/* No `walkthroughSteps.length > 0` conjunct here — the walkthrough
+              always has at least its Demon bluffs step (issue #155), so this
+              offer is never conditioned on any character being in play. */}
           {!showWalkthrough &&
             !screenObscured &&
-            walkthroughSteps.length > 0 &&
             !game.setupWalkthroughOffered && (
               <div
                 role="region"
@@ -1237,9 +1239,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onRemoveFabled={removeFabled}
                 onSetClaim={setClaim}
                 onSetActsAs={setActsAs}
-                onOpenSetupWalkthrough={
-                  walkthroughSteps.length > 0 ? openWalkthrough : undefined
-                }
+                // Always available — the walkthrough always has at least its
+                // Demon bluffs step (issue #155), so this is never undefined
+                // in practice; GrimoireBoard's own prop stays optional since
+                // it's a generically reusable board, not specific to this.
+                onOpenSetupWalkthrough={openWalkthrough}
               />
             </div>
             <div className={styles.nightListArea}>
@@ -1271,6 +1275,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               stepStatuses={game.setupWalkthroughSteps}
               players={game.players}
               characterPool={game.characterPool}
+              game={game}
+              onChangeGame={update}
               onResolveStep={resolveWalkthroughStep}
               onReassignStandIn={reassignStandIn}
               onClose={() => setShowWalkthrough(false)}
