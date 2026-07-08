@@ -7,6 +7,7 @@ import {
   alignmentLabel,
   isGameEnded,
   seatedPlayerCount,
+  travellerCount,
   type GameDocument,
 } from "@/lib/gameDocument";
 import { downloadGameSnapshot } from "@/lib/gameExport";
@@ -26,6 +27,13 @@ const ELAPSED_REFRESH_MS = 30_000;
 
 function statusOf(ended: boolean, game: GameDocument): string {
   return ended ? `${alignmentLabel(game.winner!)} won` : "In progress";
+}
+
+function playerCountLabel(game: GameDocument): string {
+  const travellers = travellerCount(game);
+  const label = `${seatedPlayerCount(game)} players`;
+  if (travellers === 0) return label;
+  return `${label} + ${travellers} traveller${travellers === 1 ? "" : "s"}`;
 }
 
 function timeSummaryOf(ended: boolean, game: GameDocument): string {
@@ -86,7 +94,7 @@ export function GamesList() {
               <div className={styles.summary}>
                 <span className={styles.name}>{game.scriptName}</span>
                 <span className={styles.meta}>
-                  {seatedPlayerCount(game)} players · {statusOf(ended, game)}
+                  {playerCountLabel(game)} · {statusOf(ended, game)}
                 </span>
                 <span className={styles.meta}>
                   {timeSummaryOf(ended, game)}

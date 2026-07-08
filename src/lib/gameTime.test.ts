@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { formatDuration, formatStartTimeSGT } from "./gameTime";
+import {
+  formatDateStampSGT,
+  formatDuration,
+  formatStartTimeSGT,
+} from "./gameTime";
 
 const ORIGINAL_TZ = process.env.TZ;
 
@@ -32,6 +36,32 @@ describe("formatStartTimeSGT", () => {
 
   it("falls back to a plain label instead of throwing on an unparseable date", () => {
     expect(formatStartTimeSGT("not-a-date")).toBe("Unknown start time");
+  });
+});
+
+describe("formatDateStampSGT", () => {
+  it("dates a timestamp by its SGT calendar day, not UTC's", () => {
+    // 2026-07-04T20:00:00Z is 2026-07-05T04:00:00+08:00 in SGT — a day later.
+    expect(formatDateStampSGT("2026-07-04T20:00:00.000Z")).toBe(
+      "2026-07-05",
+    );
+  });
+
+  it("agrees with UTC outside the 16:00-24:00Z window", () => {
+    expect(formatDateStampSGT("2026-07-04T00:00:00.000Z")).toBe(
+      "2026-07-04",
+    );
+  });
+
+  it("converts to SGT the same way regardless of the host's local timezone", () => {
+    process.env.TZ = "America/New_York";
+    expect(formatDateStampSGT("2026-07-04T20:00:00.000Z")).toBe(
+      "2026-07-05",
+    );
+  });
+
+  it("falls back to a placeholder instead of throwing on an unparseable date", () => {
+    expect(formatDateStampSGT("not-a-date")).toBe("unknown-date");
   });
 });
 

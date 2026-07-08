@@ -443,6 +443,10 @@ export function seatedPlayerCount(game: GameDocument): number {
   return game.players.filter((player) => !player.isTraveller).length;
 }
 
+export function travellerCount(game: GameDocument): number {
+  return game.players.filter((player) => player.isTraveller).length;
+}
+
 // Undo must be idempotent: two Undo taps fired before the banner's state
 // update has rendered would otherwise both append the same removed token,
 // leaving two reminders sharing one id.
