@@ -1188,7 +1188,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             meta={shareableScriptMeta}
             characters={game.characterPool}
           />
-          <EndGamePanel game={game} onChange={update} />
+          <EndGamePanel
+            game={game}
+            // Merged onto gameRef.current, not this render's `game` — the
+            // panel is reachable mid-draw, so a stale full-document write
+            // could revert a draw transition from the same tick (Cursor
+            // review finding). The panel emits patches for the same reason.
+            onChange={(patch) => update({ ...gameRef.current, ...patch })}
+          />
         </>
       )}
       {pendingRemovePlayer && (

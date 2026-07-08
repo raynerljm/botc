@@ -17,7 +17,13 @@ import styles from "./EndGamePanel.module.css";
 
 export interface EndGamePanelProps {
   game: GameDocument;
-  onChange: (next: GameDocument) => void;
+  // Emits only the fields this panel changed, never a whole document built
+  // from the `game` prop — the panel stays reachable while draw-stage
+  // handlers write newer documents through GrimoireSetup's gameRef in the
+  // same tick, so a full-document spread here could silently revert a
+  // drawSession/bag/assignment write that landed after this render (Cursor
+  // review finding). The owner merges the patch onto its freshest document.
+  onChange: (patch: Partial<GameDocument>) => void;
   // Injectable clock so tests can assert a stable end timestamp.
   now?: () => string;
 }
@@ -39,12 +45,12 @@ export function EndGamePanel({
   // session is persisted (issue #108) a dangling one would otherwise reopen
   // the ended game into the ritual on every resume, forever.
   function declareWinner(winner: Alignment) {
-    onChange({ ...game, winner, endedAt: now(), drawSession: null });
+    onChange({ winner, endedAt: now(), drawSession: null });
     setPendingWinner(null);
   }
 
   function reopen() {
-    onChange({ ...game, winner: null, endedAt: null });
+    onChange({ winner: null, endedAt: null });
   }
 
   return (
@@ -57,7 +63,7 @@ export function EndGamePanel({
           // clearing the staged winner, so re-expanding later re-shows the
           // dialog with no further tap (Copilot review finding).
           if (collapsed) setPendingWinner(null);
-          onChange({ ...game, endGamePanelCollapsed: collapsed });
+          onChange({ endGamePanelCollapsed: collapsed });
         }}
       >
         {ended && (
@@ -71,7 +77,7 @@ export function EndGamePanel({
           <textarea
             value={game.notes}
             placeholder="Anything worth remembering about this game…"
-            onChange={(event) => onChange({ ...game, notes: event.target.value })}
+            onChange={(event) => onChange({ notes: event.target.value })}
           />
         </label>
 
