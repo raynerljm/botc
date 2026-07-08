@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 import { BagBuilder } from "@/components/BagBuilder";
+import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
 import { resolveStoredScript } from "@/lib/customScripts";
-import { describeScriptParseError } from "@/lib/scriptParser";
+import { describeScriptParseError, isTeensyvilleScript } from "@/lib/scriptParser";
 
 import styles from "./page.module.css";
 
@@ -30,6 +31,9 @@ function CustomBagContent() {
             _meta.name — so the two pages, and the game this bag creates,
             never disagree about which script this is. */}
         {stored && <h1 className={styles.title}>{stored.name}</h1>}
+        {result?.ok && isTeensyvilleScript(result.script.meta) && (
+          <TeensyvilleBadge />
+        )}
       </header>
       {!stored && (
         <p className={styles.message}>
@@ -53,6 +57,7 @@ function CustomBagContent() {
           almanacUrl={result.script.meta.almanac}
           firstNightOrder={result.script.meta.firstNight}
           otherNightOrder={result.script.meta.otherNight}
+          isTeensyville={isTeensyvilleScript(result.script.meta)}
         />
       )}
     </main>

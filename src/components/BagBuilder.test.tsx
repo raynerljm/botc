@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveBagBuilderDraft } from "@/lib/bagBuilderDraft";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
@@ -86,6 +87,59 @@ describe("player count and official target counts", () => {
     await user.clear(playerCountInput);
 
     expect(playerCountInput).toHaveValue(null);
+  });
+});
+
+describe("Teensyville player count cap", () => {
+  it("caps the player count input at 6 for a Teensyville script", () => {
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
+
+  it("clamps a typed-in count above 6 back down to 6 on blur", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} isTeensyville />);
+
+    const playerCountInput = screen.getByLabelText("Player count");
+    await user.clear(playerCountInput);
+    await user.type(playerCountInput, "15");
+    await user.tab();
+
+    expect(playerCountInput).toHaveValue(6);
+  });
+
+  it("leaves a regular script's player count uncapped at 6", () => {
+    render(<BagBuilder characters={tb} />);
+
+    expect(screen.getByLabelText("Player count")).toHaveAttribute(
+      "max",
+      "15",
+    );
+  });
+
+  it("clamps a draft's stale above-6 player count on mount, instead of showing an out-of-range value", () => {
+    // Simulates a draft saved before the script gained (or was recognized
+    // as) Teensyville status, or written back when isTeensyville was false.
+    saveBagBuilderDraft("no-greater-joy", {
+      playerCount: 10,
+      travellerCount: 0,
+      selectedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+    });
+
+    render(
+      <BagBuilder
+        characters={tb}
+        scriptId="no-greater-joy"
+        scriptName="No Greater Joy"
+        isTeensyville
+      />,
+    );
+
+    expect(screen.getByLabelText("Player count")).toHaveValue(6);
   });
 });
 
@@ -934,44 +988,3 @@ describe("in-progress builder state survives reload / browser-back (issue #118)"
   });
 });
 
-describe("Teensyville player-count advisory (issue #120)", () => {
-  it("warns when a Teensyville script is configured above 6 players", async () => {
-    const user = userEvent.setup();
-    render(<BagBuilder characters={tb} isTeensyville />);
-
-    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
-
-    const playerCountInput = screen.getByLabelText("Player count");
-    await user.clear(playerCountInput);
-    await user.type(playerCountInput, "15");
-
-    expect(screen.getByText(/teensyville/i)).toBeInTheDocument();
-    expect(screen.getByText(/up to 6 players/i)).toBeInTheDocument();
-    // Advisory, never blocking (ADR 0003): still not disabled.
-    expect(
-      screen.getByRole("button", { name: /^Randomize/ }),
-    ).not.toBeDisabled();
-  });
-
-  it("stays silent for a Teensyville script at exactly 6 players", async () => {
-    const user = userEvent.setup();
-    render(<BagBuilder characters={tb} isTeensyville />);
-
-    const playerCountInput = screen.getByLabelText("Player count");
-    await user.clear(playerCountInput);
-    await user.type(playerCountInput, "6");
-
-    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
-  });
-
-  it("stays silent for a non-Teensyville script at any player count", async () => {
-    const user = userEvent.setup();
-    render(<BagBuilder characters={tb} />);
-
-    const playerCountInput = screen.getByLabelText("Player count");
-    await user.clear(playerCountInput);
-    await user.type(playerCountInput, "15");
-
-    expect(screen.queryByText(/teensyville/i)).not.toBeInTheDocument();
-  });
-});

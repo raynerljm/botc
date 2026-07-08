@@ -38,6 +38,20 @@ describe("bag builder page", () => {
     await expect(renderBagPage("does-not-exist")).rejects.toThrow();
   });
 
+  it("marks a Teensyville script's designation and caps its player count at 6", async () => {
+    await renderBagPage("no-greater-joy");
+
+    expect(screen.getByText("Teensyville")).toBeInTheDocument();
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "6");
+  });
+
+  it("does not cap a regular script's player count below 15", async () => {
+    await renderBagPage("tb");
+
+    expect(screen.queryByText("Teensyville")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "15");
+  });
+
   it("renders the Teensyville designation for a Teensyville script, not for a regular one (issue #120)", async () => {
     await renderBagPage("no-greater-joy");
     expect(

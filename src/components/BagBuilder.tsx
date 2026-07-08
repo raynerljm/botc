@@ -131,6 +131,19 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+// Blank stays blank (it's a deliberately-empty field mid-edit, not a real
+// count); a real count reclamps against the current bounds, since a draft
+// can predate this script being known/capped as Teensyville.
+function clampDraftCount(
+  value: number | "" | undefined,
+  min: number,
+  max: number,
+): number | "" {
+  if (value === undefined) return min;
+  if (value === "") return value;
+  return clamp(value, min, max);
+}
+
 function omitKey(
   record: Record<string, number>,
   key: string,
@@ -147,9 +160,10 @@ export function BagBuilder({
   almanacUrl,
   firstNightOrder,
   otherNightOrder,
-  isTeensyville,
+  isTeensyville = false,
 }: BagBuilderProps) {
   const router = useRouter();
+  const maxPlayers = isTeensyville ? TEENSYVILLE_MAX_PLAYERS : MAX_PLAYERS;
   // Loaded once on mount (not re-read on every render) — a reload or a
   // browser-back from `/game/` remounts this component fresh, so the lazy
   // initializers below are exactly when this needs to run (issue #118).
@@ -157,7 +171,7 @@ export function BagBuilder({
     scriptId ? loadBagBuilderDraft(scriptId) : null,
   );
   const [playerCount, setPlayerCount] = useState<number | "">(
-    initialDraft?.playerCount ?? MIN_PLAYERS,
+    clampDraftCount(initialDraft?.playerCount, MIN_PLAYERS, maxPlayers),
   );
   const [travellerCount, setTravellerCount] = useState<number | "">(
     initialDraft?.travellerCount ?? 0,
@@ -255,7 +269,7 @@ export function BagBuilder({
   const effectivePlayerCount = clamp(
     playerCount === "" ? NaN : playerCount,
     MIN_PLAYERS,
-    MAX_PLAYERS,
+    maxPlayers,
   );
   const effectiveTravellerCount = clamp(
     travellerCount === "" ? NaN : travellerCount,
@@ -288,15 +302,6 @@ export function BagBuilder({
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
     );
   }
-  // Teensyville scripts' small pools can't fill the standard distribution
-  // table above 6 players (BotC wiki "Behind the Curtain") — advisory only,
-  // per ADR 0003, since rule zero lets a storyteller deviate deliberately.
-  if (isTeensyville && effectivePlayerCount > TEENSYVILLE_MAX_PLAYERS) {
-    requirementWarnings.push(
-      `Teensyville scripts are designed for up to ${TEENSYVILLE_MAX_PLAYERS} players — ${effectivePlayerCount} may not leave enough characters to fill the bag.`,
-    );
-  }
-
   function toggleCharacter(character: Character) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -468,7 +473,7 @@ export function BagBuilder({
           <input
             type="number"
             min={MIN_PLAYERS}
-            max={MAX_PLAYERS}
+            max={maxPlayers}
             value={playerCount}
             // Clamping is deferred to blur: clamping on every keystroke
             // fights the browser's in-progress digit-by-digit typing (e.g.
@@ -481,7 +486,7 @@ export function BagBuilder({
             }}
             onBlur={() =>
               setPlayerCount((value) =>
-                clamp(value === "" ? NaN : value, MIN_PLAYERS, MAX_PLAYERS),
+                clamp(value === "" ? NaN : value, MIN_PLAYERS, maxPlayers),
               )
             }
           />
