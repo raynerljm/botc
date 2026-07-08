@@ -984,6 +984,53 @@ describe("travellers addable at setup with alignment", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a homebrew script's own traveller even in a 0-traveller game, not just vendored ones (code review finding)", async () => {
+    const user = userEvent.setup();
+    // Not in the vendored dataset — characterPool alone (which only holds
+    // what's already selected/built) could never resolve this; it has to
+    // come from scriptCharacters, the script's full not-yet-built universe.
+    const homebrewTraveller = {
+      id: "homebrew-bootlegger",
+      name: "Bootlegger",
+      edition: null,
+      team: "traveller" as const,
+      ability: "A homebrew traveller for this test.",
+      firstNight: 0,
+      firstNightReminder: "",
+      otherNight: 0,
+      otherNightReminder: "",
+      reminders: [],
+      remindersGlobal: [],
+      setup: false,
+      jinxes: [],
+      image: null,
+    };
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+      ],
+      scriptCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        homebrewTraveller,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await user.selectOptions(
+      screen.getByLabelText("Traveller character"),
+      "Bootlegger",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to the circle" }));
+
+    const reloaded = loadGame()!;
+    const traveller = reloaded.players.find((p) => p.isTraveller)!;
+    expect(traveller.characterId).toBe("homebrew-bootlegger");
+  });
+
   it("lists every traveller-team character, not just the ones built into the traveller bag, in a 0-traveller game", async () => {
     const user = userEvent.setup();
     const game = makeGame({ playerCount: 2 });

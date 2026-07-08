@@ -192,10 +192,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // Traveller add options (issue #119): every traveller-team character,
   // script-first then the rest of the dataset, whether or not it was ever
   // built into travellerBag — travellers may join the circle at any time per
-  // the rulebook, even in a game built with 0 travellers.
+  // the rulebook, even in a game built with 0 travellers. Sourced from
+  // scriptCharacters, not characterPool: characterPool only holds what's
+  // already selected/built (gameDocument.ts), so a homebrew script's own
+  // traveller — never in the vendored dataset — would otherwise be
+  // unreachable in a 0-traveller game exactly like the "Claims" pool a few
+  // lines up, this needs the "not in play yet" universe, not the in-play one.
   const travellerAddOptions = useMemo(
-    () => characterPickerPool(game.characterPool, "traveller"),
-    [game.characterPool],
+    () => characterPickerPool(game.scriptCharacters, "traveller"),
+    [game.scriptCharacters],
   );
 
   // The in-flight draw ritual, read straight from the document so every
@@ -1025,11 +1030,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
       {/* Gated on `!draw`, not just `!screenObscured` — screenObscured
           deliberately treats the 'choosing' stage as safe for most controls,
-          but the traveller select below can list travellerBag names, which
-          is exactly the kind of bag-composition leak issue #111 closed for
-          the official bag's manual-assign selects. Always offered regardless
-          of travellerBag's size — a traveller may join at any time per the
-          rulebook, even in a game built with 0 travellers (issue #119). */}
+          but this form's default selection is seeded from travellerBag
+          (openTravellerForm), which is exactly the kind of bag-composition
+          leak issue #111 closed for the official bag's manual-assign
+          selects. Always offered regardless of travellerBag's size — a
+          traveller may join at any time per the rulebook, even in a game
+          built with 0 travellers (issue #119). */}
       {!draw && !travellerFormOpen && (
         <button
           type="button"
