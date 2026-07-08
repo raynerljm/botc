@@ -1512,6 +1512,102 @@ describe("token menu exclusivity and dismissal (issue #70)", () => {
   });
 });
 
+describe("token menu viewport clamping (issue #124)", () => {
+  it("marks a seat near the board's right edge so its menu can anchor left instead of overflowing", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 92, y: 50 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).toHaveAttribute("data-side", "right");
+    expect(wrap).not.toHaveAttribute("data-vside");
+  });
+
+  it("marks a seat near the board's left edge so its menu can anchor right instead of overflowing", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 8, y: 50 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).toHaveAttribute("data-side", "left");
+  });
+
+  it("marks a seat near the board's bottom edge so its menu can flip above instead of overflowing", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 50, y: 90 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).toHaveAttribute("data-vside", "bottom");
+    expect(wrap).not.toHaveAttribute("data-side");
+  });
+
+  it("leaves centred seats unmarked so their menu keeps its default centred anchor", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 50, y: 50 } }),
+    ]);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap).not.toHaveAttribute("data-side");
+    expect(wrap).not.toHaveAttribute("data-vside");
+  });
+
+  it("marks a reminder's wrap the same way a seat's is marked", () => {
+    const reminder = makeReminder({ id: "r1", position: { x: 90, y: 88 } });
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      reminders: [reminder],
+    });
+    const reminderWrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+    expect(reminderWrap).toHaveAttribute("data-side", "right");
+    expect(reminderWrap).toHaveAttribute("data-vside", "bottom");
+  });
+
+  it("marks a reminder anchored to an edge seat using its own anchored position, not its own stored position (issue #71's anchoring)", () => {
+    // A reminder's stored .position is stale once anchored — it tracks its
+    // anchor seat's position via anchoredReminderPosition instead (see the
+    // reminderWrap render logic). This anchor seat sits at the board's
+    // right edge with no vertical clamp in play, so the reminder parks
+    // beside it without any of anchoredReminderPosition's clearance-recovery
+    // shifting it back toward centre — it should still read as edge-parked.
+    const anchoredReminder = makeReminder({
+      id: "r1",
+      anchorPlayerId: "p1",
+      position: { x: 50, y: 50 }, // stale/irrelevant once anchored
+    });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 90, y: 50 } })],
+      { reminders: [anchoredReminder] },
+    );
+    const reminderWrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+    expect(reminderWrap).toHaveAttribute("data-side", "right");
+    expect(reminderWrap).toHaveAttribute("data-vside", "bottom");
+  });
+
+  it("keeps a menu's anchor pinned to the token's resting position while dragging the same token, instead of flickering as the live drag preview crosses the side/vside thresholds", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 90, y: 50 } }),
+    ]);
+    mockBoardRect(container);
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    await user.click(summary);
+    expect(wrap).toHaveAttribute("data-side", "right");
+
+    // Drag the same (now open-menu'd) token toward the board's centre —
+    // the live position (and thus the token's on-screen left/top) follows
+    // the drag, but the menu's anchor must not chase it.
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 360, clientY: 200 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
+
+    expect(wrap.style.left).toBe("50%");
+    expect(wrap).toHaveAttribute("data-side", "right");
+  });
+});
+
 describe("remove player", () => {
   it("lets the storyteller remove a player from their token menu", async () => {
     const user = userEvent.setup();

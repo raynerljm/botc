@@ -227,10 +227,47 @@
   gap: 0.5rem;
   width: max-content;
   max-width: 14rem;
+  /* Viewport clamp (issue #124): without this, a menu whose content grows
+     tall enough to reach the viewport edge is only reachable by scrolling
+     the page — and since a page-background touch reads as "outside" (the
+     pointerdown-outside-closes handler above), that scroll gesture closes
+     the menu before it lands. Scrolling *inside* an already-clamped menu
+     stays "inside" for that handler, so it never fires. `100vh` on a phone
+     browser is the *layout* viewport, taller than what's actually visible
+     behind a collapsible address bar/toolbar — `dvh` tracks the real,
+     currently-visible viewport instead; unsupported browsers ignore that
+     line and keep the `vh` clamp above it. */
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   padding: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
+}
+
+/* Re-anchors the menu to the token's own edge instead of its centre for a
+   token parked near the board's rim, where a centred ~14rem-wide menu would
+   otherwise overflow the viewport (issue #124). data-side/data-vside are
+   set from the token's circle position — see tokenSideAttr/tokenVSideAttr
+   in GrimoireBoard.tsx. */
+.tokenWrap[data-side="right"] .menuBody,
+.reminderWrap[data-side="right"] .menuBody {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.tokenWrap[data-side="left"] .menuBody,
+.reminderWrap[data-side="left"] .menuBody {
+  left: 0;
+  transform: none;
+}
+
+.tokenWrap[data-vside="bottom"] .menuBody,
+.reminderWrap[data-vside="bottom"] .menuBody {
+  top: auto;
+  bottom: calc(100% + 0.5rem);
 }
 
 /* Browsers restart a CSS animation whenever an element goes from `display:
