@@ -43,11 +43,18 @@ function gameWithCharacters(ids: string[], drunkStandInFor?: string): GameDocume
 function stepFor(game: GameDocument, characterId: string) {
   const player = game.players.find((p) => p.characterId === characterId);
   const steps = buildSetupWalkthroughSteps(game);
-  return steps.find((s) => s.playerId === player?.id);
+  return steps.find((s) => "playerId" in s && s.playerId === player?.id);
+}
+
+// The demonBluffs step is always present and always first (issue #155) —
+// every other assertion in this file cares only about the per-player steps
+// that follow it, so tests strip it off before checking "no steps"/ordering.
+function playerSteps(game: GameDocument) {
+  return buildSetupWalkthroughSteps(game).filter((s) => s.kind !== "demonBluffs");
 }
 
 describe("buildSetupWalkthroughSteps (issue #26)", () => {
-  it("returns no steps for a game with no players assigned yet", () => {
+  it("always includes exactly one demonBluffs step, first, regardless of who's in play (issue #155)", () => {
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
@@ -57,12 +64,27 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
       extraCopies: {},
     });
 
-    expect(buildSetupWalkthroughSteps(game)).toEqual([]);
+    const steps = buildSetupWalkthroughSteps(game);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({ id: "demonBluffs", kind: "demonBluffs" });
   });
 
-  it("returns no steps when every in-play character needs no setup decision", () => {
+  it("returns no per-player steps for a game with no players assigned yet", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 5,
+      selectedCharacters: characters("imp"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(playerSteps(game)).toEqual([]);
+  });
+
+  it("returns no per-player steps when every in-play character needs no setup decision", () => {
     const game = gameWithCharacters(["imp", "chef", "recluse"]);
-    expect(buildSetupWalkthroughSteps(game)).toEqual([]);
+    expect(playerSteps(game)).toEqual([]);
   });
 
   it("gives the Fortune Teller a playerPick step for the red herring", () => {
@@ -195,10 +217,14 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     const steps = buildSetupWalkthroughSteps(game);
     const drunkPlayer = game.players.find((p) => p.isDrunk);
 
-    const drunkStep = steps.find((s) => s.playerId === drunkPlayer?.id);
+    const drunkStep = steps.find(
+      (s) => "playerId" in s && s.playerId === drunkPlayer?.id,
+    );
     expect(drunkStep).toMatchObject({ kind: "review", reminderLabel: "Drunk" });
     // Only one step for that seat — not also a Washerwoman characterAndTwoPlayers step.
-    expect(steps.filter((s) => s.playerId === drunkPlayer?.id)).toHaveLength(1);
+    expect(
+      steps.filter((s) => "playerId" in s && s.playerId === drunkPlayer?.id),
+    ).toHaveLength(1);
   });
 
   it("gives a homebrew character with reminders a generic step", () => {
@@ -231,26 +257,26 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
       players: game.players.map((p) => ({ ...p, characterId: "custom-oracle" })),
     };
 
-    const steps = buildSetupWalkthroughSteps(gameWithPlayer);
-    expect(steps).toMatchObject([
+    expect(playerSteps(gameWithPlayer)).toMatchObject([
       { kind: "generic", characterId: "custom-oracle", reminderOptions: ["Marked"] },
     ]);
   });
 
-  it("gives no step for an uncovered official character with no reminders to place", () => {
+  it("gives no per-player step for an uncovered official character with no reminders to place", () => {
     const game = gameWithCharacters(["chef"]);
-    expect(buildSetupWalkthroughSteps(game)).toEqual([]);
+    expect(playerSteps(game)).toEqual([]);
   });
 
   it("does not give a generic step to an official character just for having an ordinary reminder (e.g. Imp's 'Dead')", () => {
     const game = gameWithCharacters(["imp"]);
-    expect(buildSetupWalkthroughSteps(game)).toEqual([]);
+    expect(playerSteps(game)).toEqual([]);
   });
 
-  it("orders steps by seat", () => {
+  it("orders per-player steps by seat, after the demonBluffs step", () => {
     const game = gameWithCharacters(["grandmother", "fortuneteller", "eviltwin"]);
     const steps = buildSetupWalkthroughSteps(game);
-    expect(steps.map((s) => s.characterId)).toEqual([
+    expect(steps[0].kind).toBe("demonBluffs");
+    expect(playerSteps(game).map((s) => (s as { characterId: string }).characterId)).toEqual([
       "grandmother",
       "fortuneteller",
       "eviltwin",

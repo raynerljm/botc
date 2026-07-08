@@ -1226,6 +1226,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               stepStatuses={game.setupWalkthroughSteps}
               players={game.players}
               characterPool={game.characterPool}
+              game={game}
+              onChangeGame={update}
               onResolveStep={resolveWalkthroughStep}
               onReassignStandIn={reassignStandIn}
               onClose={() => setShowWalkthrough(false)}
