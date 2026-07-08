@@ -34,6 +34,7 @@ export function PlayerNamePicker({ onSelect }: PlayerNamePickerProps) {
       <label>
         Search players
         <input
+          className={styles.input}
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}

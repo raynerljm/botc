@@ -792,6 +792,7 @@ export function GrimoireBoard({
                       Player name
                       <input
                         id={`token-name-${player.id}`}
+                        className={styles.textInput}
                         type="text"
                         value={player.name}
                         onChange={(event) => onRename(player.id, event.target.value)}
@@ -834,19 +835,25 @@ export function GrimoireBoard({
                     {isHiddenDrunk && (
                       <button
                         type="button"
+                        className={styles.menuButton}
                         onClick={() => onRevealDrunk(player.id)}
                       >
                         Reveal Drunk
                       </button>
                     )}
 
-                    <button type="button" onClick={() => onRemovePlayer(player.id)}>
+                    <button
+                      type="button"
+                      className={styles.menuButton}
+                      onClick={() => onRemovePlayer(player.id)}
+                    >
                       Remove player
                     </button>
 
                     {!activeOverlay && !placingReminderId && (
                       <button
                         type="button"
+                        className={styles.menuButton}
                         onClick={() =>
                           setActiveOverlay({
                             type: "reminder",
@@ -896,6 +903,7 @@ export function GrimoireBoard({
                       Acts as
                       <select
                         id={`token-acts-as-${player.id}`}
+                        className={styles.select}
                         value={player.actsAs ?? ""}
                         onChange={(event) =>
                           onSetActsAs(player.id, event.target.value || null)
@@ -917,6 +925,7 @@ export function GrimoireBoard({
                     <div className={styles.seatControls}>
                       <button
                         type="button"
+                        className={styles.menuButton}
                         disabled={index === 0}
                         onClick={() => onReorderSeat(player.id, "earlier")}
                       >
@@ -924,6 +933,7 @@ export function GrimoireBoard({
                       </button>
                       <button
                         type="button"
+                        className={styles.menuButton}
                         disabled={index === total - 1}
                         onClick={() => onReorderSeat(player.id, "later")}
                       >

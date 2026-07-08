@@ -46,7 +46,7 @@ export function InfoTokenLibrary({
   if (chosenText === null) {
     return (
       <div className={styles.library} role="dialog" aria-label="Info tokens">
-        <button type="button" onClick={onCancel}>
+        <button type="button" className={styles.cancelButton} onClick={onCancel}>
           Cancel
         </button>
 
