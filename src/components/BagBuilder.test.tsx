@@ -613,6 +613,21 @@ describe("special flow: Legion/Riot/Atheist/Summoner relax validation (AC4)", ()
     const townsfolkCounter = screen.getByText(/^Townsfolk \d+\/\d+$/);
     expect(townsfolkCounter).not.toHaveAttribute("data-state");
   });
+
+  it("does not relax validation for a seating-constraint bracket like Marionette's", async () => {
+    // Marionette's "[You neighbor the Demon]" bracket doesn't resolve to a
+    // structured count delta either, but unlike Legion/Atheist/Summoner/Xaan
+    // it isn't a distribution-breaker — it's a seating constraint, so it
+    // must not relax count validation.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("marionette", "washerwoman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Marionette/ }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    const minionsCounter = screen.getByText(/^Minions \d+\/\d+$/);
+    expect(minionsCounter).toHaveAttribute("data-state");
+  });
 });
 
 describe("active jinxes among selected characters (AC5)", () => {
@@ -782,6 +797,27 @@ describe("warns on a bag/script count mismatch before continuing (issue #51)", (
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(loadGame()).not.toBeNull();
     expect(push).toHaveBeenCalledWith("/game");
+  });
+
+  it("still warns on a count mismatch when a seating-constraint bracket like Marionette's is in the bag", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("marionette", "washerwoman")}
+        scriptId="custom-marionette"
+        scriptName="Custom"
+      />,
+    );
+
+    // Marionette alone leaves Townsfolk/Minion under target; unlike Legion's
+    // freeform bracket, Marionette's seating constraint must not relax
+    // validation, so the mismatch dialog should still fire.
+    await user.click(screen.getByRole("button", { name: /^Marionette/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.getByRole("alertdialog", { name: /count/i })).toBeInTheDocument();
   });
 
   it("moves focus into the dialog when it opens, traps Tab within it, and restores focus on dismiss", async () => {

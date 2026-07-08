@@ -46,6 +46,14 @@ import styles from "./BagBuilder.module.css";
 // isRelaxedCharacter below.
 const RELAXED_VALIDATION_IDS = new Set(["legion", "riot", "atheist", "summoner"]);
 
+// Setup characters whose bracket falls through to isFreeform (no structured
+// count delta parses out) despite describing a seating/behavioral
+// constraint rather than a distribution change — Marionette's "[You
+// neighbor the Demon]" is a placement rule, not a Townsfolk/Outsider/Minion
+// swap, so it must not relax count validation the way Legion/Atheist's
+// genuine distribution-breaking brackets do.
+const SEATING_CONSTRAINT_IDS = new Set(["marionette"]);
+
 // Characters whose "+the X" requirement is fulfilled automatically rather
 // than merely warned about (Huntsman brings its own Damsel; Choirboy just
 // requires the King already be in the bag).
@@ -129,6 +137,7 @@ function isRelaxedCharacter(
   character: Character,
   parsed: ParsedSetupModifier | null | undefined,
 ): boolean {
+  if (SEATING_CONSTRAINT_IDS.has(character.id)) return false;
   return RELAXED_VALIDATION_IDS.has(character.id) || parsed?.isFreeform === true;
 }
 
