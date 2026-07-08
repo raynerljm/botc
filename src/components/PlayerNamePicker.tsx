@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 import { REGULAR_PLAYERS } from "@/lib/players";
 
-import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
 import styles from "./PlayerNamePicker.module.css";
 
@@ -12,43 +11,64 @@ export interface PlayerNamePickerProps {
   onSelect: (name: string) => void;
 }
 
-// Curated list + "type your own" fallback (this codebase's picker
-// convention, see ReminderPicker) for naming a seat right after its token
-// reveal (issue #54). The predefined list is REGULAR_PLAYERS — a hardcoded
-// array until player profiles are database-backed.
+// One input for both filtering the curated list and naming yourself
+// (issue #157) — the same text drives both, rather than a separate
+// search box and custom-name form. The predefined list is REGULAR_PLAYERS
+// — a hardcoded array until player profiles are database-backed.
 export function PlayerNamePicker({ onSelect }: PlayerNamePickerProps) {
   const [query, setQuery] = useState("");
 
-  const normalizedQuery = query.trim().toLowerCase();
+  const trimmedQuery = query.trim();
+  const normalizedQuery = trimmedQuery.toLowerCase();
   const matches = REGULAR_PLAYERS.filter((name) =>
     name.toLowerCase().includes(normalizedQuery),
   );
+  // Filtering is substring-based (so partial typing narrows the list), but
+  // "no regular player" for naming yourself must be exact-match: a substring
+  // hit against an unrelated name (e.g. "an" inside "Dana") would otherwise
+  // block naming yourself "an" even though no player is actually named that.
+  const isRegularPlayer = REGULAR_PLAYERS.some(
+    (name) => name.toLowerCase() === normalizedQuery,
+  );
+  const canNameYourself = trimmedQuery.length > 0 && !isRegularPlayer;
 
   function select(name: string) {
     setQuery("");
     onSelect(name);
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter" && canNameYourself) {
+      event.preventDefault();
+      select(trimmedQuery);
+    }
+  }
+
   return (
     <div className={styles.picker}>
       <label>
-        Search players
+        Player name
         <input
           className={styles.input}
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={handleKeyDown}
         />
       </label>
       <PickerGroup
         legend="Regular players"
         items={matches.map((name) => ({ label: name, onClick: () => select(name) }))}
       />
-      <PickerCustomTextForm
-        label="Custom player name"
-        submitLabel="Use this name"
-        onSubmit={select}
-      />
+      {canNameYourself && (
+        <button
+          type="button"
+          className={styles.useName}
+          onClick={() => select(trimmedQuery)}
+        >
+          Name yourself &quot;{trimmedQuery}&quot;
+        </button>
+      )}
     </div>
   );
 }

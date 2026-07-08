@@ -19,3 +19,7 @@
   color: var(--foreground);
   min-height: 2.75rem;
 }
+
+.useName {
+  composes: input;
+}
