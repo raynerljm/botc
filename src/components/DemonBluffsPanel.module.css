@@ -112,8 +112,8 @@
   gap: 0.75rem;
 }
 
-.overlaySlot :global(img),
-.overlaySlot :global(span[data-team]) {
+.overlayToken :global(img),
+.overlayToken :global(span[data-team]) {
   width: 6rem;
   height: 6rem;
 }
@@ -145,6 +145,10 @@
 
 .overlayTeam[data-team="demon"] {
   color: var(--team-demon);
+}
+
+.overlayTeam[data-team="traveller"] {
+  color: var(--team-traveller);
 }
 
 .overlayAbility {
