@@ -1977,6 +1977,118 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
   });
 });
 
+describe("a reopened night stays coherent with roster changes made after End night (issue #165)", () => {
+  it("prunes a stale checkmark left by a character swap made after End night", async () => {
+    const { user, circle } = await completeSetup();
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    const washerwoman = getCharacter("washerwoman")!;
+    await user.click(
+      screen.getByRole("checkbox", { name: `${washerwoman.name} — Player 1` }),
+    );
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+
+    // Fortune Teller also acts on the first night, so its entry stays
+    // visible without needing "Show all" once the night reopens.
+    await user.selectOptions(
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "fortuneteller",
+    );
+
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+
+    expect(loadGame()!.nightChecked).toEqual([]);
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    expect(
+      screen.getByRole("checkbox", { name: `${fortuneTeller.name} — Player 1` }),
+    ).not.toBeChecked();
+  });
+
+  it("prunes a stale checkmark left by a death that happened after End night", async () => {
+    const { user, circle } = await completeSetup();
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    const washerwoman = getCharacter("washerwoman")!;
+    await user.click(
+      screen.getByRole("checkbox", { name: `${washerwoman.name} — Player 1` }),
+    );
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+
+    await user.click(within(seat1Wrap).getByRole("button", { name: /mark dead/i }));
+
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+
+    expect(loadGame()!.nightChecked).toEqual([]);
+    expect(
+      screen.getByRole("checkbox", { name: `${washerwoman.name} — Player 1` }),
+    ).not.toBeChecked();
+    expect(screen.getByText(/\(skipped\)/)).toBeInTheDocument();
+  });
+
+  it("strips a removed player's vote from a reopened night's snapshotted nomination", async () => {
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("chef")!,
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+
+    const [p1, p2, p3] = loadGame()!.players;
+    await user.selectOptions(screen.getByLabelText("Nominator"), p1.id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), p2.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    await user.click(screen.getByRole("checkbox", { name: p3.name }));
+
+    await user.click(screen.getByRole("button", { name: "Start Night 2" }));
+    await user.click(screen.getByRole("button", { name: /End Night 2/ }));
+
+    const seat3Wrap = circle.querySelectorAll("[data-player-id]")[2] as HTMLElement;
+    await user.click(within(seat3Wrap).getByText(p3.name));
+    await removePlayerAndConfirm(user, seat3Wrap);
+
+    await user.click(screen.getByRole("button", { name: "← Reopen Night 2" }));
+
+    expect(loadGame()!.nominations).toHaveLength(1);
+    expect(loadGame()!.nominations[0].votes).not.toContain(p3.id);
+  });
+
+  it("does not let reopening a night overwrite a nomination recorded after it ended", async () => {
+    const { user } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("chef")!,
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+
+    const [p1, p2, p3] = loadGame()!.players;
+    await user.selectOptions(screen.getByLabelText("Nominator"), p1.id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), p2.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+
+    await user.click(screen.getByRole("button", { name: "Start Night 2" }));
+    await user.click(screen.getByRole("button", { name: /End Night 2/ }));
+
+    await user.selectOptions(screen.getByLabelText("Nominator"), p3.id);
+    await user.selectOptions(screen.getByLabelText("Nominee"), p1.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    const dayTwoNominations = loadGame()!.nominations;
+    expect(dayTwoNominations).toHaveLength(1);
+    expect(dayTwoNominations[0].nominatorId).toBe(p3.id);
+
+    await user.click(screen.getByRole("button", { name: "← Reopen Night 2" }));
+
+    expect(loadGame()!.nominations).toEqual(dayTwoNominations);
+  });
+});
+
 describe("the first visible grimoire (issue #12)", () => {
   it("keeps showing the setup view while any seat is unassigned", () => {
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);

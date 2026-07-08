@@ -86,7 +86,12 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       nightOpen: true,
       nightChecked: snapshot.nightChecked,
       nightUnskipped: snapshot.nightUnskipped,
-      nominations: snapshot.nominations,
+      // Only restore the snapshotted nominations if none have been recorded
+      // since — End night always leaves nominations empty, so a non-empty
+      // array here means the storyteller has already nominated today, and
+      // that must never be silently overwritten by older, pre-End data
+      // (issue #165 AC: "does not silently lose the day-phase state").
+      nominations: game.nominations.length === 0 ? snapshot.nominations : game.nominations,
       lastEndedNightSnapshot: null,
     });
   }

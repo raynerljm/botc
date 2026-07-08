@@ -139,14 +139,14 @@ export interface Nomination {
 
 // Night-phase state captured immediately before "End night" clears it, so a
 // "back" control can reopen the just-ended night without losing its
-// checklist or the day's nominations (issue #165). Single-slot rather than a
-// history stack, matching ADR 0002's snapshot-not-event-log stance — only
-// the most recently ended night can be undone.
-export interface EndedNightSnapshot {
-  nightChecked: string[];
-  nightUnskipped: string[];
-  nominations: Nomination[];
-}
+// checklist or the day's nominations (issue #165). Single-slot, not a
+// history stack — only the most recently ended night can be undone. A `Pick`
+// off `GameDocument` rather than a hand-repeated shape, so the two can't
+// silently drift apart.
+export type EndedNightSnapshot = Pick<
+  GameDocument,
+  "nightChecked" | "nightUnskipped" | "nominations"
+>;
 
 export interface Player {
   id: string;
