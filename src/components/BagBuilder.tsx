@@ -71,6 +71,16 @@ function applyAutoAdds(ids: Set<string>): { next: Set<string>; added: string[] }
   return { next, added };
 }
 
+// Folds newly-added auto-add target ids (from applyAutoAdds) into a
+// provenance set — shared by toggleCharacter's select branch and
+// handleRandomize, the two places new auto-adds can happen.
+function withAutoAdded(prev: Set<string>, added: string[]): Set<string> {
+  if (added.length === 0) return prev;
+  const next = new Set(prev);
+  added.forEach((id) => next.add(id));
+  return next;
+}
+
 const DRUNK_ID = "drunk";
 
 const OFFICIAL_TEAMS = new Set<Team>([
@@ -231,12 +241,18 @@ export function BagBuilder({
 
   // The selectable pool is the script's characters plus anything a special
   // flow auto-adds (e.g. Huntsman pulling in the Damsel) that the script
-  // didn't already include.
+  // didn't already include — offered either while the trigger is selected
+  // (so it can be toggled back on after a manual deselect, mid-interaction)
+  // or while the target itself is still selected (so a target confirmed as
+  // a manual pick stays rendered after its trigger is deselected, issue
+  // #129, instead of vanishing out from under a selection the storyteller
+  // deliberately kept).
   const pool = useMemo(() => {
     const ids = new Set(characters.map((c) => c.id));
     const extras: Character[] = [];
     for (const [triggerId, targetId] of Object.entries(AUTO_ADD_TARGET_ID)) {
-      if (selectedIds.has(triggerId) && !ids.has(targetId)) {
+      if (ids.has(targetId)) continue;
+      if (selectedIds.has(triggerId) || selectedIds.has(targetId)) {
         const target = getCharacter(targetId);
         if (target) extras.push(target);
       }
@@ -340,11 +356,7 @@ export function BagBuilder({
       const { next, added } = applyAutoAdds(new Set(selectedIds).add(character.id));
       setSelectedIds(next);
       if (added.length > 0) {
-        setAutoAddedIds((prev) => {
-          const nextAutoAdded = new Set(prev);
-          added.forEach((id) => nextAutoAdded.add(id));
-          return nextAutoAdded;
-        });
+        setAutoAddedIds((prev) => withAutoAdded(prev, added));
       }
     }
     // A modifier choice or extra-copies count only makes sense for the
@@ -389,11 +401,7 @@ export function BagBuilder({
     const { next, added } = applyAutoAdds(current);
     setSelectedIds(next);
     if (added.length > 0) {
-      setAutoAddedIds((prev) => {
-        const nextAutoAdded = new Set(prev);
-        added.forEach((id) => nextAutoAdded.add(id));
-        return nextAutoAdded;
-      });
+      setAutoAddedIds((prev) => withAutoAdded(prev, added));
     }
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.

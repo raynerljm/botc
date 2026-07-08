@@ -501,6 +501,29 @@ describe("special flow: Huntsman auto-adds the Damsel (AC4)", () => {
     );
   });
 
+  it("keeps a Damsel confirmed manually after auto-add selected, and still rendered, once the Huntsman is deselected — even though Damsel isn't on this script", async () => {
+    // Damsel is *not* in the script's own characters here — she only ever
+    // enters the pool via the auto-add extra (BagBuilder.tsx's `pool`
+    // useMemo). That pool must keep offering her once she's a confirmed
+    // manual pick, not just while Huntsman is still selected.
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("huntsman")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+    const damsel = screen.getByRole("button", { name: /^Damsel/ });
+    // Confirm the auto-added Damsel as a deliberate pick: toggle her off
+    // then back on while Huntsman stays selected.
+    await user.click(damsel);
+    await user.click(screen.getByRole("button", { name: /^Damsel/ }));
+
+    await user.click(screen.getByRole("button", { name: /^Huntsman/ }));
+
+    expect(screen.getByRole("button", { name: /^Damsel/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("brings the Damsel along when Randomize itself picks the Huntsman", async () => {
     // Huntsman is the only Townsfolk candidate here, so Randomize's
     // Townsfolk fill is guaranteed to pick it deterministically.
