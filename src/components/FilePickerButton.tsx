@@ -25,19 +25,25 @@ export function FilePickerButton({
   const [fileName, setFileName] = useState<string | null>(null);
 
   return (
-    <label className={[styles.wrapper, className].filter(Boolean).join(" ")}>
-      <input
-        id={id}
-        className={styles.input}
-        type="file"
-        accept={accept}
-        onChange={(event) => {
-          setFileName(event.target.files?.[0]?.name ?? null);
-          onChange(event);
-        }}
-      />
-      <span className={styles.button}>{buttonLabel}</span>
+    <span className={[styles.wrapper, className].filter(Boolean).join(" ")}>
+      {/* fileName stays outside the label: rendering it as label content
+          would change the input's accessible name from buttonLabel to
+          "buttonLabel fileName" the moment a file is picked (Copilot
+          review finding). */}
+      <label>
+        <input
+          id={id}
+          className={styles.input}
+          type="file"
+          accept={accept}
+          onChange={(event) => {
+            setFileName(event.target.files?.[0]?.name ?? null);
+            onChange(event);
+          }}
+        />
+        <span className={styles.button}>{buttonLabel}</span>
+      </label>
       {fileName && <span className={styles.fileName}>{fileName}</span>}
-    </label>
+    </span>
   );
 }

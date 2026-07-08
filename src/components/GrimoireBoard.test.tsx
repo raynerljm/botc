@@ -505,6 +505,18 @@ describe("acts-as (issue #17)", () => {
     ) as HTMLElement;
     expect(within(summary).queryByText(/acts as/i)).not.toBeInTheDocument();
   });
+
+  it("keeps an acts-as target visible instead of silently resetting to 'Not acting as anyone' when it isn't in claimOptions (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ actsAs: "poisoner" })]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/acts as/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
+  });
 });
 
 describe("ghost votes", () => {

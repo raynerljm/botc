@@ -938,6 +938,14 @@ export function GrimoireBoard({
                         onChange={(next) => onSetActsAs(player.id, next || null)}
                         entries={[
                           { value: "", label: "Not acting as anyone" },
+                          // Same "keep an orphaned value selectable/visible"
+                          // safeguard as the Claim select above — an actsAs
+                          // target recorded before the script last changed
+                          // can reference a character no longer in
+                          // claimOptions (Copilot review finding).
+                          ...(player.actsAs && !claimById.has(player.actsAs)
+                            ? [{ value: player.actsAs, label: player.actsAs }]
+                            : []),
                           ...claimGroups.map((group) => ({
                             label: teamNames[group.team],
                             options: group.characters.map((c) => ({

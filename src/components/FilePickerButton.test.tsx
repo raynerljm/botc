@@ -36,4 +36,16 @@ describe("FilePickerButton", () => {
 
     expect(screen.getByText("script.json")).toBeInTheDocument();
   });
+
+  it("keeps the input's accessible name stable after a file is picked, instead of growing to include the filename (code review finding)", async () => {
+    const user = userEvent.setup();
+    render(<FilePickerButton buttonLabel="Upload a script-tool JSON file" onChange={vi.fn()} />);
+    const file = new File(["{}"], "script.json", { type: "application/json" });
+
+    await user.upload(screen.getByLabelText("Upload a script-tool JSON file"), file);
+
+    expect(
+      screen.getByLabelText("Upload a script-tool JSON file"),
+    ).toHaveAttribute("type", "file");
+  });
 });
