@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import type { Character } from "@/lib/characters";
 
+import { Checkbox } from "./Checkbox";
 import { DialogOverlay } from "./DialogOverlay";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
@@ -84,12 +85,8 @@ export function ReminderPicker({
           />
         ))}
 
-        <label>
-          <input
-            type="checkbox"
-            checked={showAll}
-            onChange={(event) => setShowAll(event.target.checked)}
-          />
+        <label className={styles.showAll}>
+          <Checkbox checked={showAll} onChange={setShowAll} />
           Show all characters
         </label>
 

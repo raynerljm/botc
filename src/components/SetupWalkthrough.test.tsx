@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
 import { DEMON_BLUFFS_STEP_ID, type SetupWalkthroughStep } from "@/lib/setupWalkthrough";
+import { getSelectOptions, selectOption } from "@/testUtils/selectOption";
 
 import { SetupWalkthrough } from "./SetupWalkthrough";
 
@@ -110,11 +111,9 @@ function renderWalkthrough(
 // from also matching "Player 10" — escaping first is what keeps a name
 // with regex-special characters from building a broken pattern (code
 // review finding).
-function selectPlayerNamed(select: HTMLElement, name: string) {
+function playerNamedMatcher(name: string) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return within(select).getByRole("option", {
-    name: new RegExp(`^${escaped}\\b`),
-  });
+  return new RegExp(`^${escaped}\\b`);
 }
 
 const fortuneTellerStep: SetupWalkthroughStep = {
@@ -203,7 +202,7 @@ describe("SetupWalkthrough shell", () => {
 
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
     const playerSelect = within(step).getByLabelText(/player/i);
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Cara"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Cara"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
@@ -299,7 +298,7 @@ describe("SetupWalkthrough shell", () => {
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
     await user.click(within(step).getByRole("button", { name: /redo/i }));
     const playerSelect = within(step).getByLabelText(/player/i);
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Cara"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Cara"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     // The component only ever hands back the *current* set of reminders for
@@ -327,7 +326,7 @@ describe("playerPick step", () => {
     // Bob is evil (see the alignment-filtering tests below).
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
     const playerSelect = within(step).getByLabelText(/player/i);
-    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Cara"));
+    await selectOption(user, playerSelect, playerNamedMatcher("Cara"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
@@ -335,34 +334,38 @@ describe("playerPick step", () => {
     ]);
   });
 
-  it("doesn't offer the step's own player as a candidate", () => {
+  it("doesn't offer the step's own player as a candidate", async () => {
+    const user = userEvent.setup();
     renderWalkthrough({ steps: [fortuneTellerStep] });
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
-    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
-    const optionNames = Array.from(select.options).map((o) => o.text);
+    const select = within(step).getByLabelText(/player/i);
+    const optionNames = (await getSelectOptions(user, select)).map((o) => o.label);
     expect(optionNames.some((n) => n.startsWith("Alice"))).toBe(false);
   });
 
-  it("only offers good players as candidates (code review: red herring/twin/grandchild must be good)", () => {
+  it("only offers good players as candidates (code review: red herring/twin/grandchild must be good)", async () => {
+    const user = userEvent.setup();
     // Default players: p1 Alice (Fortune Teller, good), p2 Bob (Imp, evil),
     // p3 Cara (Chef, good).
     renderWalkthrough({ steps: [fortuneTellerStep] });
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
-    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
-    const optionNames = Array.from(select.options).map((o) => o.text);
+    const select = within(step).getByLabelText(/player/i);
+    const optionNames = (await getSelectOptions(user, select)).map((o) => o.label);
     expect(optionNames.some((n) => n.startsWith("Bob"))).toBe(false);
     expect(optionNames.some((n) => n.startsWith("Cara"))).toBe(true);
   });
 
-  it("shows each candidate's assigned character role next to their name (issue #56)", () => {
+  it("shows each candidate's assigned character role next to their name (issue #56)", async () => {
+    const user = userEvent.setup();
     renderWalkthrough({ steps: [fortuneTellerStep] });
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
-    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
-    const optionNames = Array.from(select.options).map((o) => o.text);
+    const select = within(step).getByLabelText(/player/i);
+    const optionNames = (await getSelectOptions(user, select)).map((o) => o.label);
     expect(optionNames).toContain("Cara — Chef");
   });
 
-  it("flags a disguised Drunk candidate, matching GrimoireBoard's own '(actually the Drunk)' note (code review finding)", () => {
+  it("flags a disguised Drunk candidate, matching GrimoireBoard's own '(actually the Drunk)' note (code review finding)", async () => {
+    const user = userEvent.setup();
     renderWalkthrough({
       steps: [fortuneTellerStep],
       players: [
@@ -378,12 +381,13 @@ describe("playerPick step", () => {
     });
 
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
-    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
-    const optionNames = Array.from(select.options).map((o) => o.text);
+    const select = within(step).getByLabelText(/player/i);
+    const optionNames = (await getSelectOptions(user, select)).map((o) => o.label);
     expect(optionNames).toContain("Bob — Chef (actually the Drunk)");
   });
 
-  it("treats a Traveller candidate's alignment as their travellerAlignment, not their character's team", () => {
+  it("treats a Traveller candidate's alignment as their travellerAlignment, not their character's team", async () => {
+    const user = userEvent.setup();
     renderWalkthrough({
       steps: [fortuneTellerStep],
       players: [
@@ -408,8 +412,8 @@ describe("playerPick step", () => {
     });
 
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
-    const select = within(step).getByLabelText(/player/i) as HTMLSelectElement;
-    const optionNames = Array.from(select.options).map((o) => o.text);
+    const select = within(step).getByLabelText(/player/i);
+    const optionNames = (await getSelectOptions(user, select)).map((o) => o.label);
     expect(optionNames.some((n) => n.startsWith("Bob"))).toBe(false);
     expect(optionNames.some((n) => n.startsWith("Cara"))).toBe(true);
   });
@@ -437,11 +441,11 @@ describe("characterAndTwoPlayers step", () => {
     });
 
     const step = screen.getByRole("group", { name: washerwomanStep.title });
-    await user.selectOptions(within(step).getByLabelText("Character"), "Chef");
+    await selectOption(user, within(step).getByLabelText("Character"), "Chef");
     const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
-    await user.selectOptions(trueSelect, selectPlayerNamed(trueSelect, "Bob"));
+    await selectOption(user, trueSelect, playerNamedMatcher("Bob"));
     const falseSelect = within(step).getByLabelText(/shown as wrong/i);
-    await user.selectOptions(falseSelect, selectPlayerNamed(falseSelect, "Cara"));
+    await selectOption(user, falseSelect, playerNamedMatcher("Cara"));
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith(
@@ -454,16 +458,17 @@ describe("characterAndTwoPlayers step", () => {
     );
   });
 
-  it("shows each player's assigned character role next to their name in both player pickers (issue #56)", () => {
+  it("shows each player's assigned character role next to their name in both player pickers (issue #56)", async () => {
+    const user = userEvent.setup();
     renderWalkthrough({ steps: [washerwomanStep] });
     const step = screen.getByRole("group", { name: washerwomanStep.title });
 
-    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i) as HTMLSelectElement;
-    const trueOptionNames = Array.from(trueSelect.options).map((o) => o.text);
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    const trueOptionNames = (await getSelectOptions(user, trueSelect)).map((o) => o.label);
     expect(trueOptionNames).toContain("Bob — Imp");
 
-    const falseSelect = within(step).getByLabelText(/shown as wrong/i) as HTMLSelectElement;
-    const falseOptionNames = Array.from(falseSelect.options).map((o) => o.text);
+    const falseSelect = within(step).getByLabelText(/shown as wrong/i);
+    const falseOptionNames = (await getSelectOptions(user, falseSelect)).map((o) => o.label);
     expect(falseOptionNames).toContain("Cara — Chef");
   });
 
@@ -473,11 +478,11 @@ describe("characterAndTwoPlayers step", () => {
     const step = screen.getByRole("group", { name: washerwomanStep.title });
 
     await user.click(within(step).getByRole("checkbox", { name: /show all/i }));
-    await user.selectOptions(within(step).getByLabelText("Character"), "Empath");
+    await selectOption(user, within(step).getByLabelText("Character"), "Empath");
     await user.click(within(step).getByRole("checkbox", { name: /show all/i }));
 
-    const select = within(step).getByLabelText("Character") as HTMLSelectElement;
-    expect(select.value).toBe("");
+    const select = within(step).getByLabelText("Character");
+    expect(select.dataset.value).toBe("");
   });
 });
 
@@ -550,7 +555,7 @@ describe("believedDemon step (Lunatic)", () => {
     });
 
     const step = screen.getByRole("group", { name: lunaticStep.title });
-    await user.selectOptions(within(step).getByLabelText(/demon/i), "Imp");
+    await selectOption(user, within(step).getByLabelText(/demon/i), "Imp");
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
@@ -646,7 +651,7 @@ describe("review step (Drunk)", () => {
     });
 
     const step = screen.getByRole("group", { name: drunkStep.title });
-    await user.selectOptions(within(step).getByLabelText(/new stand-in/i), "Chef");
+    await selectOption(user, within(step).getByLabelText(/new stand-in/i), "Chef");
     await user.click(within(step).getByRole("button", { name: /change stand-in/i }));
 
     expect(onReassignStandIn).toHaveBeenCalledWith("p1", "chef");
@@ -654,6 +659,7 @@ describe("review step (Drunk)", () => {
   });
 
   it("excludes Townsfolk already held by another player from the stand-in picker", async () => {
+    const user = userEvent.setup();
     renderWalkthrough({
       steps: [drunkStep],
       players: [
@@ -664,10 +670,9 @@ describe("review step (Drunk)", () => {
     });
 
     const step = screen.getByRole("group", { name: drunkStep.title });
-    const options = within(step)
-      .getByLabelText(/new stand-in/i)
-      .querySelectorAll("option");
-    const optionText = Array.from(options).map((o) => o.textContent);
+    const optionText = (
+      await getSelectOptions(user, within(step).getByLabelText(/new stand-in/i))
+    ).map((o) => o.label);
 
     expect(optionText).not.toContain("Chef");
     expect(optionText).not.toContain("Grandmother");

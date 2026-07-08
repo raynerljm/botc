@@ -6,8 +6,10 @@ import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { DEMON_BLUFF_SLOTS, heldCharacterIds, type GameDocument } from "@/lib/gameDocument";
 
 import { CharacterToken } from "./CharacterToken";
+import { Checkbox } from "./Checkbox";
 import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./DemonBluffsPanel.module.css";
+import { Select, type SelectEntry } from "./Select";
 import { useDialogDismiss } from "./useDialogDismiss";
 
 export interface DemonBluffsPanelProps {
@@ -108,17 +110,23 @@ export function DemonBluffsFields({ game, onChange }: DemonBluffsPanelProps) {
   return (
     <>
       <label className={styles.showAll}>
-        <input
-          type="checkbox"
-          checked={showAll}
-          onChange={(event) => setShowAll(event.target.checked)}
-        />
+        <Checkbox checked={showAll} onChange={setShowAll} />
         Show all characters
       </label>
 
       <ul className={styles.slots}>
         {Array.from({ length: DEMON_BLUFF_SLOTS }, (_, index) => {
           const character = bluffCharacters[index];
+          const entries: SelectEntry[] = [
+            { value: "", label: "Not set" },
+            ...groupsForSlot(index).map((group) => ({
+              label: teamNames[group.team],
+              options: group.characters.map((c) => ({
+                value: c.id,
+                label: optionLabel(c),
+              })),
+            })),
+          ];
           return (
             <li key={index} className={styles.slot}>
               <span className={styles.slotVisual}>
@@ -128,23 +136,13 @@ export function DemonBluffsFields({ game, onChange }: DemonBluffsPanelProps) {
                   <span className={styles.emptySlot} aria-hidden="true" />
                 )}
               </span>
-              <select
+              <Select
                 aria-label={`Bluff slot ${index + 1}`}
                 className={styles.slotSelect}
                 value={bluffs[index] ?? ""}
-                onChange={(event) => setSlot(index, event.target.value || null)}
-              >
-                <option value="">Not set</option>
-                {groupsForSlot(index).map((group) => (
-                  <optgroup key={group.team} label={teamNames[group.team]}>
-                    {group.characters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {optionLabel(c)}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                onChange={(next) => setSlot(index, next || null)}
+                entries={entries}
+              />
             </li>
           );
         })}

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import type { Player } from "@/lib/gameDocument";
+import { getSelectOptions, selectOption } from "@/testUtils/selectOption";
 
 import { ClaimsList } from "./ClaimsList";
 
@@ -51,13 +52,6 @@ function renderList(
   );
 }
 
-function optionValues(select: HTMLElement) {
-  return Array.from(select.querySelectorAll("option")).map((o) => ({
-    value: (o as HTMLOptionElement).value,
-    label: (o as HTMLOptionElement).text,
-  }));
-}
-
 describe("ClaimsList", () => {
   it("lists every player with a claim select showing their current claim", () => {
     renderList([
@@ -66,26 +60,30 @@ describe("ClaimsList", () => {
     ]);
 
     const alice = screen.getByText("Alice").closest("li")!;
-    expect(within(alice).getByRole("combobox")).toHaveValue("washerwoman");
+    expect(within(alice).getByRole("combobox").dataset.value).toBe("washerwoman");
     const bob = screen.getByText("Bob").closest("li")!;
-    expect(within(bob).getByRole("combobox")).toHaveValue("imp");
+    expect(within(bob).getByRole("combobox").dataset.value).toBe("imp");
   });
 
-  it("shows the 'No claim' placeholder selected for a player who hasn't claimed anything", () => {
+  it("shows the 'No claim' placeholder selected for a player who hasn't claimed anything", async () => {
+    const user = userEvent.setup();
     renderList([makePlayer({ claim: null })]);
 
-    expect(screen.getByRole("combobox")).toHaveValue("");
-    expect(screen.getByRole("option", { name: "No claim" })).toBeInTheDocument();
+    const select = screen.getByRole("combobox");
+    expect(select.dataset.value).toBe("");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.label)).toContain("No claim");
   });
 
-  it("scopes every player's select to exactly the script's claim options", () => {
+  it("scopes every player's select to exactly the script's claim options", async () => {
+    const user = userEvent.setup();
     renderList([
       makePlayer({ id: "p1", seat: 1 }),
       makePlayer({ id: "p2", seat: 2 }),
     ]);
 
     for (const select of screen.getAllByRole("combobox")) {
-      expect(optionValues(select)).toEqual([
+      expect(await getSelectOptions(user, select)).toEqual([
         { value: "", label: "No claim" },
         { value: "washerwoman", label: "Washerwoman" },
         { value: "imp", label: "Imp" },
@@ -98,7 +96,7 @@ describe("ClaimsList", () => {
     const onSetClaim = vi.fn();
     renderList([makePlayer({ id: "p1", claim: null })], { onSetClaim });
 
-    await user.selectOptions(screen.getByRole("combobox"), "imp");
+    await selectOption(user, screen.getByRole("combobox"), "imp");
 
     expect(onSetClaim).toHaveBeenCalledWith("p1", "imp");
   });
@@ -108,7 +106,7 @@ describe("ClaimsList", () => {
     const onSetClaim = vi.fn();
     renderList([makePlayer({ id: "p1", claim: "imp" })], { onSetClaim });
 
-    await user.selectOptions(screen.getByRole("combobox"), "No claim");
+    await selectOption(user, screen.getByRole("combobox"), "No claim");
 
     expect(onSetClaim).toHaveBeenCalledWith("p1", null);
   });
@@ -119,7 +117,7 @@ describe("ClaimsList", () => {
     ]);
 
     const select = screen.getByRole("combobox");
-    expect(select).toHaveValue("poisoner");
+    expect(select.dataset.value).toBe("poisoner");
     expect(within(select).getByText("poisoner")).toBeInTheDocument();
   });
 

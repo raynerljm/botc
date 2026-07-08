@@ -13,7 +13,9 @@ import {
 } from "@/lib/dayPhase";
 import type { GameDocument, Nomination, Player } from "@/lib/gameDocument";
 
+import { Checkbox } from "./Checkbox";
 import styles from "./DayPhase.module.css";
+import { Select } from "./Select";
 
 export interface DayPhaseProps {
   game: GameDocument;
@@ -106,39 +108,37 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       <form className={styles.form} onSubmit={recordNomination}>
         <label className={styles.field}>
           Nominator
-          <select
+          <Select
             className={styles.select}
+            aria-label="Nominator"
             value={nominatorId}
-            onChange={(event) => setNominatorId(event.target.value)}
-          >
-            {game.players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-                {player.dead ? " (dead)" : ""}
-                {hasNominatedToday(game.nominations, player.id)
+            onChange={setNominatorId}
+            entries={game.players.map((player) => ({
+              value: player.id,
+              label: `${player.name}${player.dead ? " (dead)" : ""}${
+                hasNominatedToday(game.nominations, player.id)
                   ? " (already nominated)"
-                  : ""}
-              </option>
-            ))}
-          </select>
+                  : ""
+              }`,
+            }))}
+          />
         </label>
         <label className={styles.field}>
           Nominee
-          <select
+          <Select
             className={styles.select}
+            aria-label="Nominee"
             value={nomineeId}
-            onChange={(event) => setNomineeId(event.target.value)}
-          >
-            {game.players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-                {player.dead ? " (dead)" : ""}
-                {wasNominatedToday(game.nominations, player.id)
+            onChange={setNomineeId}
+            entries={game.players.map((player) => ({
+              value: player.id,
+              label: `${player.name}${player.dead ? " (dead)" : ""}${
+                wasNominatedToday(game.nominations, player.id)
                   ? " (already nominated)"
-                  : ""}
-              </option>
-            ))}
-          </select>
+                  : ""
+              }`,
+            }))}
+          />
         </label>
         <button type="submit" className={styles.submit}>
           Record nomination
@@ -184,8 +184,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                       player.dead && !voted && !canRecordVote(player, nomination.isExile);
                     return (
                       <label key={player.id} className={styles.voter}>
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={voted}
                           onChange={() => toggleVote(nomination, player)}
                         />

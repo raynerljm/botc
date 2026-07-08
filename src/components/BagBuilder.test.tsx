@@ -6,6 +6,7 @@ import { saveBagBuilderDraft } from "@/lib/bagBuilderDraft";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
+import { openListbox, selectOption } from "@/testUtils/selectOption";
 
 import { BagBuilder } from "./BagBuilder";
 
@@ -262,11 +263,11 @@ describe("special flow: Godfather asks +1 or -1 Outsider (AC4)", () => {
 
     await user.click(screen.getByRole("button", { name: /^Godfather/ }));
     const choice = screen.getByLabelText("Godfather setup choice");
-    expect(choice).toHaveDisplayValue("-1 Outsider");
+    expect(choice).toHaveTextContent("-1 Outsider");
 
     // 5p base is 0 Outsiders/3 Townsfolk; -1 Outsider clamps oddly so use
     // the +1 option to see the swap the other way.
-    await user.selectOptions(choice, "+1 Outsider");
+    await selectOption(user, choice, "+1 Outsider");
     expect(screen.getByText("Outsiders 0/1")).toBeInTheDocument();
     expect(screen.getByText("Townsfolk 0/2")).toBeInTheDocument();
   });
@@ -293,8 +294,8 @@ describe("special flow: Drunk stand-in (AC4)", () => {
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
 
     const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
-    await user.selectOptions(standIn, "Washerwoman");
-    expect(standIn).toHaveDisplayValue("Washerwoman");
+    await selectOption(user, standIn, "Washerwoman");
+    expect(standIn).toHaveTextContent("Washerwoman");
   });
 
   it("clears the stand-in prompt when the Drunk is deselected", async () => {
@@ -317,12 +318,13 @@ describe("special flow: Drunk stand-in (AC4)", () => {
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
 
     const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
+    const listbox = await openListbox(user, standIn);
     expect(
-      within(standIn).getByRole("option", { name: "Washerwoman" }),
+      within(listbox).getByRole("option", { name: "Washerwoman" }),
     ).toBeInTheDocument();
     // Professor is an official Townsfolk, but not part of this script.
     expect(
-      within(standIn).queryByRole("option", { name: "Professor" }),
+      within(listbox).queryByRole("option", { name: "Professor" }),
     ).not.toBeInTheDocument();
   });
 
@@ -332,14 +334,14 @@ describe("special flow: Drunk stand-in (AC4)", () => {
 
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
     const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
-    await user.selectOptions(standIn, "Washerwoman");
-    expect(standIn).toHaveDisplayValue("Washerwoman");
+    await selectOption(user, standIn, "Washerwoman");
+    expect(standIn).toHaveTextContent("Washerwoman");
 
     // Washerwoman is now claimed as the stand-in; selecting her for real
     // (a plain, unrestricted action) should give up that stand-in slot.
     await user.click(screen.getByRole("button", { name: /^Washerwoman/ }));
 
-    expect(standIn).toHaveDisplayValue("Choose a stand-in…");
+    expect(standIn).toHaveTextContent("Choose a stand-in…");
   });
 
   it("warns, but never blocks, when the Drunk has no stand-in picked yet (ADR 0003)", async () => {
@@ -361,7 +363,7 @@ describe("special flow: Drunk stand-in (AC4)", () => {
       screen.getByRole("button", { name: /Continue to seating/i }),
     ).not.toBeDisabled();
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText(/Pick the Drunk's stand-in/),
       "Washerwoman",
     );
@@ -381,7 +383,7 @@ describe("Drunk stand-in tallies count once, as an Outsider (issue #76)", () => 
     expect(screen.getByText("Townsfolk 0/3")).toBeInTheDocument();
     expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText(/Pick the Drunk's stand-in/),
       "Washerwoman",
     );
@@ -397,7 +399,7 @@ describe("Drunk stand-in tallies count once, as an Outsider (issue #76)", () => 
     render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
 
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText(/Pick the Drunk's stand-in/),
       "Washerwoman",
     );
@@ -680,7 +682,14 @@ describe("warnings are advisory, never blocking (AC6)", () => {
       "data-state",
       "over",
     );
+    // Excludes the player-/traveller-count NumberStepper's own +/− buttons:
+    // those are legitimately disabled at their min/max bounds, unrelated to
+    // this AC's concern (bag-composition deviation must never disable a
+    // character toggle).
     for (const button of screen.getAllByRole("button")) {
+      if (/^(Increase|Decrease) /.test(button.getAttribute("aria-label") ?? "")) {
+        continue;
+      }
       expect(button).not.toBeDisabled();
     }
   });

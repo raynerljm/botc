@@ -35,6 +35,8 @@ import {
 import { CharacterToken } from "./CharacterToken";
 import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./BagBuilder.module.css";
+import { NumberStepper } from "./NumberStepper";
+import { Select } from "./Select";
 
 // Setup characters whose bracket text isn't a structured count delta, but
 // which break the normal team distribution by design — their own ability
@@ -526,47 +528,41 @@ export function BagBuilder({
   return (
     <div className={styles.main}>
       <div className={styles.controls}>
-        <label className={styles.field}>
-          Player count
-          <input
-            type="number"
+        <div className={styles.field}>
+          <span>Player count</span>
+          {/* Clamping is deferred to blur: clamping on every keystroke
+              fights the browser's in-progress digit-by-digit typing (e.g.
+              typing "13" would clamp the intermediate "1" to 5 first), and
+              an empty string is kept as-is so the field can actually be
+              blanked mid-edit instead of snapping to 0. */}
+          <NumberStepper
+            aria-label="Player count"
             min={MIN_PLAYERS}
             max={maxPlayers}
             value={playerCount}
-            // Clamping is deferred to blur: clamping on every keystroke
-            // fights the browser's in-progress digit-by-digit typing (e.g.
-            // typing "13" would clamp the intermediate "1" to 5 first), and
-            // an empty string is kept as-is so the field can actually be
-            // blanked mid-edit instead of snapping to 0.
-            onChange={(event) => {
-              const raw = event.target.value;
-              setPlayerCount(raw === "" ? "" : Number(raw));
-            }}
+            onChange={setPlayerCount}
             onBlur={() =>
               setPlayerCount((value) =>
                 clamp(value === "" ? NaN : value, MIN_PLAYERS, maxPlayers),
               )
             }
           />
-        </label>
-        <label className={styles.field}>
-          Traveller count
-          <input
-            type="number"
+        </div>
+        <div className={styles.field}>
+          <span>Traveller count</span>
+          <NumberStepper
+            aria-label="Traveller count"
             min={0}
             max={MAX_TRAVELLERS}
             value={travellerCount}
-            onChange={(event) => {
-              const raw = event.target.value;
-              setTravellerCount(raw === "" ? "" : Number(raw));
-            }}
+            onChange={setTravellerCount}
             onBlur={() =>
               setTravellerCount((value) =>
                 clamp(value === "" ? NaN : value, 0, MAX_TRAVELLERS),
               )
             }
           />
-        </label>
+        </div>
         <button
           type="button"
           className={styles.randomize}
@@ -643,18 +639,18 @@ export function BagBuilder({
             Pick the Drunk&apos;s stand-in (the Townsfolk the player believes
             they are)
           </label>
-          <select
+          <Select
             id="stand-in-select"
             value={standInId ?? ""}
-            onChange={(event) => setStandInId(event.target.value || null)}
-          >
-            <option value="">Choose a stand-in…</option>
-            {availableStandIns.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setStandInId(next || null)}
+            entries={[
+              { value: "", label: "Choose a stand-in…" },
+              ...availableStandIns.map((character) => ({
+                value: character.id,
+                label: character.name,
+              })),
+            ]}
+          />
         </div>
       )}
 
@@ -733,45 +729,42 @@ export function BagBuilder({
                       </span>
                     </button>
                     {choiceOptions && (
-                      <select
+                      <Select
                         className={styles.select}
                         aria-label={`${character.name} setup choice`}
-                        value={modifierChoices[character.id] ?? 0}
-                        onChange={(event) =>
+                        value={String(modifierChoices[character.id] ?? 0)}
+                        onChange={(next) =>
                           setModifierChoices((prev) => ({
                             ...prev,
-                            [character.id]: Number(event.target.value),
+                            [character.id]: Number(next),
                           }))
                         }
-                      >
-                        {choiceOptions.map((option, index) => (
-                          <option key={option.label} value={index}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        entries={choiceOptions.map((option, index) => ({
+                          value: String(index),
+                          label: option.label,
+                        }))}
+                      />
                     )}
                     {copiesRange && (
-                      <label>
-                        Extra {character.name} copies
-                        <input
-                          type="number"
+                      <div className={styles.extraCopies}>
+                        <span>{`Extra ${character.name} copies`}</span>
+                        <NumberStepper
                           aria-label={`Extra ${character.name} copies`}
                           min={copiesRange.min}
                           max={copiesRange.max}
                           value={extraCopies[character.id] ?? 0}
-                          onChange={(event) =>
+                          onChange={(next) =>
                             setExtraCopies((prev) => ({
                               ...prev,
                               [character.id]: clamp(
-                                Number(event.target.value),
+                                next === "" ? 0 : next,
                                 copiesRange.min,
                                 copiesRange.max,
                               ),
                             }))
                           }
                         />
-                      </label>
+                      </div>
                     )}
                   </li>
                 );

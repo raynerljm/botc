@@ -39,6 +39,7 @@ import { InfoTokenShowMode } from "./InfoTokenShowMode";
 import { ReminderChip } from "./ReminderChip";
 import { ReminderPicker } from "./ReminderPicker";
 import styles from "./GrimoireBoard.module.css";
+import { Select } from "./Select";
 
 export interface GrimoireBoardProps {
   players: Player[];
@@ -849,24 +850,19 @@ export function GrimoireBoard({
                       htmlFor={`swap-character-${player.id}`}
                     >
                       Swap character
-                      <select
+                      <Select
                         id={`swap-character-${player.id}`}
                         className={styles.select}
                         value={player.characterId ?? ""}
-                        onChange={(event) =>
-                          onSwapCharacter(player.id, event.target.value)
-                        }
-                      >
-                        {swapOptionsForPlayer.map((group) => (
-                          <optgroup key={group.team} label={teamNames[group.team]}>
-                            {group.characters.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(next) => onSwapCharacter(player.id, next)}
+                        entries={swapOptionsForPlayer.map((group) => ({
+                          label: teamNames[group.team],
+                          options: group.characters.map((c) => ({
+                            value: c.id,
+                            label: c.name,
+                          })),
+                        }))}
+                      />
                     </label>
 
                     {isHiddenDrunk && (
@@ -905,32 +901,29 @@ export function GrimoireBoard({
 
                     <label className={styles.field} htmlFor={`token-claim-${player.id}`}>
                       Claim
-                      <select
+                      <Select
                         id={`token-claim-${player.id}`}
                         className={styles.claimSelect}
                         value={player.claim ?? ""}
-                        onChange={(event) =>
-                          onSetClaim(player.id, event.target.value || null)
-                        }
-                      >
-                        <option value="">No claim</option>
-                        {/* A claim recorded before the script last changed can
-                            reference a character no longer in claimOptions —
-                            keep it selectable/visible by id rather than
-                            silently resetting the row to "No claim". */}
-                        {player.claim && !claimById.has(player.claim) && (
-                          <option value={player.claim}>{player.claim}</option>
-                        )}
-                        {claimGroups.map((group) => (
-                          <optgroup key={group.team} label={teamNames[group.team]}>
-                            {group.characters.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(next) => onSetClaim(player.id, next || null)}
+                        entries={[
+                          { value: "", label: "No claim" },
+                          // A claim recorded before the script last changed can
+                          // reference a character no longer in claimOptions —
+                          // keep it selectable/visible by id rather than
+                          // silently resetting the row to "No claim".
+                          ...(player.claim && !claimById.has(player.claim)
+                            ? [{ value: player.claim, label: player.claim }]
+                            : []),
+                          ...claimGroups.map((group) => ({
+                            label: teamNames[group.team],
+                            options: group.characters.map((c) => ({
+                              value: c.id,
+                              label: c.name,
+                            })),
+                          })),
+                        ]}
+                      />
                     </label>
 
                     <label
@@ -938,25 +931,22 @@ export function GrimoireBoard({
                       htmlFor={`token-acts-as-${player.id}`}
                     >
                       Acts as
-                      <select
+                      <Select
                         id={`token-acts-as-${player.id}`}
                         className={styles.select}
                         value={player.actsAs ?? ""}
-                        onChange={(event) =>
-                          onSetActsAs(player.id, event.target.value || null)
-                        }
-                      >
-                        <option value="">Not acting as anyone</option>
-                        {claimGroups.map((group) => (
-                          <optgroup key={group.team} label={teamNames[group.team]}>
-                            {group.characters.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(next) => onSetActsAs(player.id, next || null)}
+                        entries={[
+                          { value: "", label: "Not acting as anyone" },
+                          ...claimGroups.map((group) => ({
+                            label: teamNames[group.team],
+                            options: group.characters.map((c) => ({
+                              value: c.id,
+                              label: c.name,
+                            })),
+                          })),
+                        ]}
+                      />
                     </label>
 
                     <div className={styles.seatControls}>
