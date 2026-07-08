@@ -139,6 +139,46 @@ describe("InfoTokenLibrary", () => {
 });
 
 describe("dialog dismiss behavior (issue #122)", () => {
+  it("keeps focus inside the library after the browsing→attach transition, so the Tab trap doesn't fall through to <body> (code review)", async () => {
+    const user = userEvent.setup();
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // The clicked card unmounts as part of this transition (chosenText flips
+    // from null to a string) — if focus falls through to <body>, the shared
+    // hook's Tab trap (which only intercepts Tab at the container's
+    // first/last focusable) never engages again for the rest of this mount.
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it("keeps focus inside the library after going Back to the browsing step (code review)", async () => {
+    const user = userEvent.setup();
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "Back" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Info tokens" });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+
   it("moves focus into the library on open, traps Tab within it, and restores focus to the trigger on close", async () => {
     const user = userEvent.setup();
     function Harness() {

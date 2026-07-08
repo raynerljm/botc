@@ -143,6 +143,47 @@ describe("SetupWalkthrough shell", () => {
     expect(within(step).getByRole("button", { name: /skip/i })).toHaveFocus();
   });
 
+  it("keeps focus inside the dialog after resolving a step, so the Tab trap doesn't fall through to <body> (code review)", async () => {
+    // A bare renderWalkthrough() call doesn't feed onResolveStep back into
+    // stepStatuses, so the step would never actually leave its "editing"
+    // view — this needs a real stateful wrapper (as GrimoireSetup is) to
+    // reproduce the step transition that unmounts the just-clicked Confirm
+    // button in the same commit.
+    const user = userEvent.setup();
+    function Wrapper() {
+      const [stepStatuses, setStepStatuses] = useState<
+        Record<string, "answered" | "skipped">
+      >({});
+      return (
+        <SetupWalkthrough
+          steps={[fortuneTellerStep]}
+          stepStatuses={stepStatuses}
+          players={[
+            makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
+            makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+            makePlayer({ id: "p3", seat: 3, name: "Cara", characterId: "chef" }),
+          ]}
+          characterPool={characterPool}
+          onResolveStep={(stepId, status) =>
+            setStepStatuses((current) => ({ ...current, [stepId]: status }))
+          }
+          onReassignStandIn={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+    }
+    render(<Wrapper />);
+
+    const step = screen.getByRole("group", { name: fortuneTellerStep.title });
+    const playerSelect = within(step).getByLabelText(/player/i);
+    await user.selectOptions(playerSelect, selectPlayerNamed(playerSelect, "Cara"));
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
   it("calls onClose on Escape and restores focus to the trigger on close (issue #122)", async () => {
     const user = userEvent.setup();
     function ToggleHarness() {

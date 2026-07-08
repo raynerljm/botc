@@ -44,9 +44,31 @@ export function useDialogDismiss(
       }
     }
 
+    // A dialog can resolve an internal step/screen (SetupWalkthrough
+    // confirming a step, InfoTokenLibrary choosing a card) by unmounting the
+    // very control that was focused, in the same commit that mounts its
+    // replacement — the browser drops focus to <body> when that happens.
+    // The Tab trap above only ever intercepts Tab at the container's
+    // first/last focusable, so once activeElement is <body> it stops
+    // engaging for the rest of this mount. A MutationObserver (rather than a
+    // focusout listener, which doesn't fire for this case) catches every
+    // such removal and pulls focus back onto the dialog's stable anchor; a
+    // no-op once the whole dialog (not just an inner screen) has itself
+    // unmounted, since containerRef.current is null by then too.
+    const container = containerRef.current;
+    const focusRecovery = new MutationObserver(() => {
+      if (container && !container.contains(document.activeElement)) {
+        initialFocusRef.current?.focus();
+      }
+    });
+    if (container) {
+      focusRecovery.observe(container, { childList: true, subtree: true });
+    }
+
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      focusRecovery.disconnect();
       // The trigger can be gone by the time this runs — e.g. confirming
       // "Delete game" or "Remove player" removes the very row/token that
       // hosted it in the same commit that unmounts this dialog. Focusing a

@@ -144,11 +144,9 @@ function ShowToDemonOverlay({
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Same shared dialog semantics as ConfirmDialog (issue #122): focus moves
-  // in on open, Tab is trapped within the overlay, Escape closes it (the
-  // overlay is already fully opaque and full-viewport, so nothing was ever
-  // reachable behind it — this just makes Escape and the keyboard trap
-  // honor that), and focus returns to "Show to Demon" on close.
+  // The overlay was already fully opaque and full-viewport, so nothing was
+  // ever reachable behind it — this just makes Escape and the keyboard trap
+  // honor that too (issue #122).
   useDialogDismiss(dialogRef, closeButtonRef, onClose);
 
   return (

@@ -680,13 +680,9 @@ export function SetupWalkthrough({
   // component makes the rest of the page inert — GrimoireSetup keeps
   // ShareScriptButton/EndGamePanel mounted and focusable underneath it
   // (deliberately, so they stay reachable while the device is obscured
-  // mid-draw; see its "always reachable" comment) — so without this, Tab
-  // could silently reach "Good wins"/"Evil wins" behind the backdrop (code
-  // review finding). Same shared dialog semantics as ConfirmDialog (issue
-  // #122): focus moves in on open, Tab is trapped (re-querying the DOM live
-  // on every Tab, since a step's own controls change as it's
-  // answered/skipped/redone while the dialog stays open), Escape closes,
-  // and focus returns to "Setup walkthrough" on close.
+  // mid-draw; see its "always reachable" comment) — so without a real Tab
+  // trap, Tab could silently reach "Good wins"/"Evil wins" behind the
+  // backdrop (code review finding, issue #122).
   useDialogDismiss(dialogRef, closeButtonRef, onClose);
 
   return (

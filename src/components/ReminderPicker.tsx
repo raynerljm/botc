@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import type { Character } from "@/lib/characters";
 
+import { DialogOverlay } from "./DialogOverlay";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
 import styles from "./ReminderPicker.module.css";
@@ -31,10 +32,8 @@ export function ReminderPicker({
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Same shared dialog semantics as ConfirmDialog (issue #122): focus moves
-  // in on open, Tab is trapped within the picker so it can't reach the board
-  // controls (Re-circle, Hide grimoire) behind the backdrop, Escape cancels,
-  // and focus returns to the trigger on close.
+  // The Tab trap is what keeps board controls (Re-circle, Hide grimoire)
+  // unreachable behind the new backdrop (issue #122).
   useDialogDismiss(dialogRef, cancelButtonRef, onCancel);
 
   const characters = Array.from(characterById.values());
@@ -49,12 +48,7 @@ export function ReminderPicker({
   );
 
   return (
-    <div
-      className={styles.overlay}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
-    >
+    <DialogOverlay onCancel={onCancel}>
       <div
         ref={dialogRef}
         className={styles.picker}
@@ -112,6 +106,6 @@ export function ReminderPicker({
           onSubmit={(label) => onAdd({ characterId: null, label })}
         />
       </div>
-    </div>
+    </DialogOverlay>
   );
 }

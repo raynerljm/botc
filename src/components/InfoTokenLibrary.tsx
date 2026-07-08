@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { STANDARD_INFO_TOKENS } from "@/lib/infoTokens";
 
+import { DialogOverlay } from "./DialogOverlay";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
 import styles from "./InfoTokenLibrary.module.css";
@@ -32,14 +33,14 @@ export function InfoTokenLibrary({
   );
   const dialogRef = useRef<HTMLDivElement>(null);
   // Shared by both steps' Cancel button (only one is ever mounted at a
-  // time) — the hook only needs whichever is current when it focuses on
-  // mount, which is always the browsing step's.
+  // time) — it's the initial-focus target on mount (always the browsing
+  // step's, since that's the initial screen) and also useDialogDismiss's
+  // recovery anchor if a step transition unmounts whatever was focused, so
+  // it needs to stay valid on both steps, not just the first.
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Same shared dialog semantics as ConfirmDialog (issue #122): focus moves
-  // in on open, Tab is trapped within the library so it can't reach the
-  // board controls (Re-circle, Hide grimoire) behind the backdrop, Escape
-  // cancels, and focus returns to the trigger on close.
+  // The Tab trap is what keeps board controls (Re-circle, Hide grimoire)
+  // unreachable behind the new backdrop (issue #122).
   useDialogDismiss(dialogRef, cancelButtonRef, onCancel);
 
   function chooseText(text: string) {
@@ -59,12 +60,7 @@ export function InfoTokenLibrary({
     chosenText !== null ? groupByTeam(Array.from(characterById.values())) : [];
 
   return (
-    <div
-      className={styles.overlay}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
-    >
+    <DialogOverlay onCancel={onCancel}>
       <div
         ref={dialogRef}
         className={styles.library}
@@ -131,6 +127,6 @@ export function InfoTokenLibrary({
           </>
         )}
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
