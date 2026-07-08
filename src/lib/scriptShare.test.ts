@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { Character } from "./characters";
-import { resolveCharacterId } from "./scriptParser";
+import { parseScript, resolveCharacterId } from "./scriptParser";
 import {
   buildShareUrl,
   decodeScriptForShare,
   encodeScriptForShare,
   exceedsQrCapacity,
   isTooLargeForReliableQr,
+  scriptToRawJson,
 } from "./scriptShare";
 
 describe("encodeScriptForShare / decodeScriptForShare", () => {
@@ -140,6 +141,53 @@ describe("encodeScriptForShare / decodeScriptForShare", () => {
   it("fails to decode a string that isn't validly encoded", () => {
     const result = decodeScriptForShare("not-a-valid-encoded-script!!");
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("scriptToRawJson", () => {
+  it("produces script-tool JSON that parseScript reads back to the same meta and characters", () => {
+    const washerwoman = resolveCharacterId("washerwoman")!;
+    const imp = resolveCharacterId("imp")!;
+    const json = scriptToRawJson({ name: "My Script", author: "Me" }, [
+      washerwoman,
+      imp,
+    ]);
+
+    const result = parseScript(json);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.meta).toMatchObject({
+      name: "My Script",
+      author: "Me",
+    });
+    expect(result.script.characters.map((c) => c.id).sort()).toEqual(
+      ["imp", "washerwoman"].sort(),
+    );
+  });
+
+  it("round-trips a full homebrew character object", () => {
+    const custom: Character = {
+      id: "custom-seer",
+      name: "Custom Seer",
+      edition: null,
+      team: "townsfolk",
+      ability: "Each night, learn a number of evil players.",
+      firstNight: 0,
+      firstNightReminder: "",
+      otherNight: 45,
+      otherNightReminder: "Show the count of evil players.",
+      reminders: ["Used"],
+      remindersGlobal: [],
+      setup: false,
+      jinxes: [],
+      image: null,
+    };
+    const json = scriptToRawJson({}, [custom]);
+
+    const result = parseScript(json);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.characters).toEqual([custom]);
   });
 });
 

@@ -40,8 +40,10 @@ export default async function BagBuilderPage({ params }: Props) {
         <Link href={`/scripts/${scriptId}`} className={styles.back}>
           ← {script.name}
         </Link>
-        <h1 className={styles.title}>{script.name}</h1>
-        {isTeensyville && <TeensyvilleBadge />}
+        <h1 className={styles.title}>
+          {script.name}
+          {isTeensyville && <TeensyvilleBadge />}
+        </h1>
       </header>
       <BagBuilder
         characters={script.characters}

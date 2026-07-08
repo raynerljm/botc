@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -152,5 +152,18 @@ describe("script sheet", () => {
   it("does not mark a regular script as Teensyville", async () => {
     await renderSheet("tb");
     expect(screen.queryByText("Teensyville")).not.toBeInTheDocument();
+  });
+
+  it("renders the Teensyville designation for a Teensyville script, not for a regular one (issue #120)", async () => {
+    await renderSheet("no-greater-joy");
+    expect(
+      screen.getByRole("heading", { name: /No Greater Joy/ }),
+    ).toHaveTextContent(/teensyville/i);
+
+    cleanup();
+    await renderSheet("tb");
+    expect(
+      screen.getByRole("heading", { name: "Trouble Brewing" }),
+    ).not.toHaveTextContent(/teensyville/i);
   });
 });

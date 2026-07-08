@@ -39,8 +39,10 @@ export default async function ScriptSheetPage({ params }: Props) {
         <Link href="/" className={styles.back}>
           ← Scripts
         </Link>
-        <h1 className={styles.title}>{script.name}</h1>
-        {isTeensyvilleScript(script.meta) && <TeensyvilleBadge />}
+        <h1 className={styles.title}>
+          {script.name}
+          {isTeensyvilleScript(script.meta) && <TeensyvilleBadge />}
+        </h1>
         <ShareScriptButton meta={script.meta} characters={script.characters} />
         <Link href={`/scripts/${scriptId}/bag`} className={styles.buildBag}>
           Build the bag →

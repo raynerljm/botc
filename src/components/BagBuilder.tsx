@@ -302,7 +302,6 @@ export function BagBuilder({
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
     );
   }
-
   function toggleCharacter(character: Character) {
     setSelectedIds((prev) => {
       const next = new Set(prev);

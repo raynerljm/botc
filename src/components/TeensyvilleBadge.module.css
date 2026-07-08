@@ -1,4 +1,5 @@
 .badge {
+  margin-left: 0.6rem;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -7,4 +8,5 @@
   border: 1px solid var(--accent);
   border-radius: 1rem;
   padding: 0.1rem 0.5rem;
+  vertical-align: middle;
 }

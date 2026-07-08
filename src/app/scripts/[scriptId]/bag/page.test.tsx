@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import BagBuilderPage, { generateStaticParams } from "./page";
@@ -50,5 +50,18 @@ describe("bag builder page", () => {
 
     expect(screen.queryByText("Teensyville")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Player count")).toHaveAttribute("max", "15");
+  });
+
+  it("renders the Teensyville designation for a Teensyville script, not for a regular one (issue #120)", async () => {
+    await renderBagPage("no-greater-joy");
+    expect(
+      screen.getByRole("heading", { name: /No Greater Joy/ }),
+    ).toHaveTextContent(/teensyville/i);
+
+    cleanup();
+    await renderBagPage("tb");
+    expect(
+      screen.getByRole("heading", { name: "Trouble Brewing" }),
+    ).not.toHaveTextContent(/teensyville/i);
   });
 });

@@ -73,6 +73,35 @@ describe("AddScriptDialog", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("rejects an empty script instead of saving it as Untitled script", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: { value: "[]" },
+    });
+    await user.click(screen.getByRole("button", { name: "Add script" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/no characters/i);
+    expect(listCustomScripts()).toEqual([]);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("rejects a script containing only a _meta entry", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: { value: JSON.stringify([{ id: "_meta" }]) },
+    });
+    await user.click(screen.getByRole("button", { name: "Add script" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/no characters/i);
+    expect(listCustomScripts()).toEqual([]);
+  });
+
   it("shows a friendly error for an unknown character id", async () => {
     render(<AddScriptDialog onAdded={vi.fn()} />);
     const user = userEvent.setup();
@@ -85,6 +114,22 @@ describe("AddScriptDialog", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       /unknown character id.*not-a-character/i,
+    );
+  });
+
+  it("renders a long unknown character id in full, without truncating the text content (overflow is fixed via CSS wrapping)", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+    const longId = "x".repeat(200);
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: { value: JSON.stringify([longId]) },
+    });
+    await user.click(screen.getByRole("button", { name: "Add script" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      new RegExp(longId),
     );
   });
 
