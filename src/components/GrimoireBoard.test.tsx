@@ -609,14 +609,14 @@ describe("re-circle", () => {
 
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    expect(wrap.style.left).toBe("35%");
+    expect(wrap.style.left).toBe("20%");
 
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     // The stale in-progress drag position must not resurface on the next
     // pointermove for the same (now-abandoned) gesture.
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
 
-    expect(wrap.style.left).not.toBe("35%");
+    expect(wrap.style.left).not.toBe("20%");
   });
 });
 
@@ -632,8 +632,8 @@ describe("drag", () => {
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
 
-    expect(wrap.style.left).toBe("35%");
-    expect(wrap.style.top).toBe("45%");
+    expect(wrap.style.left).toBe("60%");
+    expect(wrap.style.top).toBe("25%");
     // Persisting on every pointermove would mean dozens of full-document
     // localStorage writes a second during a real touch drag.
     expect(onMove).not.toHaveBeenCalled();
@@ -652,7 +652,7 @@ describe("drag", () => {
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
 
     expect(onMove).toHaveBeenCalledTimes(1);
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 50 });
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 65, y: 30 });
   });
 
   it("discards the in-progress move if the gesture is cancelled", () => {
@@ -687,7 +687,7 @@ describe("drag", () => {
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
 
     expect(onMove).toHaveBeenCalledTimes(1);
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 50 });
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 65, y: 30 });
   });
 
   it("doesn't move for tiny pointer jitter under the drag threshold", () => {
@@ -717,6 +717,38 @@ describe("drag", () => {
     fireEvent.click(summary);
 
     expect(details.open).toBe(false);
+  });
+
+  // Issue #167: the drag used to set the token's centre to the raw pointer
+  // position, ignoring where inside the token (icon vs. name label, a tall
+  // stack) it was actually grabbed — snapping the token under the finger the
+  // instant the drag threshold crossed. Grabbing off-centre and moving by a
+  // known delta proves the grab offset is captured and preserved: the token
+  // should move by exactly that delta, landing exactly where it started plus
+  // the delta, not at the raw pointer position.
+  it("keeps an off-centre grab point under the finger instead of snapping the token's centre to it", () => {
+    const { container, onMove } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 30, y: 40 } }),
+    ]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+
+    // Token centre is at 30%/40% of the 400px board, i.e. (120, 160). Grab
+    // 20px right and 10px down of centre — e.g. the name label below the icon.
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 140, clientY: 170 }));
+    // Move the pointer 40px right, 0px down (past the drag threshold).
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 170 }));
+
+    // The token must move by exactly the pointer's delta (+10% x, +0% y),
+    // not jump to the raw pointer position (which would read 45%/42.5%).
+    expect(wrap.style.left).toBe("40%");
+    expect(wrap.style.top).toBe("40%");
+
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 170 }));
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 40 });
   });
 });
 
@@ -844,11 +876,11 @@ describe("reminders (issue #14)", () => {
 
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    expect(wrap.style.left).toBe("35%");
+    expect(wrap.style.left).toBe("70%");
     expect(onMoveReminder).not.toHaveBeenCalled();
 
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
-    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 35, y: 45 });
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 70, y: 60 });
     expect(onMove).not.toHaveBeenCalled();
   });
 
@@ -999,7 +1031,56 @@ describe("reminder placement (issue #71)", () => {
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }));
 
     const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
-    expect(parseFloat(wrap.style.left)).toBeCloseTo(45);
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(50);
+  });
+
+  // Issue #167 AC: an anchored reminder renders offset below its seat (see
+  // "renders a reminder anchored to a seat below that seat's token" above),
+  // not at its own stale stored `position`. Dragging it must start from that
+  // displayed offset spot, not snap to the pointer on pickup.
+  it("starts dragging an anchored reminder from its displayed offset position, not its stale stored position", () => {
+    const reminder = makeReminder({
+      id: "r1",
+      anchorPlayerId: "p1",
+      // Deliberately stale/unrelated to where the reminder actually renders
+      // (below the seat) — proves the drag doesn't grab-offset against this.
+      position: { x: 1, y: 1 },
+    });
+    const { container, onMoveReminder } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+    const reminderSummary = container.querySelector(
+      "[data-reminder-id='r1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    // Displayed anchored position: same x as the seat (30%), offset below
+    // it in y (30%/52% per anchoredReminderPosition, i.e. (120, 208) on the
+    // 400px board) — not the seat's own centre and not the stored (1, 1).
+    expect(wrap.style.left).toBe("30%");
+    expect(wrap.style.top).toBe("52%");
+
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 120, clientY: 208 }),
+    );
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 208 }),
+    );
+
+    // Grabbed exactly at the displayed spot and moved 40px (10%) right, so
+    // the reminder should land at 40%/52% — not jump to the raw pointer
+    // position, and not offset against the stale stored (1, 1).
+    expect(wrap.style.left).toBe("40%");
+    expect(wrap.style.top).toBe("52%");
+
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 208 }),
+    );
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 40, y: 52 });
   });
 
   it("attaches an existing reminder to a seat by tapping it, without a drag gesture", async () => {
@@ -1296,7 +1377,7 @@ describe("info tokens (issue #19)", () => {
     fireEvent(summaryAfter, pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }));
     fireEvent(summaryAfter, pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }));
     fireEvent(summaryAfter, pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }));
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 35, y: 45 });
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 60, y: 25 });
   });
 
   it("hides the pad's info tokens trigger while the reminder picker is open, and vice versa", async () => {
