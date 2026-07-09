@@ -57,12 +57,6 @@
   color: var(--foreground);
 }
 
-.assignedPlaceholder {
-  font-size: 0.9rem;
-  font-style: italic;
-  color: var(--muted);
-}
-
 .assignedCharacter {
   display: flex;
   align-items: center;
@@ -143,14 +137,21 @@
   gap: 0.75rem;
   list-style: none;
   padding: 0;
+  max-width: 32rem;
 }
 
 .faceDownToken {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 50%;
   background: var(--surface-raised);
   border: 2px solid var(--border);
+  color: var(--foreground);
+  font-size: 1.1rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -200,6 +201,15 @@
   align-items: center;
   gap: 1rem;
   animation: reveal-in 200ms ease;
+}
+
+/* Full-screen choosing stage (issue #158): composes .reveal's fixed-viewport
+   privacy backdrop (including its documented `safe center` fallback) so the
+   seats list behind it can't show through and the drawing player sees only
+   these tokens. */
+.choosingFullscreen {
+  composes: reveal;
+  gap: 1.5rem;
 }
 
 /* The physical beat this mirrors is flipping a drawn token face-up, not a

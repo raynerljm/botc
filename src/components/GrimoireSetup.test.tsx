@@ -344,8 +344,9 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
-    // Once the next player has confirmed, the setup screen is back.
-    expect(screen.getByLabelText("Seat 1 name")).toBeInTheDocument();
+    // The next seat's own choosing stage keeps the seats list hidden too
+    // (issue #158) — it only reappears once the whole draw session ends.
+    expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
   });
 
   it("hides every seat's manual-assign select while a draw session is active, so bag composition never appears on screen (issue #111)", async () => {
@@ -372,6 +373,56 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     expect(screen.queryByText(washerwoman.name)).not.toBeInTheDocument();
     expect(screen.queryByText(imp.name)).not.toBeInTheDocument();
     expect(screen.queryByText(baron.name)).not.toBeInTheDocument();
+  });
+
+  it("hides the seats list and every per-seat status placeholder during the choosing stage, showing only the face-down tokens (issue #158)", async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("baron")!,
+    ];
+    const game = makeGame({ playerCount: 3, selectedCharacters: candidates });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+
+    // Seat 1 is already assigned and seat 3 is still unassigned, so before
+    // this fix the seats list would show both an "Assigned" and a "Draw in
+    // progress" placeholder alongside seat 2's face-down grid. None of that
+    // belongs on screen while seat 2 is choosing — only the tokens do.
+    expect(
+      screen.queryByRole("list", { name: "Seats" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Assigned")).not.toBeInTheDocument();
+    expect(screen.queryByText("Draw in progress")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Seat \d+ name/)).not.toBeInTheDocument();
+
+    // The tokens themselves are still there, still tappable.
+    expect(
+      screen.getAllByRole("button", { name: /Face-down token/ }),
+    ).toHaveLength(2);
+  });
+
+  it("shows each face-down token's position number, staying in sync with its accessible label", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+
+    const faceDownTokens = screen.getAllByRole("button", {
+      name: /Face-down token/,
+    });
+    faceDownTokens.forEach((button, index) => {
+      expect(button).toHaveAccessibleName(`Face-down token ${index + 1}`);
+      expect(within(button).getByText(String(index + 1))).toBeInTheDocument();
+    });
   });
 
   it("keeps the grimoire board and end-game controls hidden behind the reveal when the very last seat is drawn", async () => {
@@ -871,8 +922,13 @@ describe("naming the drawn seat's player (issue #54)", () => {
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
     await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
-    // Once the reveal is dismissed, the plain field is back for later edits.
-    expect(screen.getByLabelText("Seat 1 name")).toHaveValue("Player 1");
+    // The field stays hidden through the rest of the draw session too — the
+    // next seat's own choosing stage hides the whole seats list (issue #158),
+    // so it doesn't reappear until every seat is filled. The name itself
+    // still survives that round-trip, just checked at the data layer now
+    // rather than by reading it back out of a re-shown input.
+    expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
+    expect(loadGame()!.players[0].name).toBe("Player 1");
   });
 });
 
