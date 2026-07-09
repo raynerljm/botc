@@ -122,6 +122,8 @@
 }
 
 .blockBadge {
+  display: inline-block;
+  margin: 0.35rem 0 0;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
