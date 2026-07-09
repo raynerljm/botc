@@ -470,15 +470,20 @@ describe("Day phase: surfacing the block on the nomination that holds it", () =>
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    const [firstCheckbox] = screen.getAllByRole("checkbox");
     await user.click(screen.getByRole("checkbox", { name: voter1.name }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("checkbox", { name: voter2.name }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
+    // Compare against the LAST checkbox (queried fresh, post-rerender), not
+    // just the first — a badge inserted after checkbox 1 but before the
+    // rest would wrongly pass a first-checkbox-only comparison (Copilot
+    // review finding).
+    const checkboxes = screen.getAllByRole("checkbox");
+    const lastCheckbox = checkboxes[checkboxes.length - 1];
     const blockBadge = within(screen.getAllByRole("listitem")[0]).getByText("On the block");
     expect(
-      firstCheckbox.compareDocumentPosition(blockBadge) & Node.DOCUMENT_POSITION_FOLLOWING,
+      lastCheckbox.compareDocumentPosition(blockBadge) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 });
