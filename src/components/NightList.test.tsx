@@ -352,6 +352,32 @@ describe("Night list: entries", () => {
         .closest("li"),
     ).toHaveAttribute("data-checked");
   });
+
+  it("flags a disguised Drunk's entry so the storyteller doesn't run it as a real wake", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const disguised: GameDocument = {
+      ...game,
+      players: [{ ...game.players[0], isDrunk: true }, game.players[1]],
+    };
+    renderNightList(disguised);
+
+    expect(screen.getByText("(actually the Drunk)")).toBeInTheDocument();
+  });
+
+  it("flags a disguised Lunatic's entry so the storyteller runs the fake ritual, not a real Demon action (issue #163)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["imp", "washerwoman"], { night: 0, nightOpen: true });
+    const disguised: GameDocument = {
+      ...game,
+      players: [{ ...game.players[0], isLunatic: true }, game.players[1]],
+    };
+    renderNightList(disguised);
+    // The Imp (the Lunatic's stand-in here) has no first-night action of its
+    // own — show-all reveals its entry so the note can be checked.
+    await user.click(screen.getByRole("checkbox", { name: "Show all" }));
+
+    expect(screen.getByText("(actually the Lunatic)")).toBeInTheDocument();
+  });
 });
 
 describe("Night list: dead players", () => {

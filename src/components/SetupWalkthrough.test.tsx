@@ -18,6 +18,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     characterId: "fortuneteller",
     startingCharacterId: "fortuneteller",
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
@@ -42,6 +43,7 @@ const characterPool = [
   getCharacter("damsel")!,
   getCharacter("drunk")!,
   getCharacter("imp")!,
+  getCharacter("zombuul")!,
   getCharacter("chef")!,
   getCharacter("baron")!,
 ];
@@ -536,34 +538,6 @@ describe("neighborCheck step (Marionette)", () => {
   });
 });
 
-describe("believedDemon step (Lunatic)", () => {
-  const lunaticStep: SetupWalkthroughStep = {
-    id: "p1",
-    kind: "believedDemon",
-    characterId: "lunatic",
-    characterName: "Lunatic",
-    playerId: "p1",
-    playerName: "Alice",
-    title: "Lunatic — believed demon",
-    ruleText: "Pick which Demon character the Lunatic believes they are.",
-  };
-
-  it("places a custom reminder naming the believed demon", async () => {
-    const user = userEvent.setup();
-    const { onResolveStep } = renderWalkthrough({
-      steps: [lunaticStep],
-    });
-
-    const step = screen.getByRole("group", { name: lunaticStep.title });
-    await selectOption(user, within(step).getByLabelText(/demon/i), "Imp");
-    await user.click(within(step).getByRole("button", { name: /confirm/i }));
-
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
-      expect.objectContaining({ characterId: null, label: expect.stringContaining("Imp") }),
-    ]);
-  });
-});
-
 describe("acknowledge step (Damsel)", () => {
   const damselStep: SetupWalkthroughStep = {
     id: "p1",
@@ -602,6 +576,8 @@ describe("review step (Drunk)", () => {
     title: "Drunk — review the stand-in",
     ruleText: "Alice believes they are the Washerwoman.",
     reminderLabel: "Drunk",
+    disguiseId: "drunk",
+    standInTeam: "townsfolk",
   };
 
   it("places the Drunk reminder (not the stand-in character's) on confirm", async () => {
@@ -683,6 +659,92 @@ describe("review step (Drunk)", () => {
     renderWalkthrough({ steps: [drunkStep] });
 
     const step = screen.getByRole("group", { name: drunkStep.title });
+    expect(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    ).toBeDisabled();
+  });
+});
+
+describe("review step (Lunatic, issue #163)", () => {
+  const lunaticStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "review",
+    characterId: "imp",
+    characterName: "Imp",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Lunatic — review the stand-in",
+    ruleText: "Alice believes they are the Imp.",
+    reminderLabel: "Lunatic",
+    disguiseId: "lunatic",
+    standInTeam: "demon",
+  };
+
+  it("places the Lunatic reminder (not the stand-in character's) on confirm", async () => {
+    const user = userEvent.setup();
+    const { onResolveStep } = renderWalkthrough({
+      steps: [lunaticStep],
+    });
+
+    const step = screen.getByRole("group", { name: lunaticStep.title });
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
+      expect.objectContaining({ characterId: "lunatic", label: "Lunatic" }),
+    ]);
+  });
+
+  it("shows the current stand-in and offers a way to change it", () => {
+    renderWalkthrough({ steps: [lunaticStep] });
+
+    const step = screen.getByRole("group", { name: lunaticStep.title });
+    expect(within(step).getByText(/current stand-in: imp/i)).toBeInTheDocument();
+    expect(within(step).getByLabelText(/new stand-in/i)).toBeInTheDocument();
+  });
+
+  it("reassigns the stand-in without touching the reminder/status resolution", async () => {
+    const user = userEvent.setup();
+    const { onReassignStandIn, onResolveStep } = renderWalkthrough({
+      steps: [lunaticStep],
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "imp" }),
+        makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "chef" }),
+      ],
+    });
+
+    const step = screen.getByRole("group", { name: lunaticStep.title });
+    await selectOption(user, within(step).getByLabelText(/new stand-in/i), "Zombuul");
+    await user.click(within(step).getByRole("button", { name: /change stand-in/i }));
+
+    expect(onReassignStandIn).toHaveBeenCalledWith("p1", "zombuul");
+    expect(onResolveStep).not.toHaveBeenCalled();
+  });
+
+  it("offers only Demons, excluding any already held by another player", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({
+      steps: [lunaticStep],
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "imp" }),
+        makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "zombuul" }),
+        makePlayer({ id: "p3", seat: 3, name: "Cara", characterId: "chef" }),
+      ],
+    });
+
+    const step = screen.getByRole("group", { name: lunaticStep.title });
+    const optionText = (
+      await getSelectOptions(user, within(step).getByLabelText(/new stand-in/i))
+    ).map((o) => o.label);
+
+    expect(optionText).not.toContain("Zombuul");
+    expect(optionText).not.toContain("Chef");
+    expect(optionText).toContain("Imp");
+  });
+
+  it("disables the change button until a different character is chosen", async () => {
+    renderWalkthrough({ steps: [lunaticStep] });
+
+    const step = screen.getByRole("group", { name: lunaticStep.title });
     expect(
       within(step).getByRole("button", { name: /change stand-in/i }),
     ).toBeDisabled();

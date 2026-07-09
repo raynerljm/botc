@@ -1288,6 +1288,51 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
   });
 });
 
+describe("Lunatic seat display (stand-in identity + actually the Lunatic, issue #163)", () => {
+  it("shows both the stand-in identity and that they're actually the Lunatic", async () => {
+    const user = userEvent.setup();
+    const imp = getCharacter("imp")!;
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("lunatic")!],
+      standIn: null,
+      lunaticStandIn: imp,
+      extraCopies: {},
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Imp",
+    );
+
+    // A single seat, now fully assigned, renders as the completed circle.
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const summary = circle.querySelector("details > summary") as HTMLElement;
+    expect(within(summary).getByText("Imp")).toBeInTheDocument();
+    expect(within(summary).getByText(/actually the Lunatic/i)).toBeInTheDocument();
+
+    expect(loadGame()!.players[0].isLunatic).toBe(true);
+  });
+
+  it("doesn't show the Lunatic note for a seat that really is the stand-in character", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+
+    const seat1 = screen.getByLabelText("Seat 1 name").closest("li")!;
+    expect(
+      within(seat1).queryByText(/actually the Lunatic/i),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52)", () => {
   async function drunkBoard(user: ReturnType<typeof userEvent.setup>) {
     const game = createGame({
@@ -1370,6 +1415,95 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
 
     expect(options).not.toContain("Chef");
     expect(options).toContain("Grandmother");
+  });
+});
+
+describe("reassigning the Lunatic's stand-in from the setup walkthrough (issue #163)", () => {
+  async function lunaticBoard(user: ReturnType<typeof userEvent.setup>) {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: [
+        getCharacter("lunatic")!,
+        getCharacter("chef")!,
+        getCharacter("zombuul")!,
+      ],
+      standIn: null,
+      lunaticStandIn: getCharacter("imp")!,
+      extraCopies: {},
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Imp",
+    );
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 2 manually"),
+      "Chef",
+    );
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    const step = within(dialog).getByRole("group", {
+      name: /lunatic — review the stand-in/i,
+    });
+    return { dialog, step };
+  }
+
+  it("changes what the grimoire records without ending the disguise", async () => {
+    const user = userEvent.setup();
+    const { step } = await lunaticBoard(user);
+
+    await selectOption(user,
+      within(step).getByLabelText(/new stand-in/i),
+      "Zombuul",
+    );
+    await user.click(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const lunaticPlayer = reloaded.players.find((p) => p.isLunatic)!;
+    expect(lunaticPlayer.characterId).toBe("zombuul");
+    expect(lunaticPlayer.isLunatic).toBe(true);
+    expect(lunaticPlayer.startingCharacterId).toBe("imp");
+  });
+
+  it("updates what the Lunatic's player is told they are on the board", async () => {
+    const user = userEvent.setup();
+    const { step } = await lunaticBoard(user);
+
+    await selectOption(user,
+      within(step).getByLabelText(/new stand-in/i),
+      "Zombuul",
+    );
+    await user.click(
+      within(step).getByRole("button", { name: /change stand-in/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /close/i }));
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    const summary = wrap.querySelector("details > summary") as HTMLElement;
+    expect(within(summary).getByText("Zombuul")).toBeInTheDocument();
+    expect(within(summary).getByText(/actually the Lunatic/i)).toBeInTheDocument();
+  });
+
+  it("excludes a Demon already held by another player from the picker", async () => {
+    const user = userEvent.setup();
+    const { step } = await lunaticBoard(user);
+
+    const options = (
+      await getSelectOptions(user, within(step).getByLabelText(/new stand-in/i))
+    ).map((o) => o.label);
+
+    // Imp is the Lunatic's own current disguise (not "held elsewhere"), so
+    // it stays offered — only a Demon genuinely held by another seated
+    // player is excluded.
+    expect(options).toContain("Imp");
+    expect(options).toContain("Zombuul");
   });
 });
 
@@ -1660,6 +1794,33 @@ describe("mid-game token management (issue #15)", () => {
     expect(
       within(wrap).queryByRole("button", { name: /reveal drunk/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("clears the Lunatic stand-in note once a generic swap moves the seat to a different character (issue #163)", async () => {
+    const imp = getCharacter("imp")!;
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("lunatic")!, getCharacter("chef")!],
+      standIn: null,
+      lunaticStandIn: imp,
+      extraCopies: {},
+    });
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={game} />);
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Imp",
+    );
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelector("[data-player-id]") as HTMLElement;
+    await user.click(within(wrap).getByText("Player 1"));
+    await selectOption(user, within(wrap).getByLabelText(/swap character/i), "chef");
+
+    expect(loadGame()!.players[0].isLunatic).toBe(false);
+    expect(within(wrap).queryByText(/actually the Lunatic/i)).not.toBeInTheDocument();
   });
 
   it("removes an active Fabled, displayed outside the circle, with no way to add one", async () => {

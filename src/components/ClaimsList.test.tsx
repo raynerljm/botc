@@ -16,6 +16,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     characterId: null,
     startingCharacterId: null,
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,

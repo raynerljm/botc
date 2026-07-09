@@ -93,6 +93,7 @@ function withAutoAdded(prev: Set<string>, added: string[]): Set<string> {
 }
 
 const DRUNK_ID = "drunk";
+const LUNATIC_ID = "lunatic";
 
 const OFFICIAL_TEAMS = new Set<Team>([
   "townsfolk",
@@ -222,6 +223,9 @@ export function BagBuilder({
   const [standInId, setStandInId] = useState<string | null>(
     initialDraft?.standInId ?? null,
   );
+  const [lunaticStandInId, setLunaticStandInId] = useState<string | null>(
+    initialDraft?.lunaticStandInId ?? null,
+  );
   const [showCountWarning, setShowCountWarning] = useState(false);
   const [showInProgressWarning, setShowInProgressWarning] = useState(false);
 
@@ -239,6 +243,7 @@ export function BagBuilder({
       modifierChoices,
       extraCopies,
       standInId,
+      lunaticStandInId,
     });
   }, [
     scriptId,
@@ -249,6 +254,7 @@ export function BagBuilder({
     modifierChoices,
     extraCopies,
     standInId,
+    lunaticStandInId,
   ]);
 
   // The selectable pool is the script's characters plus anything a special
@@ -326,6 +332,19 @@ export function BagBuilder({
   const relaxValidation = relaxedCharacters.length > 0;
   const activeJinxes = computeActiveJinxes(selectedCharacters);
 
+  // Scoped to this script's own pool — a Demon not on this script has no
+  // physical token here, so it can't stand in for the Lunatic. Excludes the
+  // Demon(s) actually selected into the bag, same as the Drunk's
+  // availableStandIns excludes selected Townsfolk — the stand-in isn't a
+  // second, independent pick of a character already in play.
+  const availableDemonStandIns = pool.filter(
+    (c) => c.team === "demon" && !selectedIds.has(c.id),
+  );
+  // Unlike the Drunk, the Lunatic always gets a stand-in (advisory, never
+  // blocking — ADR 0003): the first available Demon applies automatically
+  // whenever the storyteller hasn't chosen one.
+  const defaultLunaticStandIn = availableDemonStandIns[0] ?? null;
+
   const requirementWarnings = selectedCharacters.flatMap((character) => {
     const parsed = parsedModifiers.get(character.id);
     if (!parsed?.requiresCharacterName) return [];
@@ -342,6 +361,15 @@ export function BagBuilder({
   if (selectedIds.has(DRUNK_ID) && !standInId) {
     requirementWarnings.push(
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
+    );
+  }
+  // The Lunatic only reaches this same "unfillable seat" warning in the rare
+  // case no Demon stand-in is available at all (e.g. the script's only
+  // Demon is already the one selected into the bag) — otherwise a default
+  // always applies, so no warning is needed.
+  if (selectedIds.has(LUNATIC_ID) && !lunaticStandInId && !defaultLunaticStandIn) {
+    requirementWarnings.push(
+      "The Lunatic needs a stand-in Demon available before its seat can be filled.",
     );
   }
   function toggleCharacter(character: Character) {
@@ -389,6 +417,12 @@ export function BagBuilder({
       // token, so they can no longer also stand in for the Drunk.
       setStandInId(null);
     }
+    if (normalizeCharacterId(character.id) === LUNATIC_ID) {
+      setLunaticStandInId(null);
+    } else if (character.id === lunaticStandInId) {
+      // Same reasoning as the Drunk's stand-in above, for the Lunatic.
+      setLunaticStandInId(null);
+    }
   }
 
   function targetFor(team: Team): number {
@@ -418,6 +452,7 @@ export function BagBuilder({
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.
     if (standInId && next.has(standInId)) setStandInId(null);
+    if (lunaticStandInId && next.has(lunaticStandInId)) setLunaticStandInId(null);
   }
 
   function handleContinue() {
@@ -448,12 +483,20 @@ export function BagBuilder({
   function createAndEnterGame() {
     if (!scriptId || !scriptName) return;
     setShowInProgressWarning(false);
+    // Advisory default (ADR 0003, AC5): an explicit pick always wins, but an
+    // unset Lunatic stand-in still resolves to an available Demon rather
+    // than leaving the seat unfillable the way the Drunk's does.
+    const lunaticStandIn = selectedIds.has(LUNATIC_ID)
+      ? ((lunaticStandInId ? poolById.get(lunaticStandInId) : null) ??
+        defaultLunaticStandIn)
+      : null;
     const game = createGame({
       scriptId,
       scriptName,
       playerCount: effectivePlayerCount,
       selectedCharacters,
       standIn: standInId ? (poolById.get(standInId) ?? null) : null,
+      lunaticStandIn,
       extraCopies,
       almanacUrl,
       firstNightOrder,
@@ -656,6 +699,32 @@ export function BagBuilder({
         </div>
       )}
 
+      {selectedIds.has(LUNATIC_ID) && (
+        <div className={styles.standIn}>
+          <label htmlFor="lunatic-stand-in-select">
+            Pick the Lunatic&apos;s stand-in (the Demon the player believes
+            they are)
+          </label>
+          <Select
+            id="lunatic-stand-in-select"
+            value={lunaticStandInId ?? ""}
+            onChange={(next) => setLunaticStandInId(next || null)}
+            entries={[
+              {
+                value: "",
+                label: defaultLunaticStandIn
+                  ? `Choose a stand-in… (defaults to ${defaultLunaticStandIn.name})`
+                  : "Choose a stand-in…",
+              },
+              ...availableDemonStandIns.map((character) => ({
+                value: character.id,
+                label: character.name,
+              })),
+            ]}
+          />
+        </div>
+      )}
+
       {groups.map((group) => {
         const official = officialTeamCountsByTeam.get(group.team);
         const target = official
@@ -693,6 +762,7 @@ export function BagBuilder({
                   isSelected && parsed?.extraCopies ? parsed.extraCopies : null;
 
                 const isStandIn = character.id === standInId;
+                const isLunaticStandIn = character.id === lunaticStandInId;
 
                 return (
                   <li key={character.id}>
@@ -700,7 +770,7 @@ export function BagBuilder({
                       type="button"
                       className={styles.character}
                       aria-pressed={isSelected}
-                      data-standin={isStandIn || undefined}
+                      data-standin={isStandIn || isLunaticStandIn || undefined}
                       onClick={() => toggleCharacter(character)}
                     >
                       <CharacterToken character={character} />
@@ -726,6 +796,11 @@ export function BagBuilder({
                         {isStandIn && (
                           <span className={styles.standInBadge}>
                             Drunk&apos;s stand-in
+                          </span>
+                        )}
+                        {isLunaticStandIn && (
+                          <span className={styles.standInBadge}>
+                            Lunatic&apos;s stand-in
                           </span>
                         )}
                       </span>
