@@ -152,6 +152,9 @@
 }
 
 .overlayAbility {
+  /* A <p>'s UA default margins would stack on top of .overlaySlot's flex
+     gap — zeroed so the gap alone owns the spacing (Copilot review). */
+  margin: 0;
   max-width: 22rem;
   font-size: 1rem;
   line-height: 1.5;
