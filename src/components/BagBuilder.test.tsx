@@ -533,6 +533,73 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
       screen.getByRole("button", { name: /Continue to seating/i }),
     ).not.toBeDisabled();
   });
+
+  it("still warns when a saved draft's stand-in id is stale and no default is available (code review finding)", () => {
+    // A draft saved before the script changed can point at a Demon id no
+    // longer on it — the draft's lunaticStandInId is non-null, but it
+    // doesn't resolve to any character in this script's pool.
+    saveBagBuilderDraft("tb", {
+      playerCount: 5,
+      travellerCount: 0,
+      selectedIds: ["lunatic", "imp"],
+      autoAddedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+      lunaticStandInId: "zombuul",
+    });
+
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    // Imp is the script's only Demon and is already selected for real, so
+    // there's no available Demon to fall back to — the warning must still
+    // fire despite the (stale) lunaticStandInId being non-null.
+    expect(screen.getByText(/Lunatic needs a stand-in/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the default stand-in when a saved draft's stand-in id is stale but another Demon is available (code review finding)", async () => {
+    const user = userEvent.setup();
+    saveBagBuilderDraft("tb", {
+      playerCount: 5,
+      travellerCount: 0,
+      selectedIds: ["lunatic", "imp"],
+      autoAddedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+      // Not part of this script — stale relative to the current pool.
+      lunaticStandInId: "not-a-real-character",
+    });
+
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp", "zombuul")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    // No warning: Zombuul is available to default to, even though the
+    // saved stand-in id doesn't resolve.
+    expect(screen.queryByText(/Lunatic needs a stand-in/i)).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+
+    const game = loadGame();
+    const standInToken = game!.bag.find((t) => t.isLunaticStandIn);
+    expect(standInToken?.characterId).toBe("zombuul");
+  });
 });
 
 describe("Lunatic stand-in tallies count once, as an Outsider (parity with issue #76)", () => {

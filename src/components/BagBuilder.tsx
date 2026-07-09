@@ -344,6 +344,15 @@ export function BagBuilder({
   // blocking — ADR 0003): the first available Demon applies automatically
   // whenever the storyteller hasn't chosen one.
   const defaultLunaticStandIn = availableDemonStandIns[0] ?? null;
+  // Resolved against the current pool, not just "is an id present" — a
+  // draft's lunaticStandInId can go stale (e.g. the script changed since it
+  // was saved), and treating that stale id as "chosen" would both suppress
+  // the warning below and silently drop the game back to no stand-in at all
+  // (code review finding). This is the one source of truth both the warning
+  // and createAndEnterGame's actual resolution read from.
+  const resolvedLunaticStandIn = lunaticStandInId
+    ? (poolById.get(lunaticStandInId) ?? null)
+    : null;
 
   const requirementWarnings = selectedCharacters.flatMap((character) => {
     const parsed = parsedModifiers.get(character.id);
@@ -367,7 +376,7 @@ export function BagBuilder({
   // case no Demon stand-in is available at all (e.g. the script's only
   // Demon is already the one selected into the bag) — otherwise a default
   // always applies, so no warning is needed.
-  if (selectedIds.has(LUNATIC_ID) && !lunaticStandInId && !defaultLunaticStandIn) {
+  if (selectedIds.has(LUNATIC_ID) && !resolvedLunaticStandIn && !defaultLunaticStandIn) {
     requirementWarnings.push(
       "The Lunatic needs a stand-in Demon available before its seat can be filled.",
     );
@@ -484,11 +493,11 @@ export function BagBuilder({
     if (!scriptId || !scriptName) return;
     setShowInProgressWarning(false);
     // Advisory default (ADR 0003, AC5): an explicit pick always wins, but an
-    // unset Lunatic stand-in still resolves to an available Demon rather
-    // than leaving the seat unfillable the way the Drunk's does.
+    // unset (or stale) Lunatic stand-in still resolves to an available
+    // Demon rather than leaving the seat unfillable the way the Drunk's
+    // does.
     const lunaticStandIn = selectedIds.has(LUNATIC_ID)
-      ? ((lunaticStandInId ? poolById.get(lunaticStandInId) : null) ??
-        defaultLunaticStandIn)
+      ? (resolvedLunaticStandIn ?? defaultLunaticStandIn)
       : null;
     const game = createGame({
       scriptId,
