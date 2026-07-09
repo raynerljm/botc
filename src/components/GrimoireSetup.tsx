@@ -781,14 +781,28 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     chooseToken(tokenId);
   }
 
-  // Every seat's reveal — including the last — goes through the same
-  // privacy guard before the device changes hands (issue #110): the last
-  // seat has no next seat to pass to, but the drawer must still lose sight
-  // of the card before the grimoire (everyone else's identity) can open.
+  // Ends the reveal. Whenever another seat is still waiting and the bag has
+  // a token for it, this skips the "hidden" privacy screen entirely and
+  // opens that seat's shuffled, face-down grid directly — safe, because
+  // nothing about the next seat's identity is visible yet (issue #185).
+  // Otherwise (the last seat, or the bag ran dry) what comes next is *not*
+  // blind — it's either the finished grimoire or the setup screen's seats
+  // list, both of which show other seats' identities — so the "hidden"
+  // privacy guard and its explicit hand-off tap are still required there,
+  // exactly as before this change.
   function hideAndPass() {
     const currentGame = gameRef.current;
     const session = currentGame.drawSession;
     if (!session) return;
+    const seat = nextUnassignedSeatOf(currentGame);
+    if (seat && currentGame.bag.length > 0) {
+      setTokenOrder(shuffleTokens(currentGame.bag));
+      update({
+        ...currentGame,
+        drawSession: { seatId: seat.id, stage: "choosing" },
+      });
+      return;
+    }
     update({ ...currentGame, drawSession: { ...session, stage: "hidden" } });
   }
 
@@ -1067,7 +1081,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 <h2>{revealedCharacter.name}</h2>
                 <p>{revealedCharacter.ability}</p>
                 <PlayerNamePicker
-                  onSelect={(name) => renamePlayer(draw.seatId, name)}
+                  excludeNames={game.players
+                    .filter((p) => p.id !== draw.seatId)
+                    .map((p) => p.name)}
+                  onSelect={(name) => {
+                    renamePlayer(draw.seatId, name);
+                    hideAndPass();
+                  }}
                 />
                 <button
                   type="button"

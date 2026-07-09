@@ -9,19 +9,26 @@ import styles from "./PlayerNamePicker.module.css";
 
 export interface PlayerNamePickerProps {
   onSelect: (name: string) => void;
+  // Names already assigned to another seat this game (issue #185) — kept out
+  // of the "Regular players" quick-pick so the storyteller can't re-offer a
+  // name that's already seated. Typing a custom name is unaffected.
+  excludeNames?: string[];
 }
 
 // One input for both filtering the curated list and naming yourself
 // (issue #157) — the same text drives both, rather than a separate
 // search box and custom-name form. The predefined list is REGULAR_PLAYERS
 // — a hardcoded array until player profiles are database-backed.
-export function PlayerNamePicker({ onSelect }: PlayerNamePickerProps) {
+export function PlayerNamePicker({ onSelect, excludeNames = [] }: PlayerNamePickerProps) {
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim();
   const normalizedQuery = trimmedQuery.toLowerCase();
-  const matches = REGULAR_PLAYERS.filter((name) =>
-    name.toLowerCase().includes(normalizedQuery),
+  const excludedLower = new Set(excludeNames.map((name) => name.toLowerCase()));
+  const matches = REGULAR_PLAYERS.filter(
+    (name) =>
+      name.toLowerCase().includes(normalizedQuery) &&
+      !excludedLower.has(name.toLowerCase()),
   );
   // Filtering is substring-based (so partial typing narrows the list), but
   // "no regular player" for naming yourself must be exact-match: a substring
