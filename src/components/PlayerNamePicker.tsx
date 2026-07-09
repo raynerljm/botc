@@ -34,8 +34,12 @@ export function PlayerNamePicker({ onSelect, excludeNames = [] }: PlayerNamePick
   // "no regular player" for naming yourself must be exact-match: a substring
   // hit against an unrelated name (e.g. "an" inside "Dana") would otherwise
   // block naming yourself "an" even though no player is actually named that.
+  // Excluded names don't count either — an excluded name has no quick-pick
+  // button, so treating it as "still a regular player" would also block the
+  // "Name yourself" fallback and leave typing that exact name a dead end
+  // (code review finding, issue #185).
   const isRegularPlayer = REGULAR_PLAYERS.some(
-    (name) => name.toLowerCase() === normalizedQuery,
+    (name) => name.toLowerCase() === normalizedQuery && !excludedLower.has(name.toLowerCase()),
   );
   const canNameYourself = trimmedQuery.length > 0 && !isRegularPlayer;
 

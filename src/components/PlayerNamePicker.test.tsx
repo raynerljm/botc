@@ -161,6 +161,22 @@ describe("excluding names already assigned to an earlier seat (issue #185)", () 
     expect(screen.queryByRole("button", { name: "Jordan" })).not.toBeInTheDocument();
   });
 
+  it("still offers 'Name yourself' when the typed text exactly matches an excluded name, instead of a dead end (code review finding)", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<PlayerNamePicker onSelect={onSelect} excludeNames={["Jordan"]} />);
+
+    await user.type(screen.getByRole("textbox"), "Jordan");
+
+    expect(screen.queryByRole("button", { name: "Jordan" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /name yourself.*jordan/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /name yourself/i }));
+    expect(onSelect).toHaveBeenCalledWith("Jordan");
+  });
+
   it("still offers every regular player when nothing is excluded", () => {
     render(<PlayerNamePicker onSelect={vi.fn()} />);
 
