@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -65,13 +65,57 @@ describe("Day phase: while a night is open", () => {
 });
 
 describe("Day phase: recording a nomination", () => {
-  it("defaults the nominator and nominee to two different players, not a self-nomination", () => {
+  it("starts with no nominator or nominee selected, and the submit button disabled", () => {
     const game = gameWith(["washerwoman", "imp", "recluse"]);
     renderDayPhase(game);
 
     const nominatorSelect = screen.getByLabelText("Nominator");
     const nomineeSelect = screen.getByLabelText("Nominee");
-    expect(nominatorSelect.dataset.value).not.toBe(nomineeSelect.dataset.value);
+    expect(nominatorSelect.dataset.value).toBe("");
+    expect(nomineeSelect.dataset.value).toBe("");
+    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+  });
+
+  it("shows a placeholder preview until both a nominator and a nominee are chosen, then names them", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse"]);
+    renderDayPhase(game);
+    const [nominator, nominee] = game.players;
+
+    expect(
+      screen.getByText("Choose a nominator and a nominee to start a nomination."),
+    ).toBeInTheDocument();
+
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    expect(
+      screen.getByText("Choose a nominator and a nominee to start a nomination."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
+    expect(
+      screen.getByText(`${nominator.name} will nominate ${nominee.name}`),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record nomination" })).toBeEnabled();
+  });
+
+  it("clears the selection back to the placeholder state after recording, so the next nomination is a fresh explicit choice", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [nominator, nominee] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    expect(screen.getByLabelText("Nominator").dataset.value).toBe("");
+    expect(screen.getByLabelText("Nominee").dataset.value).toBe("");
+    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
   });
 
   it("records who nominated whom", async () => {
@@ -242,6 +286,147 @@ describe("Day phase: vote tally and threshold", () => {
     // 5 players total -> exile threshold 3, snapshotted onto the nomination.
     expect(latest.nominations[0].nomineeId).toBe("traveller-1");
     expect(latest.nominations[0].threshold).toBe(3);
+  });
+});
+
+describe("Day phase: distinguishing open vs. resolved nominations in the record", () => {
+  it("labels the open nomination as accepting votes, and a superseded one as resolved once a second is recorded", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [a, b, c] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), a.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), b.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [firstItem] = screen.getAllByRole("listitem");
+    expect(within(firstItem).getByText("Open — accepting votes")).toBeInTheDocument();
+    expect(firstItem.dataset.status).toBe("open");
+
+    await selectOption(user, screen.getByLabelText("Nominator"), b.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), c.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [resolvedItem, openItem] = screen.getAllByRole("listitem");
+    expect(within(resolvedItem).getByText("Resolved")).toBeInTheDocument();
+    expect(resolvedItem.dataset.status).toBe("resolved");
+    expect(within(openItem).getByText("Open — accepting votes")).toBeInTheDocument();
+    expect(openItem.dataset.status).toBe("open");
+  });
+});
+
+describe("Day phase: distinguishing executions from exiles in the record", () => {
+  it("labels an execution nomination and an exile call differently", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse"], {
+      players: [
+        ...gameWith(["washerwoman", "imp", "recluse"]).players,
+        {
+          id: "traveller-1",
+          seat: 4,
+          name: "Traveller",
+          characterId: "scapegoat",
+          startingCharacterId: "scapegoat",
+          isDrunk: false,
+          isLunatic: false,
+          isTraveller: true,
+          travellerAlignment: "good" as const,
+          dead: false,
+          ghostVoteSpent: false,
+          position: null,
+          claim: null,
+          actsAs: null,
+          actsAsSetOnNight: null,
+        },
+      ],
+    });
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [a, b] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), a.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), b.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    await selectOption(user, screen.getByLabelText("Nominator"), b.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [executionItem, exileItem] = screen.getAllByRole("listitem");
+    expect(within(executionItem).getByText("Execution")).toBeInTheDocument();
+    expect(within(exileItem).getByText("Exile call")).toBeInTheDocument();
+  });
+});
+
+describe("Day phase: surfacing the block on the nomination that holds it", () => {
+  it("badges the specific nomination that currently holds the block", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [nominator, nominee, voter1, voter2] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [item] = screen.getAllByRole("listitem");
+    expect(within(item).queryByText("On the block")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: voter1.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: voter2.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    expect(within(item).getByText("On the block")).toBeInTheDocument();
+  });
+
+  it("never badges an earlier, non-block-holding nomination just because it shares the same nominee (code review finding)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [a, b, c] = game.players;
+
+    // First nomination of B falls short of the threshold (2) and is
+    // superseded once a second nomination is recorded — it never held the
+    // block. wasNominatedToday only advisory-labels a repeat nominee; it
+    // doesn't block re-nominating B.
+    await selectOption(user, screen.getByLabelText("Nominator"), a.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), b.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: a.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    // Second nomination, also of B, meets the threshold and takes the block.
+    await selectOption(user, screen.getByLabelText("Nominator"), c.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), b.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: a.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: c.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [firstItem, secondItem] = screen.getAllByRole("listitem");
+    expect(within(firstItem).queryByText("On the block")).not.toBeInTheDocument();
+    expect(within(secondItem).getByText("On the block")).toBeInTheDocument();
   });
 });
 

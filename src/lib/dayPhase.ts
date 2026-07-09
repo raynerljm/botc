@@ -54,11 +54,21 @@ export function executionNominations(nominations: Nomination[]): Nomination[] {
 // gone (still the same bug this fold exists to prevent). An exile call
 // never enters this fold at all — it isn't an execution, doesn't compete
 // for the block, and is unlimited per day (CONTEXT.md: Exile, issue #114).
-export function computeBlock(
-  nominations: Nomination[],
-  players: Player[],
-): string | null {
-  let blockNomineeId: string | null = null;
+interface BlockFold {
+  nominationId: string | null;
+  nomineeId: string | null;
+}
+
+// Shared by computeBlock and computeBlockNominationId so the two can never
+// disagree on which nomination holds the block — a nominee can be nominated
+// more than once in a day (wasNominatedToday only advisory-labels a repeat,
+// never blocks it), so a caller that needs to badge the *specific* holding
+// nomination can't safely re-derive it by matching nomineeId alone (issue
+// #166 code review finding: that would badge every nomination against the
+// current block-holder, not just the one that actually took it).
+function foldBlock(nominations: Nomination[], players: Player[]): BlockFold {
+  let nominationId: string | null = null;
+  let nomineeId: string | null = null;
   let highWater = -1;
 
   for (const nomination of executionNominations(nominations)) {
@@ -68,13 +78,32 @@ export function computeBlock(
     if (tally > highWater) {
       highWater = tally;
       const stillInPlay = players.some((player) => player.id === nomination.nomineeId);
-      blockNomineeId = stillInPlay ? nomination.nomineeId : null;
+      nominationId = stillInPlay ? nomination.id : null;
+      nomineeId = stillInPlay ? nomination.nomineeId : null;
     } else if (tally === highWater) {
-      blockNomineeId = null;
+      nominationId = null;
+      nomineeId = null;
     }
   }
 
-  return blockNomineeId;
+  return { nominationId, nomineeId };
+}
+
+export function computeBlock(
+  nominations: Nomination[],
+  players: Player[],
+): string | null {
+  return foldBlock(nominations, players).nomineeId;
+}
+
+// The id of the specific nomination currently holding the block, or null —
+// distinct from computeBlock's nominee id because the same nominee can have
+// more than one nomination recorded in a day (see foldBlock above).
+export function computeBlockNominationId(
+  nominations: Nomination[],
+  players: Player[],
+): string | null {
+  return foldBlock(nominations, players).nominationId;
 }
 
 // A dead player's one ghost vote only ever gates an execution vote — an
