@@ -384,6 +384,315 @@ describe("special flow: Drunk stand-in (AC4)", () => {
   });
 });
 
+describe("confirms before continuing with no stand-in for the Drunk (issue #183)", () => {
+  beforeEach(() => {
+    clearGames();
+    push.mockClear();
+  });
+
+  it("prompts before continuing when the Drunk is in the bag with no stand-in chosen", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(
+      screen.getByRole("alertdialog", { name: /Drunk has no stand-in/i }),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("lets the storyteller dismiss the warning and stay on the bag builder, with the stand-in still unpicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /Go back/i }));
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+    ).toHaveTextContent("Choose a stand-in…");
+    expect(loadGame()).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("confirming the warning hands off into the next check (count mismatch)", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /Continue anyway/i }));
+
+    // The Drunk alone doesn't fill the bag to its target counts, so
+    // confirming this warning hands off into the existing count-mismatch
+    // warning rather than skipping straight to the game.
+    expect(screen.getByRole("alertdialog", { name: /count/i })).toBeInTheDocument();
+  });
+
+  it("confirming both warnings creates the game", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman", "legion")}
+        scriptId="custom"
+        scriptName="Custom"
+      />,
+    );
+
+    // Legion relaxes count validation entirely, so confirming the Drunk
+    // warning here proceeds straight through to the game.
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(screen.getByRole("button", { name: /^Legion/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /Continue anyway/i }));
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(loadGame()).not.toBeNull();
+    expect(push).toHaveBeenCalledWith("/game");
+  });
+
+  it("skips the warning and continues straight through once a stand-in is chosen", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman", "legion")}
+        scriptId="custom"
+        scriptName="Custom"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(screen.getByRole("button", { name: /^Legion/ }));
+    await selectOption(
+      user,
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(loadGame()).not.toBeNull();
+  });
+
+  it("still warns when a saved draft's stand-in id is stale (code review finding)", async () => {
+    // A draft saved before the script changed can point at a Townsfolk id no
+    // longer on it — the draft's standInId is non-null, but it doesn't
+    // resolve to any character in this script's pool.
+    saveBagBuilderDraft("tb", {
+      playerCount: 5,
+      travellerCount: 0,
+      selectedIds: ["drunk"],
+      autoAddedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: "not-a-real-character",
+      lunaticStandInId: null,
+    });
+
+    const user = userEvent.setup();
+    render(
+      <BagBuilder characters={characters("drunk", "washerwoman")} scriptId="tb" scriptName="Trouble Brewing" />,
+    );
+
+    // The banner still warns despite the (stale) standInId being non-null.
+    expect(
+      screen.getByText(/Drunk needs a stand-in/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    // And Continue still surfaces the confirmation, rather than silently
+    // treating the stale id as a resolved stand-in.
+    expect(
+      screen.getByRole("alertdialog", { name: /Drunk has no stand-in/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("re-shows the warning after Randomize claims the chosen stand-in for a real team slot", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await selectOption(
+      user,
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+    expect(
+      screen.queryByText(/Drunk needs a stand-in/i),
+    ).not.toBeInTheDocument();
+
+    // Randomize can independently select Washerwoman into a real team slot,
+    // which clears standInId (existing behavior) — Continue must then
+    // re-surface the issue #183 warning instead of silently proceeding.
+    await user.click(screen.getByRole("button", { name: /^Randomize/i }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(
+      screen.getByRole("alertdialog", { name: /Drunk has no stand-in/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not re-show the warning on a second Continue once the stand-in is picked after a cancel", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman", "legion")}
+        scriptId="custom"
+        scriptName="Custom"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(screen.getByRole("button", { name: /^Legion/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /Go back/i }));
+
+    await selectOption(
+      user,
+      screen.getByLabelText(/Pick the Drunk's stand-in/),
+      "Washerwoman",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(loadGame()).not.toBeNull();
+  });
+
+  it("chains through all three warnings — Drunk stand-in, count mismatch, and an in-progress game", async () => {
+    const user = userEvent.setup();
+    saveGame(
+      createGame({
+        scriptId: "tb",
+        scriptName: "Existing game",
+        playerCount: 5,
+        selectedCharacters: [getCharacter("imp")!],
+        standIn: null,
+        extraCopies: {},
+      }),
+    );
+
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    expect(
+      screen.getByRole("alertdialog", { name: /Drunk has no stand-in/i }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Continue anyway/i }));
+
+    const countDialog = screen.getByRole("alertdialog", { name: /count/i });
+    expect(countDialog).toBeInTheDocument();
+    await user.click(
+      within(countDialog).getByRole("button", { name: /Continue anyway/i }),
+    );
+
+    expect(
+      screen.getByRole("alertdialog", { name: /already in progress/i }),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("never prompts when the Drunk isn't in the bag", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("legion", "washerwoman")}
+        scriptId="custom"
+        scriptName="Custom"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Legion/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("moves focus into the dialog when it opens and restores focus on dismiss", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("drunk", "washerwoman")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Drunk/ }));
+    const continueButton = screen.getByRole("button", {
+      name: /Continue to seating/i,
+    });
+    await user.click(continueButton);
+
+    const dialog = screen.getByRole("alertdialog", {
+      name: /Drunk has no stand-in/i,
+    });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    await user.click(within(dialog).getByRole("button", { name: /Go back/i }));
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(continueButton);
+  });
+});
+
 describe("special flow: Lunatic stand-in (issue #163)", () => {
   it("prompts for a stand-in Demon once the Lunatic is selected", async () => {
     const user = userEvent.setup();
