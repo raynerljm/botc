@@ -354,6 +354,11 @@ export function BagBuilder({
   const resolvedLunaticStandIn = lunaticStandInId
     ? (poolById.get(lunaticStandInId) ?? null)
     : null;
+  // Same staleness guard as resolvedLunaticStandIn above, for the Drunk's
+  // stand-in — both the warning below and the Continue confirmation (issue
+  // #183) must treat a stale standInId as "no stand-in chosen", not as
+  // resolved.
+  const resolvedStandIn = standInId ? (poolById.get(standInId) ?? null) : null;
 
   const requirementWarnings = selectedCharacters.flatMap((character) => {
     const parsed = parsedModifiers.get(character.id);
@@ -368,7 +373,7 @@ export function BagBuilder({
   });
   // Without a stand-in, the Drunk's slot produces no physical token at all
   // (buildBagTokens skips it), leaving one seat permanently unfillable.
-  if (selectedIds.has(DRUNK_ID) && !standInId) {
+  if (selectedIds.has(DRUNK_ID) && !resolvedStandIn) {
     requirementWarnings.push(
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
     );
@@ -470,7 +475,7 @@ export function BagBuilder({
     // Advisory, never blocking (ADR 0003): the Drunk's unfillable-seat gate
     // interrupts once with a dialog the storyteller can override, same as
     // the count mismatch below.
-    if (selectedIds.has(DRUNK_ID) && !standInId) {
+    if (selectedIds.has(DRUNK_ID) && !resolvedStandIn) {
       setShowDrunkStandInWarning(true);
       return;
     }
@@ -517,7 +522,7 @@ export function BagBuilder({
       scriptName,
       playerCount: effectivePlayerCount,
       selectedCharacters,
-      standIn: standInId ? (poolById.get(standInId) ?? null) : null,
+      standIn: resolvedStandIn,
       lunaticStandIn,
       extraCopies,
       almanacUrl,
