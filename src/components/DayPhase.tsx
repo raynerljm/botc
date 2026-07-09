@@ -5,6 +5,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import {
   canRecordVote,
   computeBlock,
+  computeBlockNominationId,
   currentDay,
   hasNominatedToday,
   hasSpentGhostVoteElsewhereToday,
@@ -16,17 +17,35 @@ import type { GameDocument, Nomination, Player } from "@/lib/gameDocument";
 import { Checkbox } from "./Checkbox";
 import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./DayPhase.module.css";
-import { Select } from "./Select";
+import { Select, type SelectEntry } from "./Select";
 
 export interface DayPhaseProps {
   game: GameDocument;
   onChange: (next: GameDocument) => void;
 }
 
+// Shared shape for the Nominator/Nominee pickers: an empty placeholder entry
+// first (no misleading default pairing — issue #166), then every player
+// labeled dead/already-nominated by whichever check the caller passes.
+function playerEntries(
+  players: Player[],
+  placeholder: string,
+  alreadyNominated: (playerId: string) => boolean,
+): SelectEntry[] {
+  return [
+    { value: "", label: placeholder },
+    ...players.map((player) => ({
+      value: player.id,
+      label: `${player.name}${player.dead ? " (dead)" : ""}${
+        alreadyNominated(player.id) ? " (already nominated)" : ""
+      }`,
+    })),
+  ];
+}
+
 export function DayPhase({ game, onChange }: DayPhaseProps) {
-  const secondPlayerId = game.players[1]?.id ?? game.players[0]?.id ?? "";
-  const [nominatorId, setNominatorId] = useState(game.players[0]?.id ?? "");
-  const [nomineeId, setNomineeId] = useState(secondPlayerId);
+  const [nominatorId, setNominatorId] = useState("");
+  const [nomineeId, setNomineeId] = useState("");
 
   const playerById = useMemo(
     () => new Map(game.players.map((player) => [player.id, player] as const)),
@@ -60,21 +79,29 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   // — earlier ones in the day are already resolved and shown read-only.
   const openNomination = game.nominations[game.nominations.length - 1] ?? null;
   const blockNomineeId = computeBlock(game.nominations, game.players);
+  const blockNominationId = computeBlockNominationId(game.nominations, game.players);
   const blockHolder = playerById.get(blockNomineeId ?? "");
+
+  const selectedNominator = playerById.get(nominatorId);
+  const selectedNominee = playerById.get(nomineeId);
+  const canSubmit = Boolean(selectedNominator && selectedNominee);
 
   function recordNomination(event: FormEvent) {
     event.preventDefault();
-    const nominee = playerById.get(nomineeId);
-    if (!nominee) return;
+    if (!selectedNominator || !selectedNominee) return;
     const nomination: Nomination = {
       id: crypto.randomUUID(),
       nominatorId,
       nomineeId,
       votes: [],
-      threshold: nominationThreshold(nominee, game.players),
-      isExile: nominee.isTraveller,
+      threshold: nominationThreshold(selectedNominee, game.players),
+      isExile: selectedNominee.isTraveller,
     };
     onChange({ ...game, nominations: [...game.nominations, nomination] });
+    // Reset to the empty placeholder state — starting the next nomination is
+    // always an explicit fresh choice, never a carried-over pairing.
+    setNominatorId("");
+    setNomineeId("");
   }
 
   function toggleVote(nomination: Nomination, player: Player) {
@@ -126,14 +153,9 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               aria-label="Nominator"
               value={nominatorId}
               onChange={setNominatorId}
-              entries={game.players.map((player) => ({
-                value: player.id,
-                label: `${player.name}${player.dead ? " (dead)" : ""}${
-                  hasNominatedToday(game.nominations, player.id)
-                    ? " (already nominated)"
-                    : ""
-                }`,
-              }))}
+              entries={playerEntries(game.players, "Choose who's nominating…", (id) =>
+                hasNominatedToday(game.nominations, id),
+              )}
             />
           </label>
           <label className={styles.field}>
@@ -143,17 +165,17 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               aria-label="Nominee"
               value={nomineeId}
               onChange={setNomineeId}
-              entries={game.players.map((player) => ({
-                value: player.id,
-                label: `${player.name}${player.dead ? " (dead)" : ""}${
-                  wasNominatedToday(game.nominations, player.id)
-                    ? " (already nominated)"
-                    : ""
-                }`,
-              }))}
+              entries={playerEntries(game.players, "Choose who's nominated…", (id) =>
+                wasNominatedToday(game.nominations, id),
+              )}
             />
           </label>
-          <button type="submit" className={styles.submit}>
+          <p className={styles.preview} aria-live="polite">
+            {selectedNominator && selectedNominee
+              ? `${selectedNominator.name} will nominate ${selectedNominee.name}`
+              : "Choose a nominator and a nominee to start a nomination."}
+          </p>
+          <button type="submit" className={styles.submit} disabled={!canSubmit}>
             Record nomination
           </button>
         </form>
@@ -168,12 +190,30 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
             const tally = nomination.votes.length;
             const meetsThreshold = tally >= threshold;
             const isOpen = nomination.id === openNomination?.id;
+            const isOnBlock = nomination.id === blockNominationId;
 
             return (
-              <li key={nomination.id} className={styles.nomination}>
-                <p className={styles.nominationHeading}>
-                  {nominator?.name ?? "Unknown"} → {nominee.name}
-                  {nomination.isExile && " (exile)"}
+              <li
+                key={nomination.id}
+                className={styles.nomination}
+                data-status={isOpen ? "open" : "resolved"}
+              >
+                <div className={styles.nominationHeader}>
+                  <p className={styles.nominationHeading}>
+                    {nominator?.name ?? "Unknown"} → {nominee.name}
+                  </p>
+                  <span
+                    className={styles.typeBadge}
+                    data-exile={nomination.isExile || undefined}
+                  >
+                    {nomination.isExile ? "Exile call" : "Execution"}
+                  </span>
+                </div>
+                <p className={styles.statusLine}>
+                  <span className={styles.statusBadge} data-open={isOpen || undefined}>
+                    {isOpen ? "Open — accepting votes" : "Resolved"}
+                  </span>
+                  {isOnBlock && <span className={styles.blockBadge}>On the block</span>}
                 </p>
                 <p
                   className={styles.tally}

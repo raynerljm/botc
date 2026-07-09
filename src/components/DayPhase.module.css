@@ -74,9 +74,69 @@
   border-radius: 0.5rem;
 }
 
+.nominationHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .nominationHeading {
   margin: 0;
   font-weight: 600;
+}
+
+.typeBadge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 0.1rem 0.5rem;
+}
+
+.typeBadge[data-exile] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+}
+
+.statusBadge {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.statusBadge[data-open] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.blockBadge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--background);
+  background: var(--accent);
+  border-radius: 1rem;
+  padding: 0.1rem 0.5rem;
+}
+
+.preview {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .tally {
@@ -117,6 +177,12 @@
   border-radius: 0.5rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.submit:disabled {
+  background: var(--surface-raised);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .note {
