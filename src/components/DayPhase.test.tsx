@@ -118,6 +118,33 @@ describe("Day phase: recording a nomination", () => {
     expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
   });
 
+  it("clears an unsubmitted nominator/nominee pick once a new day begins, since it was never recorded (DayPhase stays mounted across day transitions)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse"]);
+    const { rerender } = renderDayPhase(game);
+
+    // Pick both, but never submit — e.g. the storyteller moved on to the
+    // night instead of recording the nomination.
+    const [nominator, nominee] = game.players;
+    // getAllByLabelText(...)[0], not getByLabelText: the custom Select's
+    // trigger and its (conditionally rendered) open listbox share the same
+    // aria-label, so a select left open makes a plain getByLabelText
+    // ambiguous — the trigger is always the first match in document order.
+    await selectOption(user, screen.getAllByLabelText("Nominator")[0], nominator.id);
+    await selectOption(user, screen.getAllByLabelText("Nominee")[0], nominee.id);
+    expect(screen.getAllByLabelText("Nominator")[0].dataset.value).toBe(nominator.id);
+
+    // Day 2 begins. DayPhase is never unmounted by its parent (GrimoireSetup
+    // renders it unconditionally), so its useState would otherwise carry the
+    // abandoned day 1 picks straight into day 2 as a misleading pre-filled
+    // pair — the same problem issue #166 removed for the initial render.
+    rerender(<DayPhase game={{ ...game, night: 2 }} onChange={() => {}} />);
+
+    expect(screen.getAllByLabelText("Nominator")[0].dataset.value).toBe("");
+    expect(screen.getAllByLabelText("Nominee")[0].dataset.value).toBe("");
+    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+  });
+
   it("records who nominated whom", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse"]);
@@ -427,6 +454,32 @@ describe("Day phase: surfacing the block on the nomination that holds it", () =>
     const [firstItem, secondItem] = screen.getAllByRole("listitem");
     expect(within(firstItem).queryByText("On the block")).not.toBeInTheDocument();
     expect(within(secondItem).getByText("On the block")).toBeInTheDocument();
+  });
+
+  it("keeps the block badge below the voter checkboxes, so it can never shift one mid-vote (issue #125, per-item regression)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [nominator, nominee, voter1, voter2] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [firstCheckbox] = screen.getAllByRole("checkbox");
+    await user.click(screen.getByRole("checkbox", { name: voter1.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: voter2.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const blockBadge = within(screen.getAllByRole("listitem")[0]).getByText("On the block");
+    expect(
+      firstCheckbox.compareDocumentPosition(blockBadge) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

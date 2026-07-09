@@ -46,6 +46,7 @@ function playerEntries(
 export function DayPhase({ game, onChange }: DayPhaseProps) {
   const [nominatorId, setNominatorId] = useState("");
   const [nomineeId, setNomineeId] = useState("");
+  const [lastSeenDay, setLastSeenDay] = useState(currentDay(game));
 
   const playerById = useMemo(
     () => new Map(game.players.map((player) => [player.id, player] as const)),
@@ -57,6 +58,20 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   }
 
   const day = currentDay(game);
+
+  // DayPhase stays mounted across day transitions (its parent never
+  // remounts it), so an unsubmitted pick left over from a day the
+  // storyteller didn't record a nomination on would otherwise carry
+  // straight into the next day as a misleading pre-filled pair — the same
+  // problem issue #166 removed for the initial render. Adjusted during
+  // render (React's documented pattern for resetting state on a prop
+  // change) rather than in an effect, to avoid an extra cascading render.
+  if (day !== lastSeenDay) {
+    setLastSeenDay(day);
+    setNominatorId("");
+    setNomineeId("");
+  }
+
   if (day < 1 || game.nightOpen) {
     return (
       <section className={styles.panel} aria-label="Day phase">
@@ -213,7 +228,6 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                   <span className={styles.statusBadge} data-open={isOpen || undefined}>
                     {isOpen ? "Open — accepting votes" : "Resolved"}
                   </span>
-                  {isOnBlock && <span className={styles.blockBadge}>On the block</span>}
                 </p>
                 <p
                   className={styles.tally}
@@ -257,6 +271,12 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                     })}
                   </fieldset>
                 )}
+
+                {/* Kept after the voter fieldset, never before it — same
+                    reasoning as the panel-wide block line below (issue
+                    #125): mounting this once threshold is met must never
+                    shift an unchecked voter checkbox down mid-tap. */}
+                {isOnBlock && <p className={styles.blockBadge}>On the block</p>}
               </li>
             );
           })}
