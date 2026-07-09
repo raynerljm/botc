@@ -17,12 +17,13 @@ import { normalizeCharacterId } from "./scriptParser";
 // again for issue #114 (Nomination gained the required `isExile` field),
 // and again for issue #108 (GameDocument gained the required `drawSession`
 // field), again for issue #168 (GameDocument gained the required
-// `nightListCollapsed`/`dayPhaseCollapsed` fields), and again for issue #165
-// (GameDocument gained the required `lastEndedNightSnapshot` field) — a
+// `nightListCollapsed`/`dayPhaseCollapsed` fields), again for issue #165
+// (GameDocument gained the required `lastEndedNightSnapshot` field), and
+// again for issue #163 (Player gained the required `isLunatic` field) — a
 // document saved under an older shape must be rejected by gameStorage's
 // version check rather than loaded with any of these fields silently
 // undefined.
-export const GAME_SCHEMA_VERSION = 16;
+export const GAME_SCHEMA_VERSION = 17;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -41,6 +42,10 @@ export interface BagToken {
   // True for the extra Townsfolk-styled token that stands in for the Drunk —
   // the player believes they are that Townsfolk (CONTEXT.md: Stand-in).
   isDrunkStandIn: boolean;
+  // Same mechanic as isDrunkStandIn, for the Lunatic's Demon stand-in
+  // (issue #163): the extra Demon-styled token the Lunatic's player believes
+  // they are.
+  isLunaticStandIn: boolean;
 }
 
 // One seat's turn in the pass-the-device bag draw (CONTEXT.md: Bag draw):
@@ -160,6 +165,8 @@ export interface Player {
   // character, issue #15).
   startingCharacterId: string | null;
   isDrunk: boolean;
+  // Same mechanic as isDrunk, for the Lunatic's Demon stand-in (issue #163).
+  isLunatic: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
   dead: boolean;
@@ -429,6 +436,9 @@ export function anchoredReminderPosition(
 // action and display in the grimoire components) shares one source of truth.
 export const DRUNK_ID = "drunk";
 
+// Same mechanic as DRUNK_ID, for the Lunatic's Demon stand-in (issue #163).
+export const LUNATIC_ID = "lunatic";
+
 // Every character id currently held by a seated player — the "who holds
 // what" set several pickers filter against (GrimoireBoard's reminder
 // picker, the setup walkthrough's stand-in reassignment) so it's computed
@@ -510,6 +520,10 @@ export interface BuildBagTokensInput {
   // other Townsfolk on the script), so it's passed as its own object rather
   // than looked up among selectedCharacters.
   standIn: Character | null;
+  // Same mechanic as standIn, for the Lunatic's Demon stand-in (issue #163).
+  // Optional (unlike standIn) so every pre-existing caller/test that doesn't
+  // care about the Lunatic keeps working unchanged.
+  lunaticStandIn?: Character | null;
   extraCopies: Record<string, number>;
   newId?: () => string;
 }
@@ -521,10 +535,12 @@ export interface BuiltBagTokens {
 
 // The Drunk never gets a physical token of its own — the player believes
 // they are the stand-in Townsfolk, so that character's extra token fills
-// the Drunk's slot instead (CONTEXT.md: Stand-in).
+// the Drunk's slot instead (CONTEXT.md: Stand-in). The Lunatic follows the
+// same pattern with a Demon stand-in (issue #163).
 export function buildBagTokens({
   selectedCharacters,
   standIn,
+  lunaticStandIn = null,
   extraCopies,
   newId = defaultNewId,
 }: BuildBagTokensInput): BuiltBagTokens {
@@ -537,10 +553,12 @@ export function buildBagTokens({
         id: newId(),
         characterId: character.id,
         isDrunkStandIn: false,
+        isLunaticStandIn: false,
       });
       continue;
     }
-    if (normalizeCharacterId(character.id) === DRUNK_ID) continue;
+    const normalizedId = normalizeCharacterId(character.id);
+    if (normalizedId === DRUNK_ID || normalizedId === LUNATIC_ID) continue;
 
     const copies = 1 + (extraCopies[character.id] ?? 0);
     for (let i = 0; i < copies; i++) {
@@ -548,6 +566,7 @@ export function buildBagTokens({
         id: newId(),
         characterId: character.id,
         isDrunkStandIn: false,
+        isLunaticStandIn: false,
       });
     }
   }
@@ -560,6 +579,19 @@ export function buildBagTokens({
       id: newId(),
       characterId: standIn.id,
       isDrunkStandIn: true,
+      isLunaticStandIn: false,
+    });
+  }
+
+  const lunaticSelected = selectedCharacters.some(
+    (c) => normalizeCharacterId(c.id) === LUNATIC_ID,
+  );
+  if (lunaticSelected && lunaticStandIn) {
+    officialTokens.push({
+      id: newId(),
+      characterId: lunaticStandIn.id,
+      isDrunkStandIn: false,
+      isLunaticStandIn: true,
     });
   }
 
@@ -572,6 +604,10 @@ export interface CreateGameInput {
   playerCount: number;
   selectedCharacters: Character[];
   standIn: Character | null;
+  // Same mechanic as standIn, for the Lunatic's Demon stand-in (issue #163).
+  // Optional (unlike standIn) so every pre-existing caller/test that doesn't
+  // care about the Lunatic keeps working unchanged.
+  lunaticStandIn?: Character | null;
   extraCopies: Record<string, number>;
   almanacUrl?: string | null;
   firstNightOrder?: string[] | null;
@@ -601,6 +637,7 @@ export function createGame({
   playerCount,
   selectedCharacters,
   standIn,
+  lunaticStandIn = null,
   extraCopies,
   almanacUrl = null,
   firstNightOrder = null,
@@ -612,6 +649,7 @@ export function createGame({
   const { officialTokens, travellerTokens } = buildBagTokens({
     selectedCharacters,
     standIn,
+    lunaticStandIn,
     extraCopies,
     newId,
   });
@@ -623,6 +661,7 @@ export function createGame({
     characterId: null,
     startingCharacterId: null,
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
@@ -635,10 +674,11 @@ export function createGame({
 
   const characterPool = Array.from(
     new Map(
-      [...selectedCharacters, ...(standIn ? [standIn] : [])].map((c) => [
-        c.id,
-        c,
-      ]),
+      [
+        ...selectedCharacters,
+        ...(standIn ? [standIn] : []),
+        ...(lunaticStandIn ? [lunaticStandIn] : []),
+      ].map((c) => [c.id, c]),
     ).values(),
   );
 

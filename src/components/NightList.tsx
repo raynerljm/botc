@@ -212,6 +212,9 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
                       {entry.isDrunk && (
                         <span className={styles.note}> (actually the Drunk)</span>
                       )}
+                      {entry.isLunatic && (
+                        <span className={styles.note}> (actually the Lunatic)</span>
+                      )}
                       {entry.skipped && (
                         <span className={styles.skippedBadge}> (skipped)</span>
                       )}

@@ -241,17 +241,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     );
   }
 
-  // A token landing on a seat always sets the same three fields, whether it
-  // got there by draw or by manual assignment. This is always a seat's
-  // *first* character (the only way characterId goes from null to set), so
+  // A token landing on a seat always sets the same fields, whether it got
+  // there by draw or by manual assignment. This is always a seat's *first*
+  // character (the only way characterId goes from null to set), so
   // startingCharacterId is stamped here once and never touched again.
   function tokenAssignmentPatch(
     token: BagToken,
-  ): Pick<Player, "characterId" | "startingCharacterId" | "isDrunk"> {
+  ): Pick<
+    Player,
+    "characterId" | "startingCharacterId" | "isDrunk" | "isLunatic"
+  > {
     return {
       characterId: token.characterId,
       startingCharacterId: token.characterId,
       isDrunk: token.isDrunkStandIn,
+      isLunatic: token.isLunaticStandIn,
     };
   }
 
@@ -530,13 +534,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
-  // isDrunk clears by default: a deliberate swap — whether it's the
-  // dedicated Drunk reveal or a storyteller correction to some other
-  // character — ordinarily ends the stand-in illusion, since there's
-  // nothing left to disguise. The one exception is reassigning the Drunk's
-  // stand-in itself (issue #52's reassignStandIn below) — that only changes
-  // which Townsfolk the disguise is, not whether there's a disguise at all,
-  // so it opts out via endDisguise: false.
+  // isDrunk/isLunatic clear by default: a deliberate swap — whether it's a
+  // dedicated reveal or a storyteller correction to some other character —
+  // ordinarily ends whichever stand-in illusion was active, since there's
+  // nothing left to disguise. The one exception is reassigning a stand-in
+  // itself (issue #52/#163's reassignStandIn below) — that only changes
+  // which Townsfolk/Demon the disguise is, not whether there's a disguise at
+  // all, so it opts out via endDisguise: false.
   function swapCharacter(
     playerId: string,
     characterId: string,
@@ -548,7 +552,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ...game,
       players: updatePlayer(
         playerId,
-        endDisguise ? { characterId, isDrunk: false } : { characterId },
+        endDisguise
+          ? { characterId, isDrunk: false, isLunatic: false }
+          : { characterId },
       ),
       characterPool: withCharacterInPool(game.characterPool, character),
       // The night-list entry id doesn't encode which character it was for
@@ -618,6 +624,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               id: crypto.randomUUID(),
               characterId: player.characterId,
               isDrunkStandIn: false,
+              isLunaticStandIn: false,
             },
           ]
         : game.travellerBag;
@@ -863,6 +870,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       characterId: character.id,
       startingCharacterId: character.id,
       isDrunk: false,
+      isLunatic: false,
       isTraveller: true,
       travellerAlignment,
       dead: false,
@@ -906,6 +914,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       characterId: character.id,
       startingCharacterId: character.id,
       isDrunk: false,
+      isLunatic: false,
       isTraveller: false,
       travellerAlignment: null,
       dead: false,
@@ -1382,6 +1391,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       {player.isDrunk && (
                         <span className={styles.drunkNote}>
                           (actually the Drunk)
+                        </span>
+                      )}
+                      {player.isLunatic && (
+                        <span className={styles.drunkNote}>
+                          (actually the Lunatic)
                         </span>
                       )}
                     </div>

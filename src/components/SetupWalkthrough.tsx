@@ -7,6 +7,7 @@ import {
   DRUNK_ID,
   heldCharacterIds,
   livePlayerPosition,
+  LUNATIC_ID,
   parkBeside,
   type GameDocument,
   type Player,
@@ -101,9 +102,13 @@ function playerOptionLabel(
   const character = characterOf(player, characterById);
   if (!character) return player.name;
   const label = `${player.name} — ${character.name}`;
-  return player.isDrunk && character.id !== DRUNK_ID
-    ? `${label} (actually the Drunk)`
-    : label;
+  if (player.isDrunk && character.id !== DRUNK_ID) {
+    return `${label} (actually the Drunk)`;
+  }
+  if (player.isLunatic && character.id !== LUNATIC_ID) {
+    return `${label} (actually the Lunatic)`;
+  }
+  return label;
 }
 
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
@@ -180,6 +185,7 @@ function StepPanel({
           rest of this panel. */}
       {step.kind === "review" && (
         <StandInReassignControls
+          team={step.standInTeam}
           currentCharacterId={step.characterId}
           currentCharacterName={step.characterName}
           heldElsewhereIds={heldCharacterIds(otherPlayers)}
@@ -279,22 +285,6 @@ function StepPanel({
             />
           )}
 
-          {step.kind === "believedDemon" && (
-            <BelievedDemonControls
-              characterPool={characterPool}
-              onConfirm={(demon) =>
-                resolve("answered", [
-                  {
-                    characterId: null,
-                    label: `Thinks: ${demon.name}`,
-                    position: anchorPosition(step.playerId, players),
-                    anchorPlayerId: step.playerId,
-                  },
-                ])
-              }
-            />
-          )}
-
           {step.kind === "acknowledge" && (
             <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
               <p>{step.message}</p>
@@ -310,11 +300,11 @@ function StepPanel({
                   placeReminder
                     ? [
                         {
-                          // The Drunk's own reminder, not the stand-in
+                          // The seat's true identity, not the stand-in
                           // character's — step.characterId is the stand-in
                           // (e.g. "washerwoman"), which isn't who this
                           // reminder is about.
-                          characterId: "drunk",
+                          characterId: step.disguiseId,
                           label: step.reminderLabel,
                           position: anchorPosition(step.playerId, players),
                           anchorPlayerId: step.playerId,
@@ -553,74 +543,32 @@ function ReminderToggleControls({
   );
 }
 
-function BelievedDemonControls({
-  characterPool,
-  onConfirm,
-}: {
-  characterPool: Character[];
-  onConfirm: (demon: Character) => void;
-}) {
-  const { list, showAll, setShowAll } = useCandidateCharacters(
-    "demon",
-    characterPool,
-  );
-  const [demonId, setDemonId] = useState("");
-  const demon = list.find((c) => c.id === demonId);
-
-  function handleShowAllChange(next: boolean) {
-    setShowAll(next);
-    if (!next && demonId && !characterPool.some((c) => c.id === demonId)) {
-      setDemonId("");
-    }
-  }
-
-  return (
-    <div className={styles.controls}>
-      <label>
-        Demon
-        <Select
-          aria-label="Demon"
-          value={demonId}
-          onChange={setDemonId}
-          entries={[
-            { value: "", label: "Choose a demon…" },
-            ...list.map((c) => ({ value: c.id, label: c.name })),
-          ]}
-        />
-      </label>
-      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
-      <button
-        type="button"
-        disabled={!demon}
-        onClick={() => demon && onConfirm(demon)}
-      >
-        Confirm
-      </button>
-    </div>
-  );
-}
-
-// Lets the storyteller revise the Drunk's stand-in after bag-building's
-// initial pick (issue #52) — a separate action from the reminder-toggle
-// below it, since it changes what the grimoire records rather than placing
-// a reminder, and doesn't move this step's answered/skipped status.
+// Lets the storyteller revise the seat's stand-in after bag-building's
+// initial pick (issue #52, generalised to the Lunatic's Demon stand-in by
+// issue #163) — a separate action from the reminder-toggle below it, since
+// it changes what the grimoire records rather than placing a reminder, and
+// doesn't move this step's answered/skipped status.
 function StandInReassignControls({
+  team,
   currentCharacterId,
   currentCharacterName,
   heldElsewhereIds,
   characterPool,
   onConfirm,
 }: {
+  // townsfolk for the Drunk, demon for the Lunatic.
+  team: Team;
   currentCharacterId: string;
   currentCharacterName: string;
-  // Townsfolk currently held by some other seated player — excluded from
-  // the picker (issue #52 AC: "not already in play as another character").
+  // Characters of `team` currently held by some other seated player —
+  // excluded from the picker (issue #52 AC: "not already in play as another
+  // character").
   heldElsewhereIds: Set<string>;
   characterPool: Character[];
   onConfirm: (characterId: string) => void;
 }) {
   const { list, showAll, setShowAll } = useCandidateCharacters(
-    "townsfolk",
+    team,
     characterPool,
   );
   const candidates = list.filter((c) => !heldElsewhereIds.has(c.id));

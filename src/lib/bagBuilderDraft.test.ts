@@ -19,6 +19,7 @@ function draft(overrides: Partial<Parameters<typeof saveBagBuilderDraft>[1]> = {
     modifierChoices: { baron: 0 },
     extraCopies: { villageidiot: 1 },
     standInId: "chef",
+    lunaticStandInId: "imp",
     ...overrides,
   };
 }
@@ -87,5 +88,21 @@ describe("bag-builder draft persistence", () => {
     const loaded = loadBagBuilderDraft("tb");
     expect(loaded?.autoAddedIds).toEqual([]);
     expect(loaded?.selectedIds).toEqual(["imp", "baron"]);
+  });
+
+  it("restores a pre-#163 draft with no lunaticStandInId field as none chosen, instead of dropping it", () => {
+    const legacyDraft: Record<string, unknown> = { ...draft() };
+    delete legacyDraft.lunaticStandInId;
+    localStorage.setItem("botc:bagBuilderDraft:tb", JSON.stringify(legacyDraft));
+
+    const loaded = loadBagBuilderDraft("tb");
+    expect(loaded?.lunaticStandInId).toBeNull();
+    expect(loaded?.selectedIds).toEqual(["imp", "baron"]);
+  });
+
+  it("round-trips the Lunatic's stand-in choice", () => {
+    saveBagBuilderDraft("tb", draft({ lunaticStandInId: "zombuul" }));
+
+    expect(loadBagBuilderDraft("tb")?.lunaticStandInId).toBe("zombuul");
   });
 });

@@ -29,6 +29,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     characterId: "washerwoman",
     startingCharacterId: "washerwoman",
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
@@ -200,6 +201,32 @@ describe("GrimoireBoard rendering", () => {
     const note = screen.getByText("(actually the Drunk)");
     expect(styles.noteCapitalized).toBeTruthy();
     expect(note.className.split(" ")).not.toContain(styles.noteCapitalized);
+  });
+
+  it("marks a Lunatic stand-in as actually the Lunatic (issue #163)", () => {
+    renderBoard([makePlayer({ isLunatic: true })]);
+
+    expect(screen.getByText(/actually the Lunatic/i)).toBeInTheDocument();
+  });
+
+  it("doesn't show the Lunatic note for a seat that really is the stand-in character", () => {
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["lunatic", getCharacter("lunatic")!],
+    ]);
+    render(
+      <GrimoireBoard
+        players={[makePlayer({ isLunatic: true, characterId: "lunatic" })]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        almanacUrl={null}
+        reminders={[]}
+        activeFabled={[]}
+        {...makeHandlers()}
+      />,
+    );
+
+    expect(screen.queryByText(/actually the Lunatic/i)).not.toBeInTheDocument();
   });
 
   it("shows a traveller's alignment", () => {

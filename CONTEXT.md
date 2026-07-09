@@ -21,7 +21,7 @@ The per-team token counts the bag should contain for the chosen player count, af
 A character ability (flagged `setup: true`) that changes the bag's composition before play, e.g. Baron `[+2 Outsiders]`.
 
 **Stand-in**:
-The Townsfolk token placed in the bag to represent the Drunk. The player who draws it believes they are that Townsfolk; the grimoire records them as the Drunk.
+The token placed in the bag to represent the Drunk or the Lunatic: a Townsfolk for the Drunk, a Demon for the Lunatic. The player who draws it believes they are that character; the grimoire records them as the Drunk or the Lunatic respectively.
 
 **Seat**:
 A player's position in the circle. Seat order defines token layout and matters mechanically (neighbour-reading abilities like Empath).

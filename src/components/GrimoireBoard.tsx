@@ -25,6 +25,7 @@ import {
   clampPct,
   DRUNK_ID,
   heldCharacterIds,
+  LUNATIC_ID,
   nextPadReminderPosition,
   parkBeside,
   type Player,
@@ -768,6 +769,10 @@ export function GrimoireBoard({
             // identity — once swapped to any other character (including a
             // reveal to "drunk" itself), there's nothing left to disguise.
             const isHiddenDrunk = player.isDrunk && character?.id !== DRUNK_ID;
+            // Same mechanic as isHiddenDrunk, for the Lunatic's Demon
+            // stand-in (issue #163).
+            const isHiddenLunatic =
+              player.isLunatic && character?.id !== LUNATIC_ID;
             const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
@@ -823,6 +828,9 @@ export function GrimoireBoard({
                     </span>
                     {isHiddenDrunk && (
                       <span className={styles.note}>(actually the Drunk)</span>
+                    )}
+                    {isHiddenLunatic && (
+                      <span className={styles.note}>(actually the Lunatic)</span>
                     )}
                     {player.isTraveller && (
                       <span className={styles.noteCapitalized}>

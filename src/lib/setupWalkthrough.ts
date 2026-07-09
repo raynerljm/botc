@@ -1,5 +1,5 @@
 import { isOfficialCharacter, type Team } from "./characters";
-import type { GameDocument, Player } from "./gameDocument";
+import { DRUNK_ID, LUNATIC_ID, type GameDocument, type Player } from "./gameDocument";
 
 // The post-draw setup walkthrough (issue #26): a curated table of official
 // characters whose ability needs a storyteller decision before the first
@@ -12,7 +12,6 @@ export type SetupWalkthroughStepKind =
   | "playerPick"
   | "characterAndTwoPlayers"
   | "neighborCheck"
-  | "believedDemon"
   | "acknowledge"
   | "review"
   | "generic";
@@ -64,10 +63,6 @@ export interface NeighborCheckStep extends StepBase {
   seatedCorrectly: boolean;
 }
 
-export interface BelievedDemonStep extends StepBase {
-  kind: "believedDemon";
-}
-
 export interface AcknowledgeStep extends StepBase {
   kind: "acknowledge";
   message: string;
@@ -76,6 +71,13 @@ export interface AcknowledgeStep extends StepBase {
 export interface ReviewStep extends StepBase {
   kind: "review";
   reminderLabel: string;
+  // The seat's true identity behind the disguise ("drunk" or "lunatic") —
+  // used for the review reminder's own characterId (not the stand-in's, per
+  // issue #163's generalisation of issue #52's Drunk-only review step).
+  disguiseId: string;
+  // Which team the reassignment picker offers candidates from (townsfolk for
+  // the Drunk, demon for the Lunatic).
+  standInTeam: Team;
 }
 
 export interface GenericStep extends StepBase {
@@ -88,7 +90,6 @@ export type SetupWalkthroughStep =
   | PlayerPickStep
   | CharacterAndTwoPlayersStep
   | NeighborCheckStep
-  | BelievedDemonStep
   | AcknowledgeStep
   | ReviewStep
   | GenericStep;
@@ -216,6 +217,24 @@ export function buildSetupWalkthroughSteps(
         title: "Drunk — review the stand-in",
         ruleText: `${player.name} was given the Drunk's stand-in character during the bag draw and believes they are it. Confirm this is still correct before the first night.`,
         reminderLabel: "Drunk",
+        disguiseId: DRUNK_ID,
+        standInTeam: "townsfolk",
+      });
+      continue;
+    }
+
+    // Same mechanic as the Drunk above, for the Lunatic's Demon stand-in
+    // (issue #163) — the initial pick already happened at bag build, so this
+    // is a review step, not a fresh up-front pick.
+    if (player.isLunatic) {
+      steps.push({
+        ...base,
+        kind: "review",
+        title: "Lunatic — review the stand-in",
+        ruleText: `${player.name} was given the Lunatic's stand-in Demon during the bag draw and believes they are it. Confirm this is still correct before the first night.`,
+        reminderLabel: "Lunatic",
+        disguiseId: LUNATIC_ID,
+        standInTeam: "demon",
       });
       continue;
     }
@@ -245,17 +264,6 @@ export function buildSetupWalkthroughSteps(
           "The Marionette must sit next to the Demon — move a player if not.",
         reminderLabel: "Is the Marionette",
         seatedCorrectly: seatedNextToDemon(player, game.players, characterById),
-      });
-      continue;
-    }
-
-    if (character.id === "lunatic") {
-      steps.push({
-        ...base,
-        kind: "believedDemon",
-        title: "Lunatic — believed demon",
-        ruleText:
-          "Pick which Demon character the Lunatic believes they are, so you know which fake info and attacks to feed them.",
       });
       continue;
     }

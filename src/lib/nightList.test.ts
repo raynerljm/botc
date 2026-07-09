@@ -324,6 +324,51 @@ describe("computeNightList: character entries and ordering", () => {
   });
 });
 
+describe("computeNightList: disguised stand-in flags (Drunk/Lunatic, issue #163)", () => {
+  it("flags a Drunk's disguised entry as isDrunk, so the storyteller knows the wake is fake", () => {
+    const game = gameWith(["washerwoman", "imp"]);
+    const disguised: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => (i === 0 ? { ...p, isDrunk: true } : p)),
+    };
+    // showAll: true so every entry appears regardless of whether the
+    // character actually acts tonight — this test only cares about the
+    // isDrunk flag reaching the entry, not night-action eligibility.
+    const entries = computeNightList({
+      game: disguised,
+      characterById: characterById(disguised),
+      phase: "first",
+      showAll: true,
+      unskippedIds: new Set(),
+    });
+
+    const washerwomanEntry = entries.find((e) => e.characterId === "washerwoman")!;
+    expect(washerwomanEntry.isDrunk).toBe(true);
+    const impEntry = entries.find((e) => e.characterId === "imp")!;
+    expect(impEntry.isDrunk).toBe(false);
+  });
+
+  it("flags a Lunatic's disguised entry as isLunatic, so the storyteller runs it as the fake ritual, not a real Demon action", () => {
+    const game = gameWith(["imp", "washerwoman"]);
+    const disguised: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => (i === 0 ? { ...p, isLunatic: true } : p)),
+    };
+    const entries = computeNightList({
+      game: disguised,
+      characterById: characterById(disguised),
+      phase: "first",
+      showAll: true,
+      unskippedIds: new Set(),
+    });
+
+    const impEntry = entries.find((e) => e.characterId === "imp")!;
+    expect(impEntry.isLunatic).toBe(true);
+    const washerwomanEntry = entries.find((e) => e.characterId === "washerwoman")!;
+    expect(washerwomanEntry.isLunatic).toBe(false);
+  });
+});
+
 describe("computeNightList: dead players", () => {
   it("marks a dead player's entry skipped unless un-skipped", () => {
     const game = gameWith(["imp", "washerwoman"]);
