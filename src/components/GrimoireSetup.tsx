@@ -1012,7 +1012,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
             // EndGamePanel stay focusable underneath by design (issue #21),
             // so this backdrop hiding them visually doesn't pull them out of
             // the tab order.
-            <div className={styles.choosingFullscreen}>
+            <div
+              className={styles.choosingFullscreen}
+              role="dialog"
+              aria-label={`${drawingSeat.name}, tap a token to draw`}
+            >
               <p>
                 {drawingSeat.name}, tap a token to draw
               </p>
