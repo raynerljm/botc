@@ -23,6 +23,7 @@ import {
   withRestoredReminder,
   type Alignment,
   type BagToken,
+  type EndedNightSnapshot,
   type GameDocument,
   type Player,
   type PlayerPosition,
@@ -42,7 +43,9 @@ import { EndGamePanel } from "./EndGamePanel";
 import { GrimoireBoard } from "./GrimoireBoard";
 import { NightList } from "./NightList";
 import { PlayerNamePicker } from "./PlayerNamePicker";
+import { RadioGroup } from "./RadioGroup";
 import styles from "./GrimoireSetup.module.css";
+import { Select } from "./Select";
 import { SetupWalkthrough, type SetupWalkthroughReminderInput } from "./SetupWalkthrough";
 import { ShareScriptButton } from "./ShareScriptButton";
 
@@ -238,17 +241,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     );
   }
 
-  // A token landing on a seat always sets the same three fields, whether it
-  // got there by draw or by manual assignment. This is always a seat's
-  // *first* character (the only way characterId goes from null to set), so
+  // A token landing on a seat always sets the same fields, whether it got
+  // there by draw or by manual assignment. This is always a seat's *first*
+  // character (the only way characterId goes from null to set), so
   // startingCharacterId is stamped here once and never touched again.
   function tokenAssignmentPatch(
     token: BagToken,
-  ): Pick<Player, "characterId" | "startingCharacterId" | "isDrunk"> {
+  ): Pick<
+    Player,
+    "characterId" | "startingCharacterId" | "isDrunk" | "isLunatic"
+  > {
     return {
       characterId: token.characterId,
       startingCharacterId: token.characterId,
       isDrunk: token.isDrunkStandIn,
+      isLunatic: token.isLunaticStandIn,
     };
   }
 
@@ -322,6 +329,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
     const dead = !player.dead;
+    const entryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(playerId, { dead }),
@@ -330,11 +338,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // "(skipped)" badge NightList renders, rather than a checked box that
       // both counts as done and reads as never-performed (issue #128).
       nightChecked: dead
-        ? withoutNightListEntries(game.nightChecked, [
-            charEntryId(playerId),
-            actsAsEntryId(playerId),
-          ])
+        ? withoutNightListEntries(game.nightChecked, entryIds)
         : game.nightChecked,
+      lastEndedNightSnapshot: dead
+        ? withoutSnapshotNightListEntries(game.lastEndedNightSnapshot, entryIds)
+        : game.lastEndedNightSnapshot,
     });
   }
 
@@ -505,27 +513,48 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     return list.filter((id) => !ids.includes(id));
   }
 
+  // The same pruning, applied to a captured "End night" snapshot (issue
+  // #165) rather than the live nightChecked/nightUnskipped — a reopened
+  // night replays the snapshot verbatim, so a swap/retarget/death that
+  // lands between End night and Reopen must prune it too, or Reopen
+  // resurrects the exact ambiguous checked-and-skipped state issue #128
+  // prunes on the live arrays.
+  function withoutSnapshotNightListEntries(
+    snapshot: EndedNightSnapshot | null,
+    ids: readonly string[],
+  ): EndedNightSnapshot | null {
+    if (!snapshot) return null;
+    return {
+      ...snapshot,
+      nightChecked: withoutNightListEntries(snapshot.nightChecked, ids),
+      nightUnskipped: withoutNightListEntries(snapshot.nightUnskipped, ids),
+    };
+  }
+
   // Swaps only ever change characterId — startingCharacterId (stamped once,
   // at the seat's first assignment) is untouched, so the export can still
   // tell a starting character from a final one that diverged (issue #15).
-  // isDrunk clears by default: a deliberate swap — whether it's the
-  // dedicated Drunk reveal or a storyteller correction to some other
-  // character — ordinarily ends the stand-in illusion, since there's
-  // nothing left to disguise. The one exception is reassigning the Drunk's
-  // stand-in itself (issue #52's reassignStandIn below) — that only changes
-  // which Townsfolk the disguise is, not whether there's a disguise at all,
-  // so it opts out via endDisguise: false.
+  // isDrunk/isLunatic clear by default: a deliberate swap — whether it's a
+  // dedicated reveal or a storyteller correction to some other character —
+  // ordinarily ends whichever stand-in illusion was active, since there's
+  // nothing left to disguise. The one exception is reassigning a stand-in
+  // itself (issue #52/#163's reassignStandIn below) — that only changes
+  // which Townsfolk/Demon the disguise is, not whether there's a disguise at
+  // all, so it opts out via endDisguise: false.
   function swapCharacter(
     playerId: string,
     characterId: string,
     { endDisguise = true }: { endDisguise?: boolean } = {},
   ) {
     const character = getCharacter(characterId);
+    const entryIds = [charEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(
         playerId,
-        endDisguise ? { characterId, isDrunk: false } : { characterId },
+        endDisguise
+          ? { characterId, isDrunk: false, isLunatic: false }
+          : { characterId },
       ),
       characterPool: withCharacterInPool(game.characterPool, character),
       // The night-list entry id doesn't encode which character it was for
@@ -533,10 +562,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // checked/un-skipped state the player's previous character left behind
       // — "done", or exempt from auto-skip, for a wake the new character
       // never had.
-      nightChecked: withoutNightListEntries(game.nightChecked, [charEntryId(playerId)]),
-      nightUnskipped: withoutNightListEntries(game.nightUnskipped, [
-        charEntryId(playerId),
-      ]),
+      nightChecked: withoutNightListEntries(game.nightChecked, entryIds),
+      nightUnskipped: withoutNightListEntries(game.nightUnskipped, entryIds),
+      lastEndedNightSnapshot: withoutSnapshotNightListEntries(
+        game.lastEndedNightSnapshot,
+        entryIds,
+      ),
     });
   }
 
@@ -593,9 +624,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               id: crypto.randomUUID(),
               characterId: player.characterId,
               isDrunkStandIn: false,
+              isLunaticStandIn: false,
             },
           ]
         : game.travellerBag;
+
+    // A removed player's night-list entries and any snapshotted nomination
+    // votes must not survive them (issue #20's live-nominations rule,
+    // extended to the "End night" snapshot by issue #165 — otherwise
+    // Reopen could resurrect a checkmark or a vote tally for a player who
+    // no longer exists).
+    const snapshotEntryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
+    const prunedSnapshot = withoutSnapshotNightListEntries(
+      game.lastEndedNightSnapshot,
+      snapshotEntryIds,
+    );
 
     update({
       ...game,
@@ -608,6 +651,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         ...n,
         votes: n.votes.filter((id) => id !== playerId),
       })),
+      lastEndedNightSnapshot: prunedSnapshot && {
+        ...prunedSnapshot,
+        nominations: prunedSnapshot.nominations.map((n) => ({
+          ...n,
+          votes: n.votes.filter((id) => id !== playerId),
+        })),
+      },
     });
   }
 
@@ -642,6 +692,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // acts-as entry silently never appears.
   function setActsAs(playerId: string, characterId: string | null) {
     const character = characterId ? scriptCharacterById.get(characterId) : undefined;
+    const entryIds = [actsAsEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(playerId, {
@@ -653,10 +704,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // (issue #128), so retargeting (or clearing) would otherwise leave a
       // stale checked/un-skipped state behind — "done", or exempt from
       // auto-skip, for a wake the new target never had.
-      nightChecked: withoutNightListEntries(game.nightChecked, [actsAsEntryId(playerId)]),
-      nightUnskipped: withoutNightListEntries(game.nightUnskipped, [
-        actsAsEntryId(playerId),
-      ]),
+      nightChecked: withoutNightListEntries(game.nightChecked, entryIds),
+      nightUnskipped: withoutNightListEntries(game.nightUnskipped, entryIds),
+      lastEndedNightSnapshot: withoutSnapshotNightListEntries(
+        game.lastEndedNightSnapshot,
+        entryIds,
+      ),
     });
   }
 
@@ -817,6 +870,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       characterId: character.id,
       startingCharacterId: character.id,
       isDrunk: false,
+      isLunatic: false,
       isTraveller: true,
       travellerAlignment,
       dead: false,
@@ -860,6 +914,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       characterId: character.id,
       startingCharacterId: character.id,
       isDrunk: false,
+      isLunatic: false,
       isTraveller: false,
       travellerAlignment: null,
       dead: false,
@@ -893,14 +948,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     game.players.length > 0 &&
     game.players.every((p) => p.characterId !== null);
   // "Screen blurred/obscured" means the *whole* screen, not just the draw
-  // card — every other control (seat names, manual-assign dropdowns listing
-  // bag characters, traveller add, the grimoire board once every seat is
-  // filled) has to disappear too, both while a character is privately on
-  // screen and while the device is mid pass-around — i.e. whenever a draw is
-  // active and it isn't the safe "choosing" stage. Written as a deny-list
-  // (not `stage === "revealed" || stage === "hidden"`) so a future
-  // privacy-sensitive stage is obscured by default instead of needing this
-  // line remembered.
+  // card — every other control (traveller add, the grimoire board once every
+  // seat is filled) has to disappear too, both while a character is
+  // privately on screen and while the device is mid pass-around — i.e.
+  // whenever a draw is active and it isn't the safe "choosing" stage. Written
+  // as a deny-list (not `stage === "revealed" || stage === "hidden"`) so a
+  // future privacy-sensitive stage is obscured by default instead of needing
+  // this line remembered. The seats list (seat names, manual-assign
+  // dropdowns, "Assigned"/"Draw in progress" status) is stricter still — it
+  // uses its own `!draw` gate at its render site (issue #158), since its own
+  // full-screen "choosing" grid means "choosing" isn't safe for *that*
+  // control the way it is for the others here.
   const screenObscured = draw !== null && draw.stage !== "choosing";
   // Export/end-game/script-sharing stay reachable through a private reveal
   // (issue #21 AC: always reachable) — only the pass-around hand-off itself
@@ -956,7 +1014,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       {draw && drawingSeat && (
         <div className={styles.drawFlow} role="region" aria-label="Bag draw">
           {draw.stage === "choosing" && (
-            <>
+            // Full-screen like the reveal (issue #53's .reveal) — the
+            // drawing player needs only these tokens on screen, not the
+            // seats list rendering behind them (issue #158). Same
+            // no-aria-modal trade-off as the reveal below: ShareScriptButton/
+            // EndGamePanel stay focusable underneath by design (issue #21),
+            // so this backdrop hiding them visually doesn't pull them out of
+            // the tab order.
+            <div
+              className={styles.choosingFullscreen}
+              role="dialog"
+              aria-label={`${drawingSeat.name}, tap a token to draw`}
+            >
               <p>
                 {drawingSeat.name}, tap a token to draw
               </p>
@@ -968,11 +1037,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       className={styles.faceDownToken}
                       aria-label={`Face-down token ${index + 1}`}
                       onClick={(event) => chooseTokenOnClick(event, token.id)}
-                    />
+                    >
+                      <span aria-hidden="true">{index + 1}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           )}
 
           {draw.stage === "revealed" && revealedCharacter && (
@@ -1054,53 +1125,38 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         <form className={styles.travellerForm} onSubmit={addTraveller}>
           <label>
             Traveller character
-            <select
+            <Select
+              aria-label="Traveller character"
               value={travellerCharacterId}
-              onChange={(event) => setTravellerCharacterId(event.target.value)}
-            >
-              {travellerAddOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))}
-            </select>
+              onChange={setTravellerCharacterId}
+              entries={travellerAddOptions.map((character) => ({
+                value: character.id,
+                label: character.name,
+              }))}
+            />
           </label>
-          <fieldset>
-            <legend>Alignment</legend>
-            <label>
-              <input
-                type="radio"
-                name="traveller-alignment"
-                value="good"
-                checked={travellerAlignment === "good"}
-                onChange={() => setTravellerAlignment("good")}
-              />
-              Good
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="traveller-alignment"
-                value="evil"
-                checked={travellerAlignment === "evil"}
-                onChange={() => setTravellerAlignment("evil")}
-              />
-              Evil
-            </label>
-          </fieldset>
+          <RadioGroup
+            name="traveller-alignment"
+            legend="Alignment"
+            value={travellerAlignment}
+            onChange={setTravellerAlignment}
+            options={[
+              { value: "good", label: "Good" },
+              { value: "evil", label: "Evil" },
+            ]}
+          />
           <label>
             Seat position
-            <select
+            <Select
+              aria-label="Seat position"
               className={styles.select}
-              value={travellerSeat}
-              onChange={(event) => setTravellerSeat(Number(event.target.value))}
-            >
-              {seatPositionOptions(game.players).map((option) => (
-                <option key={option.seat} value={option.seat}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              value={String(travellerSeat)}
+              onChange={(next) => setTravellerSeat(Number(next))}
+              entries={seatPositionOptions(game.players).map((option) => ({
+                value: String(option.seat),
+                label: option.label,
+              }))}
+            />
           </label>
           <button type="submit" className={styles.formSubmit}>
             Add to the circle
@@ -1122,30 +1178,28 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         <form className={styles.travellerForm} onSubmit={addToken}>
           <label>
             Character
-            <select
+            <Select
+              aria-label="Character"
               value={tokenCharacterId}
-              onChange={(event) => setTokenCharacterId(event.target.value)}
-            >
-              {addTokenOptions.map((character) => (
-                <option key={character.id} value={character.id}>
-                  {character.name}
-                </option>
-              ))}
-            </select>
+              onChange={setTokenCharacterId}
+              entries={addTokenOptions.map((character) => ({
+                value: character.id,
+                label: character.name,
+              }))}
+            />
           </label>
           <label>
             Seat position
-            <select
+            <Select
+              aria-label="Seat position"
               className={styles.select}
-              value={tokenSeat}
-              onChange={(event) => setTokenSeat(Number(event.target.value))}
-            >
-              {seatPositionOptions(game.players).map((option) => (
-                <option key={option.seat} value={option.seat}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              value={String(tokenSeat)}
+              onChange={(next) => setTokenSeat(Number(next))}
+              entries={seatPositionOptions(game.players).map((option) => ({
+                value: String(option.seat),
+                label: option.label,
+              }))}
+            />
           </label>
           <button type="submit">Add to the grimoire</button>
           <button type="button" onClick={() => setTokenFormOpen(false)}>
@@ -1206,6 +1260,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <div
             className={styles.circleLayout}
             hidden={showWalkthrough || screenObscured}
+            // Both side panels collapsed is the only case that actually frees
+            // width for the circle to grow into — the two panels share one
+            // grid column, so collapsing only one still leaves the column
+            // reserved for whichever panel is still expanded (issue #168).
+            data-side-collapsed={
+              (game.nightListCollapsed && game.dayPhaseCollapsed) || undefined
+            }
           >
             <div
               role="region"
@@ -1239,11 +1300,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onRemoveFabled={removeFabled}
                 onSetClaim={setClaim}
                 onSetActsAs={setActsAs}
-                // Always available — the walkthrough always has at least its
-                // Demon bluffs step (issue #155), so this is never undefined
-                // in practice; GrimoireBoard's own prop stays optional since
-                // it's a generically reusable board, not specific to this.
-                onOpenSetupWalkthrough={openWalkthrough}
+                // Undefined once the first night has ended (issue #170) —
+                // those are pre-first-night decisions, so the standing
+                // reopen entry point is clutter afterward. Before that, the
+                // walkthrough always has at least its Demon bluffs step
+                // (issue #155), so this is never undefined in practice;
+                // GrimoireBoard's own prop stays optional since it's a
+                // generically reusable board, not specific to this.
+                onOpenSetupWalkthrough={
+                  firstNightEnded(game) ? undefined : openWalkthrough
+                }
               />
             </div>
             <div className={styles.nightListArea}>
@@ -1284,44 +1350,36 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           )}
         </>
       ) : (
-        !screenObscured && (
+        // Hidden for the whole draw session, not just the obscured stages —
+        // the choosing stage's own full-screen token grid (issue #158) means
+        // this list never has anything useful to show until every seat is
+        // filled or the draw hasn't started yet.
+        !draw && (
           <ul className={styles.seats} aria-label="Seats">
             {game.players.map((player) => {
               const character = player.characterId
                 ? characterById.get(player.characterId)
                 : undefined;
+              // `draw` is always null here — the whole list is hidden
+              // whenever a draw session is active (issue #158) — so every
+              // seat is either already assigned or open for manual pick,
+              // with no "revealed"/"Assigned"/"Draw in progress" mid-draw
+              // placeholder state possible.
               return (
                 <li key={player.id} className={styles.seat}>
-                  {draw?.seatId === player.id && draw.stage === "revealed" ? (
-                    // The reveal panel's PlayerNamePicker is this seat's only
-                    // name editor while it's on-screen — a second live field
-                    // here would let the two silently overwrite each other.
-                    <p className={styles.assignedPlaceholder}>Naming above</p>
-                  ) : (
-                    <>
-                      <label htmlFor={`seat-name-${player.id}`}>
-                        Seat {player.seat} name
-                      </label>
-                      <input
-                        id={`seat-name-${player.id}`}
-                        type="text"
-                        value={player.name}
-                        onChange={(event) =>
-                          renamePlayer(player.id, event.target.value)
-                        }
-                        onBlur={() => commitPlayerName(player.id)}
-                      />
-                    </>
-                  )}
-                  {character && draw && (
-                    // A draw session is on-screen for a *different* seat
-                    // right now, which means the device is mid pass-around
-                    // — every other seat's already-revealed identity has
-                    // to stay hidden too, not just the seat currently
-                    // drawing.
-                    <p className={styles.assignedPlaceholder}>Assigned</p>
-                  )}
-                  {character && !draw && (
+                  <label htmlFor={`seat-name-${player.id}`}>
+                    Seat {player.seat} name
+                  </label>
+                  <input
+                    id={`seat-name-${player.id}`}
+                    type="text"
+                    value={player.name}
+                    onChange={(event) =>
+                      renamePlayer(player.id, event.target.value)
+                    }
+                    onBlur={() => commitPlayerName(player.id)}
+                  />
+                  {character ? (
                     <div className={styles.assignedCharacter}>
                       <CharacterToken character={character} />
                       <span>{character.name}</span>
@@ -1335,36 +1393,28 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                           (actually the Drunk)
                         </span>
                       )}
+                      {player.isLunatic && (
+                        <span className={styles.drunkNote}>
+                          (actually the Lunatic)
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {!character && draw && (
-                    // A draw session is active — bag composition is the
-                    // storyteller's secret, and this select would list every
-                    // remaining character (including, for the last
-                    // unassigned seat, letting it read its own character
-                    // before the reveal) to whoever's holding the device
-                    // mid-draw (issue #111).
-                    <p className={styles.assignedPlaceholder}>
-                      Draw in progress
-                    </p>
-                  )}
-                  {!character && !draw && (
+                  ) : (
                     <label>
-                      Assign seat {player.seat} manually
-                      <select
+                      {`Assign seat ${player.seat} manually`}
+                      <Select
+                        aria-label={`Assign seat ${player.seat} manually`}
                         className={styles.select}
                         value=""
-                        onChange={(event) =>
-                          assignManually(player.id, event.target.value)
-                        }
-                      >
-                        <option value="">Choose a character…</option>
-                        {game.bag.map((token) => (
-                          <option key={token.id} value={token.id}>
-                            {tokenCharacterName(token)}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(next) => assignManually(player.id, next)}
+                        entries={[
+                          { value: "", label: "Choose a character…" },
+                          ...game.bag.map((token) => ({
+                            value: token.id,
+                            label: tokenCharacterName(token),
+                          })),
+                        ]}
+                      />
                     </label>
                   )}
                 </li>

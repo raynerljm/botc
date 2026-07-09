@@ -33,6 +33,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     characterId: "washerwoman",
     startingCharacterId: "washerwoman",
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
@@ -289,6 +290,35 @@ describe("buildBagTokens", () => {
     ).toHaveLength(2);
   });
 
+  it("gives the Lunatic's slot a Demon stand-in token instead of a 'lunatic' token (issue #163)", () => {
+    const { officialTokens } = buildBagTokens({
+      selectedCharacters: characters("washerwoman", "lunatic", "baron", "imp"),
+      standIn: null,
+      lunaticStandIn: getCharacter("zombuul") ?? null,
+      extraCopies: {},
+    });
+
+    expect(officialTokens.some((t) => t.characterId === "lunatic")).toBe(false);
+    const standIns = officialTokens.filter((t) => t.isLunaticStandIn);
+    expect(standIns).toHaveLength(1);
+    expect(standIns[0].characterId).toBe("zombuul");
+    expect(
+      officialTokens.filter((t) => t.characterId === "zombuul"),
+    ).toHaveLength(1);
+  });
+
+  it("leaves the Lunatic's slot without a token when no Demon stand-in is given, same as the Drunk", () => {
+    const { officialTokens } = buildBagTokens({
+      selectedCharacters: characters("washerwoman", "lunatic", "imp"),
+      standIn: null,
+      lunaticStandIn: null,
+      extraCopies: {},
+    });
+
+    expect(officialTokens).toHaveLength(2);
+    expect(officialTokens.some((t) => t.isLunaticStandIn)).toBe(false);
+  });
+
   it("expands extra copies (e.g. Village Idiot) into repeated tokens", () => {
     const { officialTokens } = buildBagTokens({
       selectedCharacters: characters("villageidiot"),
@@ -520,6 +550,20 @@ describe("createGame", () => {
     );
   });
 
+  it("starts every player not disguised as the Drunk or the Lunatic", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.players.every((p) => p.isDrunk === false)).toBe(true);
+    expect(game.players.every((p) => p.isLunatic === false)).toBe(true);
+  });
+
   it("starts unfinished: no winner, no end time, empty notes", () => {
     const game = createGame({
       scriptId: "tb",
@@ -609,6 +653,21 @@ describe("createGame", () => {
     expect(game.characterPool).toContainEqual(homebrewCharacter);
   });
 
+  it("includes the Lunatic's Demon stand-in in the character pool (issue #163)", () => {
+    const zombuul = getCharacter("zombuul")!;
+    const game = createGame({
+      scriptId: "custom-script",
+      scriptName: "Custom Script",
+      playerCount: 1,
+      selectedCharacters: characters("lunatic"),
+      standIn: null,
+      lunaticStandIn: zombuul,
+      extraCopies: {},
+    });
+
+    expect(game.characterPool).toContainEqual(zombuul);
+  });
+
   it("starts with three empty Demon bluff slots and no player claims", () => {
     const game = createGame({
       scriptId: "tb",
@@ -665,6 +724,20 @@ describe("createGame", () => {
     expect(game.demonBluffsCollapsed).toBe(false);
     expect(game.claimsCollapsed).toBe(false);
     expect(game.endGamePanelCollapsed).toBeNull();
+  });
+
+  it("starts with the Night List and Day Phase side panels expanded (issue #168)", () => {
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: characters("washerwoman"),
+      standIn: null,
+      extraCopies: {},
+    });
+
+    expect(game.nightListCollapsed).toBe(false);
+    expect(game.dayPhaseCollapsed).toBe(false);
   });
 });
 

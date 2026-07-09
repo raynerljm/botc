@@ -149,6 +149,7 @@ describe("buildGameSnapshot", () => {
       characterId: "scapegoat",
       startingCharacterId: "scapegoat",
       isDrunk: false,
+      isLunatic: false,
       isTraveller: true,
       travellerAlignment: "evil",
       dead: false,
@@ -259,6 +260,28 @@ describe("buildGameSnapshot", () => {
     const sarah = snapshot.players.find((p) => p.name === "Sarah")!;
 
     expect(sarah.isDrunk).toBe(false);
+  });
+
+  it("records a stand-in's true identity as the Lunatic (issue #163)", () => {
+    const game = makeGame();
+    const withLunatic = {
+      ...game,
+      players: game.players.map((p) =>
+        p.name === "Alex" ? { ...p, isLunatic: true } : p,
+      ),
+    };
+
+    const snapshot = buildGameSnapshot(withLunatic);
+    const alex = snapshot.players.find((p) => p.name === "Alex")!;
+
+    expect(alex.isLunatic).toBe(true);
+  });
+
+  it("marks a genuine (non-Lunatic) player false", () => {
+    const snapshot = buildGameSnapshot(makeGame());
+    const sarah = snapshot.players.find((p) => p.name === "Sarah")!;
+
+    expect(sarah.isLunatic).toBe(false);
   });
 
   it("carries only the filled Demon bluff slots into the snapshot", () => {

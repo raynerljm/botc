@@ -10,15 +10,21 @@ function characters(...ids: string[]) {
 
 // Builds a game with one player per given character id, seated in order,
 // each already assigned (as if the bag draw just finished).
-function gameWithCharacters(ids: string[], drunkStandInFor?: string): GameDocument {
+function gameWithCharacters(
+  ids: string[],
+  drunkStandInFor?: string,
+  lunaticStandInFor?: string,
+): GameDocument {
   const selected = characters(...ids);
   const standIn = drunkStandInFor ? getCharacter(drunkStandInFor)! : null;
+  const lunaticStandIn = lunaticStandInFor ? getCharacter(lunaticStandInFor)! : null;
   const game = createGame({
     scriptId: "custom",
     scriptName: "Test script",
     playerCount: ids.length,
     selectedCharacters: selected,
     standIn,
+    lunaticStandIn,
     extraCopies: {},
     newId: (() => {
       let n = 0;
@@ -27,14 +33,16 @@ function gameWithCharacters(ids: string[], drunkStandInFor?: string): GameDocume
   });
 
   const assignable = ids
-    .filter((id) => id !== "drunk")
+    .filter((id) => id !== "drunk" && id !== "lunatic")
     .map((id, i) => ({ playerIndex: i, characterId: id }));
 
   let players = game.players;
   for (const { playerIndex, characterId } of assignable) {
     const isDrunk = drunkStandInFor !== undefined && characterId === drunkStandInFor;
+    const isLunatic =
+      lunaticStandInFor !== undefined && characterId === lunaticStandInFor;
     players = players.map((p, i) =>
-      i === playerIndex ? { ...p, characterId, isDrunk } : p,
+      i === playerIndex ? { ...p, characterId, isDrunk, isLunatic } : p,
     );
   }
   return { ...game, players };
@@ -166,14 +174,24 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     });
   });
 
-  it("gives the Lunatic a believedDemon step", () => {
-    const game = gameWithCharacters(["lunatic", "imp", "chef"]);
-    const step = stepFor(game, "lunatic");
+  it("gives the Lunatic a review step keyed by the stand-in player, not their apparent character's own step (issue #163)", () => {
+    const game = gameWithCharacters(
+      ["lunatic", "imp", "chef"],
+      undefined,
+      "imp",
+    );
+    const steps = buildSetupWalkthroughSteps(game);
+    const lunaticPlayer = game.players.find((p) => p.isLunatic)!;
+    const lunaticSteps = stepsForPlayerId(steps, lunaticPlayer.id);
 
-    expect(step).toMatchObject({
-      kind: "believedDemon",
-      characterId: "lunatic",
+    expect(lunaticSteps[0]).toMatchObject({
+      kind: "review",
+      reminderLabel: "Lunatic",
+      disguiseId: "lunatic",
+      standInTeam: "demon",
     });
+    // Only one step for that seat — not also a stray step for the Imp.
+    expect(lunaticSteps).toHaveLength(1);
   });
 
   it("gives the Damsel an acknowledge step for telling the Minions", () => {

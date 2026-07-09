@@ -35,6 +35,8 @@ import {
 import { CharacterToken } from "./CharacterToken";
 import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./BagBuilder.module.css";
+import { NumberStepper } from "./NumberStepper";
+import { Select } from "./Select";
 
 // Setup characters whose bracket text isn't a structured count delta, but
 // which break the normal team distribution by design — their own ability
@@ -91,6 +93,7 @@ function withAutoAdded(prev: Set<string>, added: string[]): Set<string> {
 }
 
 const DRUNK_ID = "drunk";
+const LUNATIC_ID = "lunatic";
 
 const OFFICIAL_TEAMS = new Set<Team>([
   "townsfolk",
@@ -220,6 +223,9 @@ export function BagBuilder({
   const [standInId, setStandInId] = useState<string | null>(
     initialDraft?.standInId ?? null,
   );
+  const [lunaticStandInId, setLunaticStandInId] = useState<string | null>(
+    initialDraft?.lunaticStandInId ?? null,
+  );
   const [showCountWarning, setShowCountWarning] = useState(false);
   const [showInProgressWarning, setShowInProgressWarning] = useState(false);
 
@@ -237,6 +243,7 @@ export function BagBuilder({
       modifierChoices,
       extraCopies,
       standInId,
+      lunaticStandInId,
     });
   }, [
     scriptId,
@@ -247,6 +254,7 @@ export function BagBuilder({
     modifierChoices,
     extraCopies,
     standInId,
+    lunaticStandInId,
   ]);
 
   // The selectable pool is the script's characters plus anything a special
@@ -324,6 +332,28 @@ export function BagBuilder({
   const relaxValidation = relaxedCharacters.length > 0;
   const activeJinxes = computeActiveJinxes(selectedCharacters);
 
+  // Scoped to this script's own pool — a Demon not on this script has no
+  // physical token here, so it can't stand in for the Lunatic. Excludes the
+  // Demon(s) actually selected into the bag, same as the Drunk's
+  // availableStandIns excludes selected Townsfolk — the stand-in isn't a
+  // second, independent pick of a character already in play.
+  const availableDemonStandIns = pool.filter(
+    (c) => c.team === "demon" && !selectedIds.has(c.id),
+  );
+  // Unlike the Drunk, the Lunatic always gets a stand-in (advisory, never
+  // blocking — ADR 0003): the first available Demon applies automatically
+  // whenever the storyteller hasn't chosen one.
+  const defaultLunaticStandIn = availableDemonStandIns[0] ?? null;
+  // Resolved against the current pool, not just "is an id present" — a
+  // draft's lunaticStandInId can go stale (e.g. the script changed since it
+  // was saved), and treating that stale id as "chosen" would both suppress
+  // the warning below and silently drop the game back to no stand-in at all
+  // (code review finding). This is the one source of truth both the warning
+  // and createAndEnterGame's actual resolution read from.
+  const resolvedLunaticStandIn = lunaticStandInId
+    ? (poolById.get(lunaticStandInId) ?? null)
+    : null;
+
   const requirementWarnings = selectedCharacters.flatMap((character) => {
     const parsed = parsedModifiers.get(character.id);
     if (!parsed?.requiresCharacterName) return [];
@@ -340,6 +370,15 @@ export function BagBuilder({
   if (selectedIds.has(DRUNK_ID) && !standInId) {
     requirementWarnings.push(
       "The Drunk needs a stand-in Townsfolk picked before its seat can be filled.",
+    );
+  }
+  // The Lunatic only reaches this same "unfillable seat" warning in the rare
+  // case no Demon stand-in is available at all (e.g. the script's only
+  // Demon is already the one selected into the bag) — otherwise a default
+  // always applies, so no warning is needed.
+  if (selectedIds.has(LUNATIC_ID) && !resolvedLunaticStandIn && !defaultLunaticStandIn) {
+    requirementWarnings.push(
+      "The Lunatic needs a stand-in Demon available before its seat can be filled.",
     );
   }
   function toggleCharacter(character: Character) {
@@ -387,6 +426,12 @@ export function BagBuilder({
       // token, so they can no longer also stand in for the Drunk.
       setStandInId(null);
     }
+    if (normalizeCharacterId(character.id) === LUNATIC_ID) {
+      setLunaticStandInId(null);
+    } else if (character.id === lunaticStandInId) {
+      // Same reasoning as the Drunk's stand-in above, for the Lunatic.
+      setLunaticStandInId(null);
+    }
   }
 
   function targetFor(team: Team): number {
@@ -416,6 +461,7 @@ export function BagBuilder({
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.
     if (standInId && next.has(standInId)) setStandInId(null);
+    if (lunaticStandInId && next.has(lunaticStandInId)) setLunaticStandInId(null);
   }
 
   function handleContinue() {
@@ -446,12 +492,20 @@ export function BagBuilder({
   function createAndEnterGame() {
     if (!scriptId || !scriptName) return;
     setShowInProgressWarning(false);
+    // Advisory default (ADR 0003, AC5): an explicit pick always wins, but an
+    // unset (or stale) Lunatic stand-in still resolves to an available
+    // Demon rather than leaving the seat unfillable the way the Drunk's
+    // does.
+    const lunaticStandIn = selectedIds.has(LUNATIC_ID)
+      ? (resolvedLunaticStandIn ?? defaultLunaticStandIn)
+      : null;
     const game = createGame({
       scriptId,
       scriptName,
       playerCount: effectivePlayerCount,
       selectedCharacters,
       standIn: standInId ? (poolById.get(standInId) ?? null) : null,
+      lunaticStandIn,
       extraCopies,
       almanacUrl,
       firstNightOrder,
@@ -526,47 +580,43 @@ export function BagBuilder({
   return (
     <div className={styles.main}>
       <div className={styles.controls}>
-        <label className={styles.field}>
-          Player count
-          <input
-            type="number"
+        <div className={styles.field}>
+          <label htmlFor="player-count">Player count</label>
+          {/* Clamping is deferred to blur: clamping on every keystroke
+              fights the browser's in-progress digit-by-digit typing (e.g.
+              typing "13" would clamp the intermediate "1" to 5 first), and
+              an empty string is kept as-is so the field can actually be
+              blanked mid-edit instead of snapping to 0. */}
+          <NumberStepper
+            id="player-count"
+            aria-label="Player count"
             min={MIN_PLAYERS}
             max={maxPlayers}
             value={playerCount}
-            // Clamping is deferred to blur: clamping on every keystroke
-            // fights the browser's in-progress digit-by-digit typing (e.g.
-            // typing "13" would clamp the intermediate "1" to 5 first), and
-            // an empty string is kept as-is so the field can actually be
-            // blanked mid-edit instead of snapping to 0.
-            onChange={(event) => {
-              const raw = event.target.value;
-              setPlayerCount(raw === "" ? "" : Number(raw));
-            }}
+            onChange={setPlayerCount}
             onBlur={() =>
               setPlayerCount((value) =>
                 clamp(value === "" ? NaN : value, MIN_PLAYERS, maxPlayers),
               )
             }
           />
-        </label>
-        <label className={styles.field}>
-          Traveller count
-          <input
-            type="number"
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="traveller-count">Traveller count</label>
+          <NumberStepper
+            id="traveller-count"
+            aria-label="Traveller count"
             min={0}
             max={MAX_TRAVELLERS}
             value={travellerCount}
-            onChange={(event) => {
-              const raw = event.target.value;
-              setTravellerCount(raw === "" ? "" : Number(raw));
-            }}
+            onChange={setTravellerCount}
             onBlur={() =>
               setTravellerCount((value) =>
                 clamp(value === "" ? NaN : value, 0, MAX_TRAVELLERS),
               )
             }
           />
-        </label>
+        </div>
         <button
           type="button"
           className={styles.randomize}
@@ -643,18 +693,44 @@ export function BagBuilder({
             Pick the Drunk&apos;s stand-in (the Townsfolk the player believes
             they are)
           </label>
-          <select
+          <Select
             id="stand-in-select"
             value={standInId ?? ""}
-            onChange={(event) => setStandInId(event.target.value || null)}
-          >
-            <option value="">Choose a stand-in…</option>
-            {availableStandIns.map((character) => (
-              <option key={character.id} value={character.id}>
-                {character.name}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => setStandInId(next || null)}
+            entries={[
+              { value: "", label: "Choose a stand-in…" },
+              ...availableStandIns.map((character) => ({
+                value: character.id,
+                label: character.name,
+              })),
+            ]}
+          />
+        </div>
+      )}
+
+      {selectedIds.has(LUNATIC_ID) && (
+        <div className={styles.standIn}>
+          <label htmlFor="lunatic-stand-in-select">
+            Pick the Lunatic&apos;s stand-in (the Demon the player believes
+            they are)
+          </label>
+          <Select
+            id="lunatic-stand-in-select"
+            value={lunaticStandInId ?? ""}
+            onChange={(next) => setLunaticStandInId(next || null)}
+            entries={[
+              {
+                value: "",
+                label: defaultLunaticStandIn
+                  ? `Choose a stand-in… (defaults to ${defaultLunaticStandIn.name})`
+                  : "Choose a stand-in…",
+              },
+              ...availableDemonStandIns.map((character) => ({
+                value: character.id,
+                label: character.name,
+              })),
+            ]}
+          />
         </div>
       )}
 
@@ -695,6 +771,7 @@ export function BagBuilder({
                   isSelected && parsed?.extraCopies ? parsed.extraCopies : null;
 
                 const isStandIn = character.id === standInId;
+                const isLunaticStandIn = character.id === lunaticStandInId;
 
                 return (
                   <li key={character.id}>
@@ -702,7 +779,7 @@ export function BagBuilder({
                       type="button"
                       className={styles.character}
                       aria-pressed={isSelected}
-                      data-standin={isStandIn || undefined}
+                      data-standin={isStandIn || isLunaticStandIn || undefined}
                       onClick={() => toggleCharacter(character)}
                     >
                       <CharacterToken character={character} />
@@ -730,48 +807,53 @@ export function BagBuilder({
                             Drunk&apos;s stand-in
                           </span>
                         )}
+                        {isLunaticStandIn && (
+                          <span className={styles.standInBadge}>
+                            Lunatic&apos;s stand-in
+                          </span>
+                        )}
                       </span>
                     </button>
                     {choiceOptions && (
-                      <select
+                      <Select
                         className={styles.select}
                         aria-label={`${character.name} setup choice`}
-                        value={modifierChoices[character.id] ?? 0}
-                        onChange={(event) =>
+                        value={String(modifierChoices[character.id] ?? 0)}
+                        onChange={(next) =>
                           setModifierChoices((prev) => ({
                             ...prev,
-                            [character.id]: Number(event.target.value),
+                            [character.id]: Number(next),
                           }))
                         }
-                      >
-                        {choiceOptions.map((option, index) => (
-                          <option key={option.label} value={index}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        entries={choiceOptions.map((option, index) => ({
+                          value: String(index),
+                          label: option.label,
+                        }))}
+                      />
                     )}
                     {copiesRange && (
-                      <label>
-                        Extra {character.name} copies
-                        <input
-                          type="number"
+                      <div className={styles.extraCopies}>
+                        <label htmlFor={`extra-copies-${character.id}`}>
+                          {`Extra ${character.name} copies`}
+                        </label>
+                        <NumberStepper
+                          id={`extra-copies-${character.id}`}
                           aria-label={`Extra ${character.name} copies`}
                           min={copiesRange.min}
                           max={copiesRange.max}
                           value={extraCopies[character.id] ?? 0}
-                          onChange={(event) =>
+                          onChange={(next) =>
                             setExtraCopies((prev) => ({
                               ...prev,
                               [character.id]: clamp(
-                                Number(event.target.value),
+                                next === "" ? 0 : next,
                                 copiesRange.min,
                                 copiesRange.max,
                               ),
                             }))
                           }
                         />
-                      </label>
+                      </div>
                     )}
                   </li>
                 );

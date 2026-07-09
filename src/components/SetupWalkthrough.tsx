@@ -7,6 +7,7 @@ import {
   DRUNK_ID,
   heldCharacterIds,
   livePlayerPosition,
+  LUNATIC_ID,
   parkBeside,
   type GameDocument,
   type Player,
@@ -15,7 +16,9 @@ import {
 } from "@/lib/gameDocument";
 import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
+import { Checkbox } from "./Checkbox";
 import { DemonBluffsFields } from "./DemonBluffsPanel";
+import { Select } from "./Select";
 import styles from "./SetupWalkthrough.module.css";
 import { useDialogDismiss } from "./useDialogDismiss";
 
@@ -99,9 +102,13 @@ function playerOptionLabel(
   const character = characterOf(player, characterById);
   if (!character) return player.name;
   const label = `${player.name} — ${character.name}`;
-  return player.isDrunk && character.id !== DRUNK_ID
-    ? `${label} (actually the Drunk)`
-    : label;
+  if (player.isDrunk && character.id !== DRUNK_ID) {
+    return `${label} (actually the Drunk)`;
+  }
+  if (player.isLunatic && character.id !== LUNATIC_ID) {
+    return `${label} (actually the Lunatic)`;
+  }
+  return label;
 }
 
 function useCandidateCharacters(team: Team, characterPool: Character[]) {
@@ -178,6 +185,7 @@ function StepPanel({
           rest of this panel. */}
       {step.kind === "review" && (
         <StandInReassignControls
+          team={step.standInTeam}
           currentCharacterId={step.characterId}
           currentCharacterName={step.characterName}
           heldElsewhereIds={heldCharacterIds(otherPlayers)}
@@ -277,22 +285,6 @@ function StepPanel({
             />
           )}
 
-          {step.kind === "believedDemon" && (
-            <BelievedDemonControls
-              characterPool={characterPool}
-              onConfirm={(demon) =>
-                resolve("answered", [
-                  {
-                    characterId: null,
-                    label: `Thinks: ${demon.name}`,
-                    position: anchorPosition(step.playerId, players),
-                    anchorPlayerId: step.playerId,
-                  },
-                ])
-              }
-            />
-          )}
-
           {step.kind === "acknowledge" && (
             <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
               <p>{step.message}</p>
@@ -308,11 +300,11 @@ function StepPanel({
                   placeReminder
                     ? [
                         {
-                          // The Drunk's own reminder, not the stand-in
+                          // The seat's true identity, not the stand-in
                           // character's — step.characterId is the stand-in
                           // (e.g. "washerwoman"), which isn't who this
                           // reminder is about.
-                          characterId: "drunk",
+                          characterId: step.disguiseId,
                           label: step.reminderLabel,
                           position: anchorPosition(step.playerId, players),
                           anchorPlayerId: step.playerId,
@@ -388,14 +380,18 @@ function PlayerPickControls({
     <div className={styles.controls}>
       <label>
         Player
-        <select value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
-          <option value="">Choose a player…</option>
-          {otherPlayers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {playerOptionLabel(p, characterById)}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Player"
+          value={playerId}
+          onChange={setPlayerId}
+          entries={[
+            { value: "", label: "Choose a player…" },
+            ...otherPlayers.map((p) => ({
+              value: p.id,
+              label: playerOptionLabel(p, characterById),
+            })),
+          ]}
+        />
       </label>
       <button
         type="button"
@@ -417,11 +413,7 @@ function ShowAllToggle({
 }) {
   return (
     <label>
-      <input
-        type="checkbox"
-        checked={showAll}
-        onChange={(e) => onChange(e.target.checked)}
-      />
+      <Checkbox checked={showAll} onChange={onChange} />
       Show all characters
     </label>
   );
@@ -472,46 +464,46 @@ function CharacterAndTwoPlayersControls({
     <div className={styles.controls}>
       <label>
         Character
-        <select
+        <Select
+          aria-label="Character"
           value={characterId}
-          onChange={(e) => setCharacterId(e.target.value)}
-        >
-          <option value="">Choose a character…</option>
-          {list.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCharacterId}
+          entries={[
+            { value: "", label: "Choose a character…" },
+            ...list.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </label>
       <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <label>
         {`Shown as ${step.trueLabel}`}
-        <select
+        <Select
+          aria-label={`Shown as ${step.trueLabel}`}
           value={truePlayerId}
-          onChange={(e) => setTruePlayerId(e.target.value)}
-        >
-          <option value="">Choose a player…</option>
-          {otherPlayers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {playerOptionLabel(p, characterById)}
-            </option>
-          ))}
-        </select>
+          onChange={setTruePlayerId}
+          entries={[
+            { value: "", label: "Choose a player…" },
+            ...otherPlayers.map((p) => ({
+              value: p.id,
+              label: playerOptionLabel(p, characterById),
+            })),
+          ]}
+        />
       </label>
       <label>
         {`Shown as ${step.falseLabel}`}
-        <select
+        <Select
+          aria-label={`Shown as ${step.falseLabel}`}
           value={falsePlayerId}
-          onChange={(e) => setFalsePlayerId(e.target.value)}
-        >
-          <option value="">Choose a player…</option>
-          {otherPlayers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {playerOptionLabel(p, characterById)}
-            </option>
-          ))}
-        </select>
+          onChange={setFalsePlayerId}
+          entries={[
+            { value: "", label: "Choose a player…" },
+            ...otherPlayers.map((p) => ({
+              value: p.id,
+              label: playerOptionLabel(p, characterById),
+            })),
+          ]}
+        />
       </label>
       <button
         type="button"
@@ -541,11 +533,7 @@ function ReminderToggleControls({
     <div className={styles.controls}>
       {note && <p>{note}</p>}
       <label>
-        <input
-          type="checkbox"
-          checked={placeReminder}
-          onChange={(e) => setPlaceReminder(e.target.checked)}
-        />
+        <Checkbox checked={placeReminder} onChange={setPlaceReminder} />
         {`Place "${reminderLabel}" reminder`}
       </label>
       <button type="button" onClick={() => onConfirm(placeReminder)}>
@@ -555,73 +543,32 @@ function ReminderToggleControls({
   );
 }
 
-function BelievedDemonControls({
-  characterPool,
-  onConfirm,
-}: {
-  characterPool: Character[];
-  onConfirm: (demon: Character) => void;
-}) {
-  const { list, showAll, setShowAll } = useCandidateCharacters(
-    "demon",
-    characterPool,
-  );
-  const [demonId, setDemonId] = useState("");
-  const demon = list.find((c) => c.id === demonId);
-
-  function handleShowAllChange(next: boolean) {
-    setShowAll(next);
-    if (!next && demonId && !characterPool.some((c) => c.id === demonId)) {
-      setDemonId("");
-    }
-  }
-
-  return (
-    <div className={styles.controls}>
-      <label>
-        Demon
-        <select value={demonId} onChange={(e) => setDemonId(e.target.value)}>
-          <option value="">Choose a demon…</option>
-          {list.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
-      <button
-        type="button"
-        disabled={!demon}
-        onClick={() => demon && onConfirm(demon)}
-      >
-        Confirm
-      </button>
-    </div>
-  );
-}
-
-// Lets the storyteller revise the Drunk's stand-in after bag-building's
-// initial pick (issue #52) — a separate action from the reminder-toggle
-// below it, since it changes what the grimoire records rather than placing
-// a reminder, and doesn't move this step's answered/skipped status.
+// Lets the storyteller revise the seat's stand-in after bag-building's
+// initial pick (issue #52, generalised to the Lunatic's Demon stand-in by
+// issue #163) — a separate action from the reminder-toggle below it, since
+// it changes what the grimoire records rather than placing a reminder, and
+// doesn't move this step's answered/skipped status.
 function StandInReassignControls({
+  team,
   currentCharacterId,
   currentCharacterName,
   heldElsewhereIds,
   characterPool,
   onConfirm,
 }: {
+  // townsfolk for the Drunk, demon for the Lunatic.
+  team: Team;
   currentCharacterId: string;
   currentCharacterName: string;
-  // Townsfolk currently held by some other seated player — excluded from
-  // the picker (issue #52 AC: "not already in play as another character").
+  // Characters of `team` currently held by some other seated player —
+  // excluded from the picker (issue #52 AC: "not already in play as another
+  // character").
   heldElsewhereIds: Set<string>;
   characterPool: Character[];
   onConfirm: (characterId: string) => void;
 }) {
   const { list, showAll, setShowAll } = useCandidateCharacters(
-    "townsfolk",
+    team,
     characterPool,
   );
   const candidates = list.filter((c) => !heldElsewhereIds.has(c.id));
@@ -640,17 +587,15 @@ function StandInReassignControls({
       <p>{`Current stand-in: ${currentCharacterName}`}</p>
       <label>
         New stand-in
-        <select
+        <Select
+          aria-label="New stand-in"
           value={characterId}
-          onChange={(e) => setCharacterId(e.target.value)}
-        >
-          <option value="">Choose a character…</option>
-          {candidates.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCharacterId}
+          entries={[
+            { value: "", label: "Choose a character…" },
+            ...candidates.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </label>
       <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <button

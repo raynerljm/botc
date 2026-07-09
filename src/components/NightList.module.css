@@ -20,18 +20,6 @@
   }
 }
 
-.header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.heading {
-  font-size: 1.1rem;
-  margin: 0;
-}
-
 .progress {
   margin: 0;
   font-size: 0.85rem;
@@ -49,6 +37,22 @@
   color: var(--background);
   cursor: pointer;
   min-height: 2.75rem;
+}
+
+/* Deliberately the inverse of .startNight/.endNight (outline, not filled) so
+   the back/undo control never reads as another forward action (issue #165
+   AC: "can't be confused with the forward Start / End actions"). */
+.back {
+  align-self: flex-start;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 2.25rem;
 }
 
 .showAll {

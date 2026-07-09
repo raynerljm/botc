@@ -16,10 +16,14 @@ import { normalizeCharacterId } from "./scriptParser";
 // again for issue #113 (Nomination gained the required `threshold` field),
 // again for issue #114 (Nomination gained the required `isExile` field),
 // and again for issue #108 (GameDocument gained the required `drawSession`
-// field) — a document saved under an older shape must be rejected by
-// gameStorage's version check rather than loaded with any of these fields
-// silently undefined.
-export const GAME_SCHEMA_VERSION = 14;
+// field), again for issue #168 (GameDocument gained the required
+// `nightListCollapsed`/`dayPhaseCollapsed` fields), again for issue #165
+// (GameDocument gained the required `lastEndedNightSnapshot` field), and
+// again for issue #163 (Player gained the required `isLunatic` field) — a
+// document saved under an older shape must be rejected by gameStorage's
+// version check rather than loaded with any of these fields silently
+// undefined.
+export const GAME_SCHEMA_VERSION = 17;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -38,6 +42,10 @@ export interface BagToken {
   // True for the extra Townsfolk-styled token that stands in for the Drunk —
   // the player believes they are that Townsfolk (CONTEXT.md: Stand-in).
   isDrunkStandIn: boolean;
+  // Same mechanic as isDrunkStandIn, for the Lunatic's Demon stand-in
+  // (issue #163): the extra Demon-styled token the Lunatic's player believes
+  // they are.
+  isLunaticStandIn: boolean;
 }
 
 // One seat's turn in the pass-the-device bag draw (CONTEXT.md: Bag draw):
@@ -134,6 +142,17 @@ export interface Nomination {
   isExile: boolean;
 }
 
+// Night-phase state captured immediately before "End night" clears it, so a
+// "back" control can reopen the just-ended night without losing its
+// checklist or the day's nominations (issue #165). Single-slot, not a
+// history stack — only the most recently ended night can be undone. A `Pick`
+// off `GameDocument` rather than a hand-repeated shape, so the two can't
+// silently drift apart.
+export type EndedNightSnapshot = Pick<
+  GameDocument,
+  "nightChecked" | "nightUnskipped" | "nominations"
+>;
+
 export interface Player {
   id: string;
   seat: number;
@@ -146,6 +165,8 @@ export interface Player {
   // character, issue #15).
   startingCharacterId: string | null;
   isDrunk: boolean;
+  // Same mechanic as isDrunk, for the Lunatic's Demon stand-in (issue #163).
+  isLunatic: boolean;
   isTraveller: boolean;
   travellerAlignment: Alignment | null;
   dead: boolean;
@@ -250,6 +271,12 @@ export interface GameDocument {
   // only") — cleared whenever a night ends and the next day begins (issue
   // #20 AC: "nomination eligibility resets at dawn").
   nominations: Nomination[];
+  // Snapshot of nightChecked/nightUnskipped/nominations as they stood right
+  // before the most recent "End night" cleared them, or null once no
+  // ended-night is available to undo (never ended one yet, or the reopen
+  // control already consumed it). Lets "back" restore the just-ended night
+  // instead of reopening it blank (issue #165).
+  lastEndedNightSnapshot: EndedNightSnapshot | null;
   // Collapsed/expanded state for the board's secondary panels, persisted so
   // it survives a reload (issue #79: a 15-player game's always-expanded
   // panels push mid-game controls several screen-heights below the board).
@@ -261,6 +288,12 @@ export interface GameDocument {
   demonBluffsCollapsed: boolean;
   claimsCollapsed: boolean;
   endGamePanelCollapsed: boolean | null;
+  // Collapsed/expanded state for the board's side panels (issue #168), same
+  // plain-manual-toggle shape as demonBluffsCollapsed/claimsCollapsed above —
+  // defaults expanded so the tablet/desktop layout is unchanged until the
+  // storyteller deliberately reclaims the circle's width.
+  nightListCollapsed: boolean;
+  dayPhaseCollapsed: boolean;
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -403,6 +436,9 @@ export function anchoredReminderPosition(
 // action and display in the grimoire components) shares one source of truth.
 export const DRUNK_ID = "drunk";
 
+// Same mechanic as DRUNK_ID, for the Lunatic's Demon stand-in (issue #163).
+export const LUNATIC_ID = "lunatic";
+
 // Every character id currently held by a seated player — the "who holds
 // what" set several pickers filter against (GrimoireBoard's reminder
 // picker, the setup walkthrough's stand-in reassignment) so it's computed
@@ -484,6 +520,10 @@ export interface BuildBagTokensInput {
   // other Townsfolk on the script), so it's passed as its own object rather
   // than looked up among selectedCharacters.
   standIn: Character | null;
+  // Same mechanic as standIn, for the Lunatic's Demon stand-in (issue #163).
+  // Optional (unlike standIn) so every pre-existing caller/test that doesn't
+  // care about the Lunatic keeps working unchanged.
+  lunaticStandIn?: Character | null;
   extraCopies: Record<string, number>;
   newId?: () => string;
 }
@@ -495,10 +535,12 @@ export interface BuiltBagTokens {
 
 // The Drunk never gets a physical token of its own — the player believes
 // they are the stand-in Townsfolk, so that character's extra token fills
-// the Drunk's slot instead (CONTEXT.md: Stand-in).
+// the Drunk's slot instead (CONTEXT.md: Stand-in). The Lunatic follows the
+// same pattern with a Demon stand-in (issue #163).
 export function buildBagTokens({
   selectedCharacters,
   standIn,
+  lunaticStandIn = null,
   extraCopies,
   newId = defaultNewId,
 }: BuildBagTokensInput): BuiltBagTokens {
@@ -511,10 +553,12 @@ export function buildBagTokens({
         id: newId(),
         characterId: character.id,
         isDrunkStandIn: false,
+        isLunaticStandIn: false,
       });
       continue;
     }
-    if (normalizeCharacterId(character.id) === DRUNK_ID) continue;
+    const normalizedId = normalizeCharacterId(character.id);
+    if (normalizedId === DRUNK_ID || normalizedId === LUNATIC_ID) continue;
 
     const copies = 1 + (extraCopies[character.id] ?? 0);
     for (let i = 0; i < copies; i++) {
@@ -522,6 +566,7 @@ export function buildBagTokens({
         id: newId(),
         characterId: character.id,
         isDrunkStandIn: false,
+        isLunaticStandIn: false,
       });
     }
   }
@@ -534,6 +579,19 @@ export function buildBagTokens({
       id: newId(),
       characterId: standIn.id,
       isDrunkStandIn: true,
+      isLunaticStandIn: false,
+    });
+  }
+
+  const lunaticSelected = selectedCharacters.some(
+    (c) => normalizeCharacterId(c.id) === LUNATIC_ID,
+  );
+  if (lunaticSelected && lunaticStandIn) {
+    officialTokens.push({
+      id: newId(),
+      characterId: lunaticStandIn.id,
+      isDrunkStandIn: false,
+      isLunaticStandIn: true,
     });
   }
 
@@ -546,6 +604,10 @@ export interface CreateGameInput {
   playerCount: number;
   selectedCharacters: Character[];
   standIn: Character | null;
+  // Same mechanic as standIn, for the Lunatic's Demon stand-in (issue #163).
+  // Optional (unlike standIn) so every pre-existing caller/test that doesn't
+  // care about the Lunatic keeps working unchanged.
+  lunaticStandIn?: Character | null;
   extraCopies: Record<string, number>;
   almanacUrl?: string | null;
   firstNightOrder?: string[] | null;
@@ -575,6 +637,7 @@ export function createGame({
   playerCount,
   selectedCharacters,
   standIn,
+  lunaticStandIn = null,
   extraCopies,
   almanacUrl = null,
   firstNightOrder = null,
@@ -586,6 +649,7 @@ export function createGame({
   const { officialTokens, travellerTokens } = buildBagTokens({
     selectedCharacters,
     standIn,
+    lunaticStandIn,
     extraCopies,
     newId,
   });
@@ -597,6 +661,7 @@ export function createGame({
     characterId: null,
     startingCharacterId: null,
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
@@ -609,10 +674,11 @@ export function createGame({
 
   const characterPool = Array.from(
     new Map(
-      [...selectedCharacters, ...(standIn ? [standIn] : [])].map((c) => [
-        c.id,
-        c,
-      ]),
+      [
+        ...selectedCharacters,
+        ...(standIn ? [standIn] : []),
+        ...(lunaticStandIn ? [lunaticStandIn] : []),
+      ].map((c) => [c.id, c]),
     ).values(),
   );
 
@@ -644,9 +710,12 @@ export function createGame({
     nightChecked: [],
     nightUnskipped: [],
     nominations: [],
+    lastEndedNightSnapshot: null,
     demonBluffsCollapsed: false,
     claimsCollapsed: false,
     endGamePanelCollapsed: null,
+    nightListCollapsed: false,
+    dayPhaseCollapsed: false,
   };
 }
 

@@ -13,7 +13,10 @@ import {
 } from "@/lib/dayPhase";
 import type { GameDocument, Nomination, Player } from "@/lib/gameDocument";
 
+import { Checkbox } from "./Checkbox";
+import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./DayPhase.module.css";
+import { Select } from "./Select";
 
 export interface DayPhaseProps {
   game: GameDocument;
@@ -30,16 +33,25 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     [game.players],
   );
 
+  function toggleCollapsed(collapsed: boolean) {
+    onChange({ ...game, dayPhaseCollapsed: collapsed });
+  }
+
   const day = currentDay(game);
   if (day < 1 || game.nightOpen) {
     return (
       <section className={styles.panel} aria-label="Day phase">
-        <h2 className={styles.heading}>Day phase</h2>
-        <p className={styles.muted}>
-          {day < 1
-            ? "Begins once the first night ends."
-            : "Resumes once tonight's night list ends."}
-        </p>
+        <CollapsibleSection
+          title="Day phase"
+          collapsed={game.dayPhaseCollapsed}
+          onToggleCollapsed={toggleCollapsed}
+        >
+          <p className={styles.muted}>
+            {day < 1
+              ? "Begins once the first night ends."
+              : "Resumes once tonight's night list ends."}
+          </p>
+        </CollapsibleSection>
       </section>
     );
   }
@@ -101,119 +113,125 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
 
   return (
     <section className={styles.panel} aria-label="Day phase">
-      <h2 className={styles.heading}>Day {day}</h2>
+      <CollapsibleSection
+        title={`Day ${day}`}
+        collapsed={game.dayPhaseCollapsed}
+        onToggleCollapsed={toggleCollapsed}
+      >
+        <form className={styles.form} onSubmit={recordNomination}>
+          <label className={styles.field}>
+            Nominator
+            <Select
+              className={styles.select}
+              aria-label="Nominator"
+              value={nominatorId}
+              onChange={setNominatorId}
+              entries={game.players.map((player) => ({
+                value: player.id,
+                label: `${player.name}${player.dead ? " (dead)" : ""}${
+                  hasNominatedToday(game.nominations, player.id)
+                    ? " (already nominated)"
+                    : ""
+                }`,
+              }))}
+            />
+          </label>
+          <label className={styles.field}>
+            Nominee
+            <Select
+              className={styles.select}
+              aria-label="Nominee"
+              value={nomineeId}
+              onChange={setNomineeId}
+              entries={game.players.map((player) => ({
+                value: player.id,
+                label: `${player.name}${player.dead ? " (dead)" : ""}${
+                  wasNominatedToday(game.nominations, player.id)
+                    ? " (already nominated)"
+                    : ""
+                }`,
+              }))}
+            />
+          </label>
+          <button type="submit" className={styles.submit}>
+            Record nomination
+          </button>
+        </form>
 
-      <form className={styles.form} onSubmit={recordNomination}>
-        <label className={styles.field}>
-          Nominator
-          <select
-            className={styles.select}
-            value={nominatorId}
-            onChange={(event) => setNominatorId(event.target.value)}
-          >
-            {game.players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-                {player.dead ? " (dead)" : ""}
-                {hasNominatedToday(game.nominations, player.id)
-                  ? " (already nominated)"
-                  : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className={styles.field}>
-          Nominee
-          <select
-            className={styles.select}
-            value={nomineeId}
-            onChange={(event) => setNomineeId(event.target.value)}
-          >
-            {game.players.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name}
-                {player.dead ? " (dead)" : ""}
-                {wasNominatedToday(game.nominations, player.id)
-                  ? " (already nominated)"
-                  : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className={styles.submit}>
-          Record nomination
-        </button>
-      </form>
+        <ul className={styles.nominations}>
+          {game.nominations.map((nomination) => {
+            const nominator = playerById.get(nomination.nominatorId);
+            const nominee = playerById.get(nomination.nomineeId);
+            if (!nominee) return null;
 
-      <ul className={styles.nominations}>
-        {game.nominations.map((nomination) => {
-          const nominator = playerById.get(nomination.nominatorId);
-          const nominee = playerById.get(nomination.nomineeId);
-          if (!nominee) return null;
+            const threshold = nomination.threshold;
+            const tally = nomination.votes.length;
+            const meetsThreshold = tally >= threshold;
+            const isOpen = nomination.id === openNomination?.id;
 
-          const threshold = nomination.threshold;
-          const tally = nomination.votes.length;
-          const meetsThreshold = tally >= threshold;
-          const isOpen = nomination.id === openNomination?.id;
+            return (
+              <li key={nomination.id} className={styles.nomination}>
+                <p className={styles.nominationHeading}>
+                  {nominator?.name ?? "Unknown"} → {nominee.name}
+                  {nomination.isExile && " (exile)"}
+                </p>
+                <p
+                  className={styles.tally}
+                  role="status"
+                  data-meets-threshold={meetsThreshold || undefined}
+                >
+                  {tally}/{threshold} votes
+                  {meetsThreshold ? " — meets threshold" : ""}
+                </p>
 
-          return (
-            <li key={nomination.id} className={styles.nomination}>
-              <p className={styles.nominationHeading}>
-                {nominator?.name ?? "Unknown"} → {nominee.name}
-                {nomination.isExile && " (exile)"}
-              </p>
-              <p
-                className={styles.tally}
-                role="status"
-                data-meets-threshold={meetsThreshold || undefined}
-              >
-                {tally}/{threshold} votes
-                {meetsThreshold ? " — meets threshold" : ""}
-              </p>
+                {isOpen && (
+                  <fieldset className={styles.voters}>
+                    <legend>Record votes</legend>
+                    {game.players.map((player) => {
+                      const voted = nomination.votes.includes(player.id);
+                      // Advisory only (ADR 0003) — never disables the
+                      // checkbox, just labels a dead voter whose ghost vote
+                      // is already spent so the storyteller can see it before
+                      // choosing to record (or not record) the vote anyway.
+                      const alreadySpent =
+                        player.dead && !voted && !canRecordVote(player, nomination.isExile);
+                      return (
+                        <label key={player.id} className={styles.voter}>
+                          <Checkbox
+                            checked={voted}
+                            onChange={() => toggleVote(nomination, player)}
+                          />
+                          {player.name}
+                          {player.dead && (
+                            <span className={styles.note}>
+                              {" "}
+                              (
+                              {nomination.isExile
+                                ? "vote free"
+                                : `ghost vote${alreadySpent ? " — already spent" : ""}`}
+                              )
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                )}
+              </li>
+            );
+          })}
+        </ul>
 
-              {isOpen && (
-                <fieldset className={styles.voters}>
-                  <legend>Record votes</legend>
-                  {game.players.map((player) => {
-                    const voted = nomination.votes.includes(player.id);
-                    // Advisory only (ADR 0003) — never disables the
-                    // checkbox, just labels a dead voter whose ghost vote
-                    // is already spent so the storyteller can see it before
-                    // choosing to record (or not record) the vote anyway.
-                    const alreadySpent =
-                      player.dead && !voted && !canRecordVote(player, nomination.isExile);
-                    return (
-                      <label key={player.id} className={styles.voter}>
-                        <input
-                          type="checkbox"
-                          checked={voted}
-                          onChange={() => toggleVote(nomination, player)}
-                        />
-                        {player.name}
-                        {player.dead && (
-                          <span className={styles.note}>
-                            {" "}
-                            (
-                            {nomination.isExile
-                              ? "vote free"
-                              : `ghost vote${alreadySpent ? " — already spent" : ""}`}
-                            )
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
-                </fieldset>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      </CollapsibleSection>
 
-      {/* Rendered after the list, never above it — inserting this above the
-          nominations shifted every voter checkbox down by a row on the exact
-          tap that crossed the threshold, losing votes mid-count (issue
-          #125). */}
+      {/* Kept outside CollapsibleSection, unlike the nomination form/history
+          itself — a storyteller collapsing this panel to reclaim circle
+          width (issue #168) still needs this glanceable status without
+          re-expanding the whole nomination record (code review finding).
+          Also keeps issue #125's fix intact: it was moved after the (now
+          collapsible) list specifically so it can never shift a voter
+          checkbox down mid-tap — rendering it outside the list entirely
+          preserves that. */}
       {blockHolder && (
         <p className={styles.block} role="status">
           On the block: {blockHolder.name}

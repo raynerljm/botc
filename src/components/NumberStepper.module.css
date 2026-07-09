@@ -1,0 +1,49 @@
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+
+.stepper button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: var(--surface-raised);
+  border: none;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.input {
+  width: 3rem;
+  min-height: 2.75rem;
+  padding: 0;
+  font: inherit;
+  text-align: center;
+  background: var(--surface-raised);
+  border: none;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  color: var(--foreground);
+  /* Hides the native up/down spin-arrow chrome (issue #156) — stepping is
+     handled entirely by the themed −/+ buttons instead. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.input::-webkit-outer-spin-button,
+.input::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}

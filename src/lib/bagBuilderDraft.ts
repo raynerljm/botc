@@ -20,6 +20,11 @@ export interface BagBuilderDraft {
   modifierChoices: Record<string, number>;
   extraCopies: Record<string, number>;
   standInId: string | null;
+  // Same mechanic as standInId, for the Lunatic's Demon stand-in (issue
+  // #163). Optional on stored data (added after this draft shape already
+  // existed) — absent is treated as "none chosen yet", the same
+  // graceful-degrade precedent autoAddedIds set for issue #129.
+  lunaticStandInId: string | null;
 }
 
 function hasStorage(): boolean {
@@ -49,8 +54,12 @@ function isStringRecord(value: unknown): value is Record<string, number> {
 // optional there too) so every other reader of a *loaded* draft can still
 // rely on `autoAddedIds` always being an array, per loadBagBuilderDraft's
 // own default below.
-type StoredBagBuilderDraft = Omit<BagBuilderDraft, "autoAddedIds"> & {
+type StoredBagBuilderDraft = Omit<
+  BagBuilderDraft,
+  "autoAddedIds" | "lunaticStandInId"
+> & {
   autoAddedIds?: string[];
+  lunaticStandInId?: string | null;
 };
 
 // A hand-edited or otherwise malformed draft must fall back to "no draft"
@@ -74,7 +83,12 @@ function isDraft(value: unknown): value is StoredBagBuilderDraft {
         candidate.autoAddedIds.every((id) => typeof id === "string"))) &&
     isStringRecord(candidate.modifierChoices) &&
     isStringRecord(candidate.extraCopies) &&
-    (candidate.standInId === null || typeof candidate.standInId === "string")
+    (candidate.standInId === null || typeof candidate.standInId === "string") &&
+    // Absent on drafts saved before issue #163 — treated as "none known",
+    // same as autoAddedIds above.
+    (candidate.lunaticStandInId === undefined ||
+      candidate.lunaticStandInId === null ||
+      typeof candidate.lunaticStandInId === "string")
   );
 }
 
@@ -85,7 +99,11 @@ export function loadBagBuilderDraft(scriptId: string): BagBuilderDraft | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isDraft(parsed)) return null;
-    return { ...parsed, autoAddedIds: parsed.autoAddedIds ?? [] };
+    return {
+      ...parsed,
+      autoAddedIds: parsed.autoAddedIds ?? [],
+      lunaticStandInId: parsed.lunaticStandInId ?? null,
+    };
   } catch {
     return null;
   }

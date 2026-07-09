@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import type { Player, ReminderToken } from "@/lib/gameDocument";
+import { getSelectOptions, openListbox, selectOption } from "@/testUtils/selectOption";
 
 import { ClaimsList } from "./ClaimsList";
 import { GrimoireBoard } from "./GrimoireBoard";
@@ -28,6 +29,7 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
     characterId: "washerwoman",
     startingCharacterId: "washerwoman",
     isDrunk: false,
+    isLunatic: false,
     isTraveller: false,
     travellerAlignment: null,
     dead: false,
@@ -201,6 +203,32 @@ describe("GrimoireBoard rendering", () => {
     expect(note.className.split(" ")).not.toContain(styles.noteCapitalized);
   });
 
+  it("marks a Lunatic stand-in as actually the Lunatic (issue #163)", () => {
+    renderBoard([makePlayer({ isLunatic: true })]);
+
+    expect(screen.getByText(/actually the Lunatic/i)).toBeInTheDocument();
+  });
+
+  it("doesn't show the Lunatic note for a seat that really is the stand-in character", () => {
+    const byId = new Map([
+      ["washerwoman", getCharacter("washerwoman")!],
+      ["lunatic", getCharacter("lunatic")!],
+    ]);
+    render(
+      <GrimoireBoard
+        players={[makePlayer({ isLunatic: true, characterId: "lunatic" })]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        almanacUrl={null}
+        reminders={[]}
+        activeFabled={[]}
+        {...makeHandlers()}
+      />,
+    );
+
+    expect(screen.queryByText(/actually the Lunatic/i)).not.toBeInTheDocument();
+  });
+
   it("shows a traveller's alignment", () => {
     const { container } = renderBoard([
       makePlayer({ isTraveller: true, travellerAlignment: "evil", characterId: "imp" }),
@@ -237,6 +265,34 @@ describe("GrimoireBoard rendering", () => {
     const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
     expect(wrap.style.left).toBe("12%");
     expect(wrap.style.top).toBe("34%");
+  });
+
+  // Issue #167 code review finding: a hand-edited or legacy-schema game
+  // document isn't guaranteed to have positions within clampPct's [4,96]
+  // range (gameDocument.ts's anchoredReminderPosition already defends
+  // against this for its anchor input). An unclamped out-of-range stored
+  // position would render off the clamped drag surface and, on pickup,
+  // make the drag's start position disagree with where the token is
+  // actually grabbed — reproducing the "jumps on pickup" bug for legacy
+  // data instead of the original in-range case.
+  it("clamps an out-of-range stored position instead of rendering the token off the pad", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", seat: 1, position: { x: 150, y: -20 } }),
+    ]);
+
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(wrap.style.left).toBe("96%");
+    expect(wrap.style.top).toBe("4%");
+  });
+
+  it("clamps an out-of-range stored reminder position the same way", () => {
+    const { container } = renderBoard([makePlayer()], {
+      reminders: [makeReminder({ id: "r1", position: { x: 150, y: -20 } })],
+    });
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    expect(wrap.style.left).toBe("96%");
+    expect(wrap.style.top).toBe("4%");
   });
 
   it("badges a player who has already nominated or been nominated today (issue #20)", () => {
@@ -438,7 +494,7 @@ describe("claims", () => {
     const handlers = renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/claim/i), "librarian");
+    await selectOption(user, screen.getByLabelText(/claim/i), "librarian");
 
     expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", "librarian");
   });
@@ -448,7 +504,7 @@ describe("claims", () => {
     const handlers = renderBoard([makePlayer({ claim: "librarian" })]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/claim/i), "");
+    await selectOption(user, screen.getByLabelText(/claim/i), "");
 
     expect(handlers.onSetClaim).toHaveBeenCalledWith("p1", null);
   });
@@ -472,7 +528,7 @@ describe("acts-as (issue #17)", () => {
     const handlers = renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/acts as/i), "librarian");
+    await selectOption(user, screen.getByLabelText(/acts as/i), "librarian");
 
     expect(handlers.onSetActsAs).toHaveBeenCalledWith("p1", "librarian");
   });
@@ -482,7 +538,7 @@ describe("acts-as (issue #17)", () => {
     const handlers = renderBoard([makePlayer({ actsAs: "librarian" })]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/acts as/i), "");
+    await selectOption(user, screen.getByLabelText(/acts as/i), "");
 
     expect(handlers.onSetActsAs).toHaveBeenCalledWith("p1", null);
   });
@@ -503,6 +559,18 @@ describe("acts-as (issue #17)", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
     expect(within(summary).queryByText(/acts as/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps an acts-as target visible instead of silently resetting to 'Not acting as anyone' when it isn't in claimOptions (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ actsAs: "poisoner" })]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/acts as/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
   });
 });
 
@@ -596,14 +664,14 @@ describe("re-circle", () => {
 
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    expect(wrap.style.left).toBe("35%");
+    expect(wrap.style.left).toBe("20%");
 
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     // The stale in-progress drag position must not resurface on the next
     // pointermove for the same (now-abandoned) gesture.
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
 
-    expect(wrap.style.left).not.toBe("35%");
+    expect(wrap.style.left).not.toBe("20%");
   });
 });
 
@@ -619,8 +687,8 @@ describe("drag", () => {
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
 
-    expect(wrap.style.left).toBe("35%");
-    expect(wrap.style.top).toBe("45%");
+    expect(wrap.style.left).toBe("60%");
+    expect(wrap.style.top).toBe("25%");
     // Persisting on every pointermove would mean dozens of full-document
     // localStorage writes a second during a real touch drag.
     expect(onMove).not.toHaveBeenCalled();
@@ -639,7 +707,7 @@ describe("drag", () => {
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
 
     expect(onMove).toHaveBeenCalledTimes(1);
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 50 });
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 65, y: 30 });
   });
 
   it("discards the in-progress move if the gesture is cancelled", () => {
@@ -674,7 +742,7 @@ describe("drag", () => {
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
 
     expect(onMove).toHaveBeenCalledTimes(1);
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 50 });
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 65, y: 30 });
   });
 
   it("doesn't move for tiny pointer jitter under the drag threshold", () => {
@@ -704,6 +772,67 @@ describe("drag", () => {
     fireEvent.click(summary);
 
     expect(details.open).toBe(false);
+  });
+
+  // Issue #167: the drag used to set the token's centre to the raw pointer
+  // position, ignoring where inside the token (icon vs. name label, a tall
+  // stack) it was actually grabbed — snapping the token under the finger the
+  // instant the drag threshold crossed. Grabbing off-centre and moving by a
+  // known delta proves the grab offset is captured and preserved: the token
+  // should move by exactly that delta, landing exactly where it started plus
+  // the delta, not at the raw pointer position.
+  it("keeps an off-centre grab point under the finger instead of snapping the token's centre to it", () => {
+    const { container, onMove } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 30, y: 40 } }),
+    ]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+
+    // Token centre is at 30%/40% of the 400px board, i.e. (120, 160). Grab
+    // 20px right and 10px down of centre — e.g. the name label below the icon.
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 140, clientY: 170 }));
+    // Move the pointer 40px right, 0px down (past the drag threshold).
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 170 }));
+
+    // The token must move by exactly the pointer's delta (+10% x, +0% y),
+    // not jump to the raw pointer position (which would read 45%/42.5%).
+    expect(wrap.style.left).toBe("40%");
+    expect(wrap.style.top).toBe("40%");
+
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 170 }));
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 40 });
+  });
+
+  // Issue #167 code review finding: dragging a token whose stored position
+  // was out of range (legacy/hand-edited data) used to disagree with where
+  // the token was actually grabbed, since the raw stored value fed the
+  // drag's start position while the token itself rendered clamped. Now that
+  // rendering clamps the stored position too, picking it up at its
+  // displayed (already-clamped) spot must behave like any other drag — no
+  // jump to the clamp edge on the first move.
+  it("doesn't jump when dragging a token whose stored position was out of range", () => {
+    const { container, onMove } = renderBoard([
+      makePlayer({ id: "p1", position: { x: 150, y: 40 } }),
+    ]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    // Clamped to 96% (384px on the 400px board) per the earlier rendering test.
+    expect(wrap.style.left).toBe("96%");
+
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 384, clientY: 160 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 344, clientY: 160 }));
+
+    // A 40px (10%) move left from the clamped edge, not a jump elsewhere.
+    expect(wrap.style.left).toBe("86%");
+
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 344, clientY: 160 }));
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 86, y: 40 });
   });
 });
 
@@ -831,11 +960,11 @@ describe("reminders (issue #14)", () => {
 
     fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    expect(wrap.style.left).toBe("35%");
+    expect(wrap.style.left).toBe("70%");
     expect(onMoveReminder).not.toHaveBeenCalled();
 
     fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
-    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 35, y: 45 });
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 70, y: 60 });
     expect(onMove).not.toHaveBeenCalled();
   });
 
@@ -986,7 +1115,56 @@ describe("reminder placement (issue #71)", () => {
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }));
 
     const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
-    expect(parseFloat(wrap.style.left)).toBeCloseTo(45);
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(50);
+  });
+
+  // Issue #167 AC: an anchored reminder renders offset below its seat (see
+  // "renders a reminder anchored to a seat below that seat's token" above),
+  // not at its own stale stored `position`. Dragging it must start from that
+  // displayed offset spot, not snap to the pointer on pickup.
+  it("starts dragging an anchored reminder from its displayed offset position, not its stale stored position", () => {
+    const reminder = makeReminder({
+      id: "r1",
+      anchorPlayerId: "p1",
+      // Deliberately stale/unrelated to where the reminder actually renders
+      // (below the seat) — proves the drag doesn't grab-offset against this.
+      position: { x: 1, y: 1 },
+    });
+    const { container, onMoveReminder } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+    const reminderSummary = container.querySelector(
+      "[data-reminder-id='r1'] summary",
+    ) as HTMLElement;
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    // Displayed anchored position: same x as the seat (30%), offset below
+    // it in y (30%/52% per anchoredReminderPosition, i.e. (120, 208) on the
+    // 400px board) — not the seat's own centre and not the stored (1, 1).
+    expect(wrap.style.left).toBe("30%");
+    expect(wrap.style.top).toBe("52%");
+
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 120, clientY: 208 }),
+    );
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 208 }),
+    );
+
+    // Grabbed exactly at the displayed spot and moved 40px (10%) right, so
+    // the reminder should land at 40%/52% — not jump to the raw pointer
+    // position, and not offset against the stale stored (1, 1).
+    expect(wrap.style.left).toBe("40%");
+    expect(wrap.style.top).toBe("52%");
+
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 208 }),
+    );
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 40, y: 52 });
   });
 
   it("attaches an existing reminder to a seat by tapping it, without a drag gesture", async () => {
@@ -1283,7 +1461,7 @@ describe("info tokens (issue #19)", () => {
     fireEvent(summaryAfter, pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }));
     fireEvent(summaryAfter, pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }));
     fireEvent(summaryAfter, pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }));
-    expect(onMove).toHaveBeenCalledWith("p1", { x: 35, y: 45 });
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 60, y: 25 });
   });
 
   it("hides the pad's info tokens trigger while the reminder picker is open, and vice versa", async () => {
@@ -1322,7 +1500,7 @@ describe("swap character", () => {
     const handlers = renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    await user.selectOptions(screen.getByLabelText(/swap character/i), "imp");
+    await selectOption(user, screen.getByLabelText(/swap character/i), "imp");
 
     expect(handlers.onSwapCharacter).toHaveBeenCalledWith("p1", "imp");
   });
@@ -1344,9 +1522,8 @@ describe("swap character", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    const options = within(
-      screen.getByLabelText(/swap character/i),
-    ).getAllByRole("option");
+    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Angel")).toBe(false);
   });
@@ -1356,9 +1533,8 @@ describe("swap character", () => {
     renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    const options = within(
-      screen.getByLabelText(/swap character/i),
-    ).getAllByRole("option");
+    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
   });
@@ -1374,10 +1550,11 @@ describe("swap character", () => {
     ]);
 
     await user.click(screen.getByText("Alice"));
-    const select = screen.getByLabelText<HTMLSelectElement>(/swap character/i);
+    const select = screen.getByLabelText(/swap character/i);
 
-    expect(select.value).toBe("scapegoat");
-    const options = within(select).getAllByRole("option");
+    expect(select.dataset.value).toBe("scapegoat");
+    const listbox = await openListbox(user, select);
+    const options = within(listbox).getAllByRole("option");
     expect(options.some((o) => o.textContent === "Washerwoman")).toBe(false);
     expect(options.some((o) => o.textContent === "Beggar")).toBe(true);
   });
@@ -1387,9 +1564,8 @@ describe("swap character", () => {
     renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    const options = within(
-      screen.getByLabelText(/swap character/i),
-    ).getAllByRole("option");
+    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Beggar")).toBe(false);
   });
@@ -1400,11 +1576,12 @@ describe("swap character", () => {
 
     await user.click(screen.getByText("Alice"));
     const select = screen.getByLabelText(/swap character/i);
-    const options = within(select).getAllByRole("option");
-    const townsfolkGroup = within(select).getByRole("group", {
+    const listbox = await openListbox(user, select);
+    const options = within(listbox).getAllByRole("option");
+    const townsfolkGroup = within(listbox).getByRole("group", {
       name: /townsfolk/i,
     });
-    const demonGroup = within(select).getByRole("group", { name: /demons/i });
+    const demonGroup = within(listbox).getByRole("group", { name: /demons/i });
 
     // characterById (the script pool) only has washerwoman and imp — each is
     // first in its own team's group, with the rest of the dataset after.
@@ -1869,13 +2046,6 @@ describe("board sizing (issue #78)", () => {
 });
 
 describe("claim option parity with the Claims panel (issue #75)", () => {
-  function optionValues(select: HTMLElement) {
-    return Array.from(select.querySelectorAll("option")).map((o) => ({
-      value: (o as HTMLOptionElement).value,
-      label: (o as HTMLOptionElement).text,
-    }));
-  }
-
   it("offers the token menu's claim select the exact same options as the Claims panel select, given the same script", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer()]);
@@ -1893,7 +2063,9 @@ describe("claim option parity with the Claims panel (issue #75)", () => {
     );
     const panelSelect = within(panelContainer).getByRole("combobox");
 
-    expect(optionValues(panelSelect)).toEqual(optionValues(boardSelect));
+    expect(await getSelectOptions(user, panelSelect)).toEqual(
+      await getSelectOptions(user, boardSelect),
+    );
   });
 
   it("both selects render the same orphaned-claim fallback option when the stored claim isn't in claimOptions", async () => {
@@ -1913,8 +2085,10 @@ describe("claim option parity with the Claims panel (issue #75)", () => {
     );
     const panelSelect = within(panelContainer).getByRole("combobox");
 
-    expect(boardSelect).toHaveValue("poisoner");
-    expect(panelSelect).toHaveValue("poisoner");
-    expect(optionValues(panelSelect)).toEqual(optionValues(boardSelect));
+    expect(boardSelect.dataset.value).toBe("poisoner");
+    expect(panelSelect.dataset.value).toBe("poisoner");
+    expect(await getSelectOptions(user, panelSelect)).toEqual(
+      await getSelectOptions(user, boardSelect),
+    );
   });
 });

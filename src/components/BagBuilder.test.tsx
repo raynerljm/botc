@@ -6,6 +6,7 @@ import { saveBagBuilderDraft } from "@/lib/bagBuilderDraft";
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame } from "@/lib/gameDocument";
 import { clearGames, loadGame, saveGame } from "@/lib/gameStorage";
+import { openListbox, selectOption } from "@/testUtils/selectOption";
 
 import { BagBuilder } from "./BagBuilder";
 
@@ -88,6 +89,15 @@ describe("player count and official target counts", () => {
 
     expect(playerCountInput).toHaveValue(null);
   });
+
+  it("focuses the player count field when its visible caption is clicked, not the −/+ steppers beside it", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={tb} />);
+
+    await user.click(screen.getByText("Player count"));
+
+    expect(screen.getByLabelText("Player count")).toHaveFocus();
+  });
 });
 
 describe("Teensyville player count cap", () => {
@@ -129,6 +139,7 @@ describe("Teensyville player count cap", () => {
       modifierChoices: {},
       extraCopies: {},
       standInId: null,
+      lunaticStandInId: null,
     });
 
     render(
@@ -262,11 +273,11 @@ describe("special flow: Godfather asks +1 or -1 Outsider (AC4)", () => {
 
     await user.click(screen.getByRole("button", { name: /^Godfather/ }));
     const choice = screen.getByLabelText("Godfather setup choice");
-    expect(choice).toHaveDisplayValue("-1 Outsider");
+    expect(choice).toHaveTextContent("-1 Outsider");
 
     // 5p base is 0 Outsiders/3 Townsfolk; -1 Outsider clamps oddly so use
     // the +1 option to see the swap the other way.
-    await user.selectOptions(choice, "+1 Outsider");
+    await selectOption(user, choice, "+1 Outsider");
     expect(screen.getByText("Outsiders 0/1")).toBeInTheDocument();
     expect(screen.getByText("Townsfolk 0/2")).toBeInTheDocument();
   });
@@ -293,8 +304,8 @@ describe("special flow: Drunk stand-in (AC4)", () => {
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
 
     const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
-    await user.selectOptions(standIn, "Washerwoman");
-    expect(standIn).toHaveDisplayValue("Washerwoman");
+    await selectOption(user, standIn, "Washerwoman");
+    expect(standIn).toHaveTextContent("Washerwoman");
   });
 
   it("clears the stand-in prompt when the Drunk is deselected", async () => {
@@ -317,12 +328,13 @@ describe("special flow: Drunk stand-in (AC4)", () => {
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
 
     const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
+    const listbox = await openListbox(user, standIn);
     expect(
-      within(standIn).getByRole("option", { name: "Washerwoman" }),
+      within(listbox).getByRole("option", { name: "Washerwoman" }),
     ).toBeInTheDocument();
     // Professor is an official Townsfolk, but not part of this script.
     expect(
-      within(standIn).queryByRole("option", { name: "Professor" }),
+      within(listbox).queryByRole("option", { name: "Professor" }),
     ).not.toBeInTheDocument();
   });
 
@@ -332,14 +344,14 @@ describe("special flow: Drunk stand-in (AC4)", () => {
 
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
     const standIn = screen.getByLabelText(/Pick the Drunk's stand-in/);
-    await user.selectOptions(standIn, "Washerwoman");
-    expect(standIn).toHaveDisplayValue("Washerwoman");
+    await selectOption(user, standIn, "Washerwoman");
+    expect(standIn).toHaveTextContent("Washerwoman");
 
     // Washerwoman is now claimed as the stand-in; selecting her for real
     // (a plain, unrestricted action) should give up that stand-in slot.
     await user.click(screen.getByRole("button", { name: /^Washerwoman/ }));
 
-    expect(standIn).toHaveDisplayValue("Choose a stand-in…");
+    expect(standIn).toHaveTextContent("Choose a stand-in…");
   });
 
   it("warns, but never blocks, when the Drunk has no stand-in picked yet (ADR 0003)", async () => {
@@ -361,7 +373,7 @@ describe("special flow: Drunk stand-in (AC4)", () => {
       screen.getByRole("button", { name: /Continue to seating/i }),
     ).not.toBeDisabled();
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText(/Pick the Drunk's stand-in/),
       "Washerwoman",
     );
@@ -369,6 +381,245 @@ describe("special flow: Drunk stand-in (AC4)", () => {
     expect(
       screen.queryByText(/Drunk needs a stand-in/i),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("special flow: Lunatic stand-in (issue #163)", () => {
+  it("prompts for a stand-in Demon once the Lunatic is selected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    expect(
+      screen.queryByLabelText(/Pick the Lunatic's stand-in/),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+
+    const standIn = screen.getByLabelText(/Pick the Lunatic's stand-in/);
+    await selectOption(user, standIn, "Imp");
+    expect(standIn).toHaveTextContent("Imp");
+  });
+
+  it("clears the stand-in prompt when the Lunatic is deselected", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    const lunatic = screen.getByRole("button", { name: /^Lunatic/ });
+    await user.click(lunatic);
+    await user.click(lunatic);
+
+    expect(
+      screen.queryByLabelText(/Pick the Lunatic's stand-in/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("only offers this script's own Demons as stand-ins, not the whole dataset", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+
+    const standIn = screen.getByLabelText(/Pick the Lunatic's stand-in/);
+    const listbox = await openListbox(user, standIn);
+    expect(
+      within(listbox).getByRole("option", { name: "Imp" }),
+    ).toBeInTheDocument();
+    // Zombuul is an official Demon, but not part of this script.
+    expect(
+      within(listbox).queryByRole("option", { name: "Zombuul" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("excludes a Demon already selected into the bag from the stand-in choices", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp", "zombuul")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+
+    const standIn = screen.getByLabelText(/Pick the Lunatic's stand-in/);
+    const listbox = await openListbox(user, standIn);
+    expect(
+      within(listbox).getByRole("option", { name: "Zombuul" }),
+    ).toBeInTheDocument();
+    expect(
+      within(listbox).queryByRole("option", { name: "Imp" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clears the chosen stand-in once that character is separately selected into the bag", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+    const standIn = screen.getByLabelText(/Pick the Lunatic's stand-in/);
+    await selectOption(user, standIn, "Imp");
+    expect(standIn).toHaveTextContent("Imp");
+
+    // Imp is now claimed as the stand-in; selecting it for real (a plain,
+    // unrestricted action) should give up that stand-in slot.
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+
+    expect(standIn).toHaveTextContent("Choose a stand-in…");
+  });
+
+  it("marks the stand-in's own card as standing in for the Lunatic, not a normal pick", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+    await selectOption(user,
+      screen.getByLabelText(/Pick the Lunatic's stand-in/),
+      "Imp",
+    );
+
+    const imp = screen.getByRole("button", { name: /^Imp/ });
+    expect(imp).toHaveAttribute("aria-pressed", "false");
+    expect(imp).toHaveTextContent(/lunatic's stand-in/i);
+  });
+
+  it("advertises the automatic default stand-in, unlike the Drunk's blank placeholder (ADR 0003, AC5)", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+
+    expect(
+      screen.getByLabelText(/Pick the Lunatic's stand-in/),
+    ).toHaveTextContent(/defaults to imp/i);
+  });
+
+  it("applies the default stand-in Demon when none is explicitly chosen, filling the seat instead of leaving it short (AC5)", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+    // No explicit stand-in choice made — the default should still apply.
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+
+    const game = loadGame();
+    const standInToken = game!.bag.find((t) => t.isLunaticStandIn);
+    expect(standInToken?.characterId).toBe("imp");
+  });
+
+  it("warns, but never blocks, in the rare case no Demon stand-in is available (ADR 0003)", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    // Imp is the script's only Demon — selecting it for real leaves no
+    // Demon available to default the Lunatic's stand-in to.
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+
+    expect(screen.getByText(/Lunatic needs a stand-in/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    ).not.toBeDisabled();
+  });
+
+  it("still warns when a saved draft's stand-in id is stale and no default is available (code review finding)", () => {
+    // A draft saved before the script changed can point at a Demon id no
+    // longer on it — the draft's lunaticStandInId is non-null, but it
+    // doesn't resolve to any character in this script's pool.
+    saveBagBuilderDraft("tb", {
+      playerCount: 5,
+      travellerCount: 0,
+      selectedIds: ["lunatic", "imp"],
+      autoAddedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+      lunaticStandInId: "zombuul",
+    });
+
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    // Imp is the script's only Demon and is already selected for real, so
+    // there's no available Demon to fall back to — the warning must still
+    // fire despite the (stale) lunaticStandInId being non-null.
+    expect(screen.getByText(/Lunatic needs a stand-in/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the default stand-in when a saved draft's stand-in id is stale but another Demon is available (code review finding)", async () => {
+    const user = userEvent.setup();
+    saveBagBuilderDraft("tb", {
+      playerCount: 5,
+      travellerCount: 0,
+      selectedIds: ["lunatic", "imp"],
+      autoAddedIds: [],
+      modifierChoices: {},
+      extraCopies: {},
+      standInId: null,
+      // Not part of this script — stale relative to the current pool.
+      lunaticStandInId: "not-a-real-character",
+    });
+
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp", "zombuul")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    // No warning: Zombuul is available to default to, even though the
+    // saved stand-in id doesn't resolve.
+    expect(screen.queryByText(/Lunatic needs a stand-in/i)).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+
+    const game = loadGame();
+    const standInToken = game!.bag.find((t) => t.isLunaticStandIn);
+    expect(standInToken?.characterId).toBe("zombuul");
+  });
+});
+
+describe("Lunatic stand-in tallies count once, as an Outsider (parity with issue #76)", () => {
+  it("doesn't inflate Demons when a stand-in is picked", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp")} />);
+
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+    expect(screen.getByText("Demons 0/1")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
+
+    await selectOption(user,
+      screen.getByLabelText(/Pick the Lunatic's stand-in/),
+      "Imp",
+    );
+
+    // The Lunatic already counts once, as an Outsider — the stand-in is the
+    // same physical token, not a second, independent Demon pick.
+    expect(screen.getByText("Demons 0/1")).toBeInTheDocument();
+    expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
   });
 });
 
@@ -381,7 +632,7 @@ describe("Drunk stand-in tallies count once, as an Outsider (issue #76)", () => 
     expect(screen.getByText("Townsfolk 0/3")).toBeInTheDocument();
     expect(screen.getByText("Outsiders 1/0")).toBeInTheDocument();
 
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText(/Pick the Drunk's stand-in/),
       "Washerwoman",
     );
@@ -397,7 +648,7 @@ describe("Drunk stand-in tallies count once, as an Outsider (issue #76)", () => 
     render(<BagBuilder characters={characters("drunk", "washerwoman")} />);
 
     await user.click(screen.getByRole("button", { name: /^Drunk/ }));
-    await user.selectOptions(
+    await selectOption(user, 
       screen.getByLabelText(/Pick the Drunk's stand-in/),
       "Washerwoman",
     );
@@ -680,7 +931,14 @@ describe("warnings are advisory, never blocking (AC6)", () => {
       "data-state",
       "over",
     );
+    // Excludes the player-/traveller-count NumberStepper's own +/− buttons:
+    // those are legitimately disabled at their min/max bounds, unrelated to
+    // this AC's concern (bag-composition deviation must never disable a
+    // character toggle).
     for (const button of screen.getAllByRole("button")) {
+      if (/^(Increase|Decrease) /.test(button.getAttribute("aria-label") ?? "")) {
+        continue;
+      }
       expect(button).not.toBeDisabled();
     }
   });

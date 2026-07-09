@@ -5,6 +5,7 @@ import type { Player } from "@/lib/gameDocument";
 
 import { CollapsibleSection } from "./CollapsibleSection";
 import styles from "./ClaimsList.module.css";
+import { Select, type SelectEntry } from "./Select";
 
 export interface ClaimsListProps {
   players: Player[];
@@ -45,37 +46,37 @@ export function ClaimsList({
         onToggleCollapsed={onToggleCollapsed}
       >
         <ul className={styles.list}>
-          {sorted.map((player) => (
-            <li key={player.id} className={styles.row}>
-              <span className={styles.name}>{player.name}</span>
-              <select
-                aria-label={`Claim for ${player.name}`}
-                className={styles.claimSelect}
-                value={player.claim ?? ""}
-                onChange={(event) =>
-                  onSetClaim(player.id, event.target.value || null)
-                }
-              >
-                <option value="">No claim</option>
-                {/* A claim recorded before the script last changed can
-                    reference a character no longer in claimOptions — keep it
-                    selectable/visible by id rather than silently resetting
-                    the row to "No claim" out from under the storyteller. */}
-                {player.claim && !claimIds.has(player.claim) && (
-                  <option value={player.claim}>{player.claim}</option>
-                )}
-                {claimGroups.map((group) => (
-                  <optgroup key={group.team} label={teamNames[group.team]}>
-                    {group.characters.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </li>
-          ))}
+          {sorted.map((player) => {
+            const entries: SelectEntry[] = [{ value: "", label: "No claim" }];
+            // A claim recorded before the script last changed can reference a
+            // character no longer in claimOptions — keep it selectable/visible
+            // by id rather than silently resetting the row to "No claim" out
+            // from under the storyteller.
+            if (player.claim && !claimIds.has(player.claim)) {
+              entries.push({ value: player.claim, label: player.claim });
+            }
+            entries.push(
+              ...claimGroups.map((group) => ({
+                label: teamNames[group.team],
+                options: group.characters.map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                })),
+              })),
+            );
+            return (
+              <li key={player.id} className={styles.row}>
+                <span className={styles.name}>{player.name}</span>
+                <Select
+                  aria-label={`Claim for ${player.name}`}
+                  className={styles.claimSelect}
+                  value={player.claim ?? ""}
+                  onChange={(next) => onSetClaim(player.id, next || null)}
+                  entries={entries}
+                />
+              </li>
+            );
+          })}
         </ul>
       </CollapsibleSection>
     </section>

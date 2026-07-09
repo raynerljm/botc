@@ -40,6 +40,10 @@ export interface NightListEntry {
   playerName: string | null;
   dead: boolean;
   isDrunk: boolean;
+  // Same mechanic as isDrunk, for the Lunatic's Demon stand-in (issue #163)
+  // — flags a fake wake so the storyteller runs it as the Lunatic's ritual
+  // rather than a real demon action.
+  isLunatic: boolean;
   // True for a dead player's entry not yet un-skipped this night — dimmed
   // and auto-skipped in the UI, but always present in the list (never
   // hidden), per issue #16's acceptance criteria.
@@ -115,6 +119,7 @@ function fixedEntry(id: string, bucket: number, nightValue: number): RawEntry {
     playerName: null,
     dead: false,
     isDrunk: false,
+    isLunatic: false,
     skipped: false,
     actingCharacterId: null,
     defaultBucket: bucket,
@@ -271,6 +276,7 @@ export function computeNightList({
       playerName: player.name,
       dead: player.dead,
       isDrunk: player.isDrunk,
+      isLunatic: player.isLunatic,
       skipped: player.dead && !unskippedIds.has(charEntryId(player.id)),
       actingCharacterId: null,
       defaultBucket: action.acts ? ACTING_BUCKET : NOT_ACTING_BUCKET,
@@ -299,6 +305,7 @@ export function computeNightList({
       playerName: player.name,
       dead: player.dead,
       isDrunk: player.isDrunk,
+      isLunatic: player.isLunatic,
       skipped: player.dead && !unskippedIds.has(actsAsEntryId(player.id)),
       defaultBucket: action.acts ? ACTING_BUCKET : NOT_ACTING_BUCKET,
       nightValue: action.nightValue,
@@ -350,6 +357,7 @@ export function computeNightList({
     playerName: entry.playerName,
     dead: entry.dead,
     isDrunk: entry.isDrunk,
+    isLunatic: entry.isLunatic,
     skipped: entry.skipped,
     actingCharacterId: entry.actingCharacterId,
   }));

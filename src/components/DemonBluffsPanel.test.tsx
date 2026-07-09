@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame, type GameDocument } from "@/lib/gameDocument";
+import { getSelectOptions, selectOption } from "@/testUtils/selectOption";
 
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
 
@@ -45,11 +46,12 @@ describe("DemonBluffsPanel", () => {
     expect(screen.getByLabelText("Bluff slot 3")).toBeInTheDocument();
   });
 
-  it("defaults each slot's options to good characters not in play", () => {
+  it("defaults each slot's options to good characters not in play", async () => {
+    const user = userEvent.setup();
     renderPanel();
 
-    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
-    const optionValues = Array.from(slot.options).map((o) => o.value);
+    const slot = screen.getByLabelText("Bluff slot 1");
+    const optionValues = (await getSelectOptions(user, slot)).map((o) => o.value);
 
     // Washerwoman (Townsfolk) is on the script but not in play.
     expect(optionValues).toContain("washerwoman");
@@ -64,8 +66,8 @@ describe("DemonBluffsPanel", () => {
 
     await user.click(screen.getByLabelText(/show all characters/i));
 
-    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
-    const optionValues = Array.from(slot.options).map((o) => o.value);
+    const slot = screen.getByLabelText("Bluff slot 1");
+    const optionValues = (await getSelectOptions(user, slot)).map((o) => o.value);
     expect(optionValues).toContain("imp");
     expect(optionValues).toContain("baron");
   });
@@ -76,19 +78,21 @@ describe("DemonBluffsPanel", () => {
     // checked — a legitimate Marionette/Lunatic bluff pick per the panel's
     // own rule.
     renderPanel({ demonBluffs: ["imp", null, null] });
-    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
+    const slot = screen.getByLabelText("Bluff slot 1");
     const showAll = screen.getByLabelText(/show all characters/i);
 
     await user.click(showAll);
-    expect(slot.value).toBe("imp");
+    expect(slot.dataset.value).toBe("imp");
 
     await user.click(showAll);
 
     // Without this fix, "imp" drops out of the option list once "show all"
     // is off (Imp is evil and in play), silently resetting the visible
     // selection to "Not set" even though game.demonBluffs[0] is still "imp".
-    expect(Array.from(slot.options).map((o) => o.value)).toContain("imp");
-    expect(slot.value).toBe("imp");
+    expect((await getSelectOptions(user, slot)).map((o) => o.value)).toContain(
+      "imp",
+    );
+    expect(slot.dataset.value).toBe("imp");
   });
 
   it("flags an in-play character as '(in play)' once 'show all' surfaces it as a bluff option (issue #128)", async () => {
@@ -105,19 +109,19 @@ describe("DemonBluffsPanel", () => {
 
     await user.click(screen.getByLabelText(/show all characters/i));
 
-    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
-    const impOption = within(slot).getByRole("option", { name: /^imp/i });
-    expect(impOption).toHaveTextContent("Imp (in play)");
+    const slot = screen.getByLabelText("Bluff slot 1");
+    const options = await getSelectOptions(user, slot);
+    expect(options.find((o) => o.value === "imp")?.label).toBe("Imp (in play)");
 
     // On the roster but not currently held by anyone — stays unannotated.
-    const baronOption = within(slot).getByRole("option", { name: /^baron/i });
-    expect(baronOption).not.toHaveTextContent("(in play)");
+    expect(options.find((o) => o.value === "baron")?.label).not.toContain(
+      "(in play)",
+    );
 
     // Off the roster entirely — also unannotated.
-    const washerwomanOption = within(slot).getByRole("option", {
-      name: /^washerwoman/i,
-    });
-    expect(washerwomanOption).not.toHaveTextContent("(in play)");
+    expect(
+      options.find((o) => o.value === "washerwoman")?.label,
+    ).not.toContain("(in play)");
   });
 
   it("stops flagging a character as '(in play)' once nobody holds it anymore, unlike the ever-growing character pool (issue #128)", async () => {
@@ -133,9 +137,11 @@ describe("DemonBluffsPanel", () => {
 
     await user.click(screen.getByLabelText(/show all characters/i));
 
-    const slot = screen.getByLabelText("Bluff slot 1") as HTMLSelectElement;
-    const impOption = within(slot).getByRole("option", { name: /^imp/i });
-    expect(impOption).not.toHaveTextContent("(in play)");
+    const slot = screen.getByLabelText("Bluff slot 1");
+    const options = await getSelectOptions(user, slot);
+    expect(options.find((o) => o.value === "imp")?.label).not.toContain(
+      "(in play)",
+    );
   });
 
   it("selecting an in-play bluff is never blocked — only annotated (issue #128, ADR 0003)", async () => {
@@ -143,7 +149,7 @@ describe("DemonBluffsPanel", () => {
     const { onChange, game } = renderPanel();
 
     await user.click(screen.getByLabelText(/show all characters/i));
-    await user.selectOptions(screen.getByLabelText("Bluff slot 1"), "imp");
+    await selectOption(user, screen.getByLabelText("Bluff slot 1"), "imp");
 
     expect(onChange).toHaveBeenCalledWith({
       ...game,
@@ -157,7 +163,7 @@ describe("DemonBluffsPanel", () => {
       demonBluffs: [null, "librarian", null],
     });
 
-    await user.selectOptions(screen.getByLabelText("Bluff slot 1"), "washerwoman");
+    await selectOption(user, screen.getByLabelText("Bluff slot 1"), "washerwoman");
 
     expect(onChange).toHaveBeenCalledWith({
       ...game,
@@ -171,7 +177,7 @@ describe("DemonBluffsPanel", () => {
       demonBluffs: ["washerwoman", null, null],
     });
 
-    await user.selectOptions(screen.getByLabelText("Bluff slot 1"), "");
+    await selectOption(user, screen.getByLabelText("Bluff slot 1"), "Not set");
 
     expect(onChange).toHaveBeenCalledWith({
       ...game,

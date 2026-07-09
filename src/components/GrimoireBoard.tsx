@@ -25,6 +25,7 @@ import {
   clampPct,
   DRUNK_ID,
   heldCharacterIds,
+  LUNATIC_ID,
   nextPadReminderPosition,
   parkBeside,
   type Player,
@@ -39,6 +40,7 @@ import { InfoTokenShowMode } from "./InfoTokenShowMode";
 import { ReminderChip } from "./ReminderChip";
 import { ReminderPicker } from "./ReminderPicker";
 import styles from "./GrimoireBoard.module.css";
+import { Select } from "./Select";
 
 export interface GrimoireBoardProps {
   players: Player[];
@@ -163,6 +165,11 @@ interface DragState {
   dragged: boolean;
   boardRect: DOMRect;
   lastPosition: PlayerPosition;
+  // The token's own board-percentage position at pickup — every move adds
+  // the pointer's pixel delta (converted to board percent) on top of this,
+  // instead of jumping the token's centre to the raw pointer position
+  // (issue #167).
+  startPosition: PlayerPosition;
 }
 
 
@@ -423,7 +430,16 @@ export function GrimoireBoard({
         player.id,
         livePlayerDrag?.id === player.id
           ? livePlayerDrag.position
-          : (player.position ?? circlePosition(index, total)),
+          : player.position
+            ? // Re-clamped the same way anchoredReminderPosition already
+              // clamps its anchor input: a hand-edited or pre-#117 exported
+              // document isn't guaranteed to be within [4,96], and an
+              // out-of-range stored position would otherwise make a drag's
+              // grab offset (GrimoireBoard.tsx's pointer handlers) jump the
+              // token to the clamp edge on pickup — the exact bug issue
+              // #167 fixed, just re-triggered by out-of-range legacy data.
+              { x: clampPct(player.position.x), y: clampPct(player.position.y) }
+            : circlePosition(index, total),
       );
     });
     return map;
@@ -450,6 +466,7 @@ export function GrimoireBoard({
     event: ReactPointerEvent<HTMLElement>,
     kind: TokenKind,
     id: string,
+    position: PlayerPosition,
   ) {
     const board = boardRef.current;
     if (!board) return;
@@ -465,6 +482,9 @@ export function GrimoireBoard({
     // pointerup/pointermove would then fail the pointerId check below and
     // the first drag would never resolve.
     if (dragRef.current) return;
+    // Captured once per gesture — the board doesn't reflow mid-drag, so
+    // re-querying layout on every pointermove is wasted work.
+    const boardRect = board.getBoundingClientRect();
     dragRef.current = {
       kind,
       id,
@@ -472,10 +492,12 @@ export function GrimoireBoard({
       startX: event.clientX,
       startY: event.clientY,
       dragged: false,
-      // Captured once per gesture — the board doesn't reflow mid-drag, so
-      // re-querying layout on every pointermove is wasted work.
-      boardRect: board.getBoundingClientRect(),
-      lastPosition: { x: 0, y: 0 },
+      boardRect,
+      lastPosition: position,
+      // `position` is the token's own currently-displayed board-percentage
+      // position (its seat/pad position, or an anchored reminder's offset
+      // display spot — never a stale stored position (issue #167)).
+      startPosition: position,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
@@ -489,10 +511,14 @@ export function GrimoireBoard({
     if (!drag.dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     drag.dragged = true;
 
-    const { boardRect } = drag;
+    // The token's pickup position plus the pointer's own pixel delta (as a
+    // board percentage) — keeps the token under the finger from pickup to
+    // drop instead of snapping its centre to the raw pointer position
+    // (issue #167).
+    const { boardRect, startPosition } = drag;
     const position = {
-      x: clampPct(((event.clientX - boardRect.left) / boardRect.width) * 100),
-      y: clampPct(((event.clientY - boardRect.top) / boardRect.height) * 100),
+      x: clampPct(startPosition.x + (dx / boardRect.width) * 100),
+      y: clampPct(startPosition.y + (dy / boardRect.height) * 100),
     };
     drag.lastPosition = position;
     // Local state only, for smooth visual feedback — the game document is
@@ -743,6 +769,10 @@ export function GrimoireBoard({
             // identity — once swapped to any other character (including a
             // reveal to "drunk" itself), there's nothing left to disguise.
             const isHiddenDrunk = player.isDrunk && character?.id !== DRUNK_ID;
+            // Same mechanic as isHiddenDrunk, for the Lunatic's Demon
+            // stand-in (issue #163).
+            const isHiddenLunatic =
+              player.isLunatic && character?.id !== LUNATIC_ID;
             const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
@@ -764,7 +794,7 @@ export function GrimoireBoard({
                     className={styles.tokenSummary}
                     data-dead={player.dead || undefined}
                     onPointerDown={(event) =>
-                      handlePointerDown(event, "player", player.id)
+                      handlePointerDown(event, "player", player.id, position)
                     }
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
@@ -798,6 +828,9 @@ export function GrimoireBoard({
                     </span>
                     {isHiddenDrunk && (
                       <span className={styles.note}>(actually the Drunk)</span>
+                    )}
+                    {isHiddenLunatic && (
+                      <span className={styles.note}>(actually the Lunatic)</span>
                     )}
                     {player.isTraveller && (
                       <span className={styles.noteCapitalized}>
@@ -849,24 +882,19 @@ export function GrimoireBoard({
                       htmlFor={`swap-character-${player.id}`}
                     >
                       Swap character
-                      <select
+                      <Select
                         id={`swap-character-${player.id}`}
                         className={styles.select}
                         value={player.characterId ?? ""}
-                        onChange={(event) =>
-                          onSwapCharacter(player.id, event.target.value)
-                        }
-                      >
-                        {swapOptionsForPlayer.map((group) => (
-                          <optgroup key={group.team} label={teamNames[group.team]}>
-                            {group.characters.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(next) => onSwapCharacter(player.id, next)}
+                        entries={swapOptionsForPlayer.map((group) => ({
+                          label: teamNames[group.team],
+                          options: group.characters.map((c) => ({
+                            value: c.id,
+                            label: c.name,
+                          })),
+                        }))}
+                      />
                     </label>
 
                     {isHiddenDrunk && (
@@ -905,32 +933,29 @@ export function GrimoireBoard({
 
                     <label className={styles.field} htmlFor={`token-claim-${player.id}`}>
                       Claim
-                      <select
+                      <Select
                         id={`token-claim-${player.id}`}
                         className={styles.claimSelect}
                         value={player.claim ?? ""}
-                        onChange={(event) =>
-                          onSetClaim(player.id, event.target.value || null)
-                        }
-                      >
-                        <option value="">No claim</option>
-                        {/* A claim recorded before the script last changed can
-                            reference a character no longer in claimOptions —
-                            keep it selectable/visible by id rather than
-                            silently resetting the row to "No claim". */}
-                        {player.claim && !claimById.has(player.claim) && (
-                          <option value={player.claim}>{player.claim}</option>
-                        )}
-                        {claimGroups.map((group) => (
-                          <optgroup key={group.team} label={teamNames[group.team]}>
-                            {group.characters.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(next) => onSetClaim(player.id, next || null)}
+                        entries={[
+                          { value: "", label: "No claim" },
+                          // A claim recorded before the script last changed can
+                          // reference a character no longer in claimOptions —
+                          // keep it selectable/visible by id rather than
+                          // silently resetting the row to "No claim".
+                          ...(player.claim && !claimById.has(player.claim)
+                            ? [{ value: player.claim, label: player.claim }]
+                            : []),
+                          ...claimGroups.map((group) => ({
+                            label: teamNames[group.team],
+                            options: group.characters.map((c) => ({
+                              value: c.id,
+                              label: c.name,
+                            })),
+                          })),
+                        ]}
+                      />
                     </label>
 
                     <label
@@ -938,25 +963,30 @@ export function GrimoireBoard({
                       htmlFor={`token-acts-as-${player.id}`}
                     >
                       Acts as
-                      <select
+                      <Select
                         id={`token-acts-as-${player.id}`}
                         className={styles.select}
                         value={player.actsAs ?? ""}
-                        onChange={(event) =>
-                          onSetActsAs(player.id, event.target.value || null)
-                        }
-                      >
-                        <option value="">Not acting as anyone</option>
-                        {claimGroups.map((group) => (
-                          <optgroup key={group.team} label={teamNames[group.team]}>
-                            {group.characters.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        onChange={(next) => onSetActsAs(player.id, next || null)}
+                        entries={[
+                          { value: "", label: "Not acting as anyone" },
+                          // Same "keep an orphaned value selectable/visible"
+                          // safeguard as the Claim select above — an actsAs
+                          // target recorded before the script last changed
+                          // can reference a character no longer in
+                          // claimOptions (Copilot review finding).
+                          ...(player.actsAs && !claimById.has(player.actsAs)
+                            ? [{ value: player.actsAs, label: player.actsAs }]
+                            : []),
+                          ...claimGroups.map((group) => ({
+                            label: teamNames[group.team],
+                            options: group.characters.map((c) => ({
+                              value: c.id,
+                              label: c.name,
+                            })),
+                          })),
+                        ]}
+                      />
                     </label>
 
                     <div className={styles.seatControls}>
@@ -1034,9 +1064,12 @@ export function GrimoireBoard({
               ? positionByPlayerId.get(reminder.anchorPlayerId)
               : undefined;
             const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
+            // Clamped for the same reason as positionByPlayerId above — a
+            // free-standing reminder's stored position isn't guaranteed to
+            // be within [4,96] for legacy/hand-edited documents.
             const restingPosition = anchorSeatPosition
               ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
-              : reminder.position;
+              : { x: clampPct(reminder.position.x), y: clampPct(reminder.position.y) };
             const position =
               liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
                 ? liveDrag.position
@@ -1062,7 +1095,7 @@ export function GrimoireBoard({
                   <summary
                     className={styles.tokenSummary}
                     onPointerDown={(event) =>
-                      handlePointerDown(event, "reminder", reminder.id)
+                      handlePointerDown(event, "reminder", reminder.id, position)
                     }
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
