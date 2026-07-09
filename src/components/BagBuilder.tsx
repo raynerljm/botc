@@ -227,6 +227,7 @@ export function BagBuilder({
     initialDraft?.lunaticStandInId ?? null,
   );
   const [showCountWarning, setShowCountWarning] = useState(false);
+  const [showDrunkStandInWarning, setShowDrunkStandInWarning] = useState(false);
   const [showInProgressWarning, setShowInProgressWarning] = useState(false);
 
   // Every field a storyteller can set while building the bag survives a
@@ -466,6 +467,18 @@ export function BagBuilder({
 
   function handleContinue() {
     if (!scriptId || !scriptName) return;
+    // Advisory, never blocking (ADR 0003): the Drunk's unfillable-seat gate
+    // interrupts once with a dialog the storyteller can override, same as
+    // the count mismatch below.
+    if (selectedIds.has(DRUNK_ID) && !standInId) {
+      setShowDrunkStandInWarning(true);
+      return;
+    }
+    continuePastDrunkStandInWarning();
+  }
+
+  function continuePastDrunkStandInWarning() {
+    setShowDrunkStandInWarning(false);
     // Advisory, never blocking (ADR 0003): a mismatch just interrupts once
     // with a dialog the storyteller can override.
     if (countMismatches.length > 0) {
@@ -634,6 +647,17 @@ export function BagBuilder({
           </button>
         )}
       </div>
+
+      {showDrunkStandInWarning && (
+        <ConfirmDialog
+          title="The Drunk has no stand-in"
+          message="No Townsfolk stand-in is picked for the Drunk, so that seat won't have a token to draw. Continue anyway?"
+          confirmLabel="Continue anyway"
+          cancelLabel="Go back"
+          onConfirm={continuePastDrunkStandInWarning}
+          onCancel={() => setShowDrunkStandInWarning(false)}
+        />
+      )}
 
       {showCountWarning && (
         <ConfirmDialog
