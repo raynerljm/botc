@@ -195,8 +195,14 @@ function ShowToDemonOverlay({
           <li key={index} className={styles.overlaySlot}>
             {character ? (
               <>
-                <CharacterToken character={character} />
+                <span className={styles.overlayToken}>
+                  <CharacterToken character={character} />
+                </span>
                 <span className={styles.overlayName}>{character.name}</span>
+                <span className={styles.overlayTeam} data-team={character.team}>
+                  {teamNames[character.team]}
+                </span>
+                <p className={styles.overlayAbility}>{character.ability}</p>
               </>
             ) : (
               <span className={styles.overlayName}>Not set</span>
