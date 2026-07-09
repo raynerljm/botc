@@ -939,14 +939,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     game.players.length > 0 &&
     game.players.every((p) => p.characterId !== null);
   // "Screen blurred/obscured" means the *whole* screen, not just the draw
-  // card — every other control (seat names, manual-assign dropdowns listing
-  // bag characters, traveller add, the grimoire board once every seat is
-  // filled) has to disappear too, both while a character is privately on
-  // screen and while the device is mid pass-around — i.e. whenever a draw is
-  // active and it isn't the safe "choosing" stage. Written as a deny-list
-  // (not `stage === "revealed" || stage === "hidden"`) so a future
-  // privacy-sensitive stage is obscured by default instead of needing this
-  // line remembered.
+  // card — every other control (traveller add, the grimoire board once every
+  // seat is filled) has to disappear too, both while a character is
+  // privately on screen and while the device is mid pass-around — i.e.
+  // whenever a draw is active and it isn't the safe "choosing" stage. Written
+  // as a deny-list (not `stage === "revealed" || stage === "hidden"`) so a
+  // future privacy-sensitive stage is obscured by default instead of needing
+  // this line remembered. The seats list (seat names, manual-assign
+  // dropdowns, "Assigned"/"Draw in progress" status) is stricter still — it
+  // uses its own `!draw` gate at its render site (issue #158), since its own
+  // full-screen "choosing" grid means "choosing" isn't safe for *that*
+  // control the way it is for the others here.
   const screenObscured = draw !== null && draw.stage !== "choosing";
   // Export/end-game/script-sharing stay reachable through a private reveal
   // (issue #21 AC: always reachable) — only the pass-around hand-off itself
@@ -1002,7 +1005,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       {draw && drawingSeat && (
         <div className={styles.drawFlow} role="region" aria-label="Bag draw">
           {draw.stage === "choosing" && (
-            <>
+            // Full-screen like the reveal (issue #53's .reveal) — the
+            // drawing player needs only these tokens on screen, not the
+            // seats list rendering behind them (issue #158). Same
+            // no-aria-modal trade-off as the reveal below: ShareScriptButton/
+            // EndGamePanel stay focusable underneath by design (issue #21),
+            // so this backdrop hiding them visually doesn't pull them out of
+            // the tab order.
+            <div className={styles.choosingFullscreen}>
               <p>
                 {drawingSeat.name}, tap a token to draw
               </p>
@@ -1014,11 +1024,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       className={styles.faceDownToken}
                       aria-label={`Face-down token ${index + 1}`}
                       onClick={(event) => chooseTokenOnClick(event, token.id)}
-                    />
+                    >
+                      <span aria-hidden="true">{index + 1}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           )}
 
           {draw.stage === "revealed" && revealedCharacter && (
@@ -1325,44 +1337,36 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           )}
         </>
       ) : (
-        !screenObscured && (
+        // Hidden for the whole draw session, not just the obscured stages —
+        // the choosing stage's own full-screen token grid (issue #158) means
+        // this list never has anything useful to show until every seat is
+        // filled or the draw hasn't started yet.
+        !draw && (
           <ul className={styles.seats} aria-label="Seats">
             {game.players.map((player) => {
               const character = player.characterId
                 ? characterById.get(player.characterId)
                 : undefined;
+              // `draw` is always null here — the whole list is hidden
+              // whenever a draw session is active (issue #158) — so every
+              // seat is either already assigned or open for manual pick,
+              // with no "revealed"/"Assigned"/"Draw in progress" mid-draw
+              // placeholder state possible.
               return (
                 <li key={player.id} className={styles.seat}>
-                  {draw?.seatId === player.id && draw.stage === "revealed" ? (
-                    // The reveal panel's PlayerNamePicker is this seat's only
-                    // name editor while it's on-screen — a second live field
-                    // here would let the two silently overwrite each other.
-                    <p className={styles.assignedPlaceholder}>Naming above</p>
-                  ) : (
-                    <>
-                      <label htmlFor={`seat-name-${player.id}`}>
-                        Seat {player.seat} name
-                      </label>
-                      <input
-                        id={`seat-name-${player.id}`}
-                        type="text"
-                        value={player.name}
-                        onChange={(event) =>
-                          renamePlayer(player.id, event.target.value)
-                        }
-                        onBlur={() => commitPlayerName(player.id)}
-                      />
-                    </>
-                  )}
-                  {character && draw && (
-                    // A draw session is on-screen for a *different* seat
-                    // right now, which means the device is mid pass-around
-                    // — every other seat's already-revealed identity has
-                    // to stay hidden too, not just the seat currently
-                    // drawing.
-                    <p className={styles.assignedPlaceholder}>Assigned</p>
-                  )}
-                  {character && !draw && (
+                  <label htmlFor={`seat-name-${player.id}`}>
+                    Seat {player.seat} name
+                  </label>
+                  <input
+                    id={`seat-name-${player.id}`}
+                    type="text"
+                    value={player.name}
+                    onChange={(event) =>
+                      renamePlayer(player.id, event.target.value)
+                    }
+                    onBlur={() => commitPlayerName(player.id)}
+                  />
+                  {character ? (
                     <div className={styles.assignedCharacter}>
                       <CharacterToken character={character} />
                       <span>{character.name}</span>
@@ -1377,19 +1381,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                         </span>
                       )}
                     </div>
-                  )}
-                  {!character && draw && (
-                    // A draw session is active — bag composition is the
-                    // storyteller's secret, and this select would list every
-                    // remaining character (including, for the last
-                    // unassigned seat, letting it read its own character
-                    // before the reveal) to whoever's holding the device
-                    // mid-draw (issue #111).
-                    <p className={styles.assignedPlaceholder}>
-                      Draw in progress
-                    </p>
-                  )}
-                  {!character && !draw && (
+                  ) : (
                     <label>
                       {`Assign seat ${player.seat} manually`}
                       <Select
