@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -38,6 +38,15 @@ function gameWith(selectedIds: string[], overrides: Partial<GameDocument> = {}):
 
 function characterById(game: GameDocument): Map<string, Character> {
   return new Map(game.characterPool.map((c) => [c.id, c]));
+}
+
+// jsdom has no real PointerEvent constructor, so a plain MouseEvent stands in
+// with pointerId grafted on — same convention as GrimoireBoard.test.tsx's
+// own pointer-drag tests.
+function pointerEvent(type: string, init: { pointerId: number; clientY: number }) {
+  const event = new MouseEvent(type, { bubbles: true, clientY: init.clientY });
+  Object.defineProperty(event, "pointerId", { value: init.pointerId });
+  return event;
 }
 
 function renderNightList(
@@ -628,7 +637,7 @@ describe("Night list: collapsing the panel (issue #168)", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps the glanceable progress count visible even while collapsed", () => {
+  it("keeps the glanceable progress count and current entry visible even while collapsed (issue #194)", () => {
     const game = gameWith(["washerwoman", "imp"], {
       night: 0,
       nightOpen: true,
@@ -636,7 +645,7 @@ describe("Night list: collapsing the panel (issue #168)", () => {
     });
     renderNightList(game);
 
-    expect(screen.getByRole("status")).toHaveTextContent(/^0\/\d+ done$/);
+    expect(screen.getByRole("status")).toHaveTextContent(/^0\/\d+ · .+$/);
   });
 
   it("toggles the persisted collapsed state via the heading", async () => {
@@ -650,5 +659,96 @@ describe("Night list: collapsing the panel (issue #168)", () => {
     await user.click(screen.getByRole("button", { name: "Night list" }));
 
     expect(latest).toEqual({ ...game, nightListCollapsed: true });
+  });
+});
+
+describe("Night list: bottom sheet peek state (issue #194)", () => {
+  it("shows the count and current entry, advancing as entries are checked off", async () => {
+    // washerwoman acts first night (firstNight 32), imp doesn't (firstNight
+    // 0) — so with show-all off the checkable steps are exactly Dusk,
+    // Washerwoman, Dawn, in that order.
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("0/3 · Dusk");
+
+    await user.click(screen.getByRole("checkbox", { name: "Dusk" }));
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(/^1\/3 · Washerwoman/);
+  });
+
+  it("shows 'done' once every entry is checked off, with no current entry left", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const allChecked: GameDocument = {
+      ...game,
+      nightChecked: ["fixed:dusk", `char:${game.players[0].id}`, "fixed:dawn"],
+    };
+    renderNightList(allChecked);
+
+    expect(screen.getByRole("status")).toHaveTextContent("3/3 done");
+  });
+
+  it("a tap on the drag handle toggles collapsed, same as tapping the heading", () => {
+    const game = gameWith(["washerwoman", "imp"]);
+    let latest = game;
+    const { container } = renderNightList(game, (next) => {
+      latest = next;
+    });
+    const handle = container.querySelector("[data-handle]") as HTMLElement;
+
+    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }));
+    fireEvent(handle, pointerEvent("pointerup", { pointerId: 1, clientY: 100 }));
+
+    expect(latest).toEqual({ ...game, nightListCollapsed: true });
+  });
+
+  it("dragging the handle down collapses an expanded sheet", () => {
+    const game = gameWith(["washerwoman", "imp"], { nightListCollapsed: false });
+    let latest = game;
+    const { container } = renderNightList(game, (next) => {
+      latest = next;
+    });
+    const handle = container.querySelector("[data-handle]") as HTMLElement;
+
+    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }));
+    fireEvent(handle, pointerEvent("pointermove", { pointerId: 1, clientY: 140 }));
+    fireEvent(handle, pointerEvent("pointerup", { pointerId: 1, clientY: 140 }));
+
+    expect(latest.nightListCollapsed).toBe(true);
+  });
+
+  it("dragging the handle up expands a collapsed sheet", () => {
+    const game = gameWith(["washerwoman", "imp"], { nightListCollapsed: true });
+    let latest = game;
+    const { container } = renderNightList(game, (next) => {
+      latest = next;
+    });
+    const handle = container.querySelector("[data-handle]") as HTMLElement;
+
+    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 140 }));
+    fireEvent(handle, pointerEvent("pointermove", { pointerId: 1, clientY: 100 }));
+    fireEvent(handle, pointerEvent("pointerup", { pointerId: 1, clientY: 100 }));
+
+    expect(latest.nightListCollapsed).toBe(false);
+  });
+
+  it("a cancelled drag doesn't toggle anything", () => {
+    const game = gameWith(["washerwoman", "imp"]);
+    const onChange = vi.fn();
+    const { container } = renderNightList(game, onChange);
+    const handle = container.querySelector("[data-handle]") as HTMLElement;
+
+    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }));
+    fireEvent(handle, pointerEvent("pointermove", { pointerId: 1, clientY: 140 }));
+    fireEvent(handle, pointerEvent("pointercancel", { pointerId: 1, clientY: 140 }));
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

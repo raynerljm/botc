@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Character } from "@/lib/characters";
 import { pauseDayTimer } from "@/lib/dayTimer";
@@ -31,14 +31,63 @@ function toggleInArray(list: string[], id: string): string[] {
   return list.includes(id) ? list.filter((entryId) => entryId !== id) : [...list, id];
 }
 
+// A firm swipe on the sheet's drag handle before it counts as a drag rather
+// than a tap — matches GrimoireBoard's own DRAG_THRESHOLD_PX convention for
+// pointer-driven UI, scaled up slightly since a thumb swipe on a handle is a
+// coarser gesture than dragging a token.
+const SHEET_DRAG_THRESHOLD_PX = 10;
+
+interface HandleDrag {
+  pointerId: number;
+  startY: number;
+  dragging: boolean;
+}
+
 export function NightList({ game, characterById, onChange }: NightListProps) {
   const [showAll, setShowAll] = useState(false);
+  const dragRef = useRef<HandleDrag | null>(null);
 
   const nightNumber = currentNightNumber(game);
   const phase = phaseForNight(nightNumber);
 
   function toggleCollapsed(collapsed: boolean) {
     onChange({ ...game, nightListCollapsed: collapsed });
+  }
+
+  // The sheet's peek/expanded state reuses `nightListCollapsed` (issue #194
+  // decision, recorded in the PR): collapsed already meant "just the heading
+  // is visible" pre-sheet (issue #168), which is exactly the peek state, so
+  // no new persisted field/schema bump is needed.
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    dragRef.current = { pointerId: event.pointerId, startY: event.clientY, dragging: false };
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.dragging && Math.abs(event.clientY - drag.startY) >= SHEET_DRAG_THRESHOLD_PX) {
+      drag.dragging = true;
+    }
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (drag.dragging) {
+      // Dragging up (toward the top of the screen, decreasing clientY)
+      // expands; dragging down collapses — always resolves to the direction
+      // the thumb was actually headed, regardless of the state it started in.
+      toggleCollapsed(event.clientY - drag.startY > 0);
+    } else {
+      // No meaningful movement: treat it as a tap, same as tapping the
+      // heading button does.
+      toggleCollapsed(!game.nightListCollapsed);
+    }
+  }
+
+  function handlePointerCancel() {
+    dragRef.current = null;
   }
 
   function startNight() {
@@ -123,7 +172,20 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
 
   if (!game.nightOpen) {
     return (
-      <section className={styles.panel} aria-label="Night list">
+      <section className={styles.panel} aria-label="Night list" data-night-sheet>
+        {/* Decorative drag handle — a bottom sheet's standard pointer/touch
+            affordance (issue #194). Screen-reader users still get an
+            accessible expand/collapse control via the heading button below,
+            so this is aria-hidden rather than a second, redundant control. */}
+        <div
+          className={styles.handle}
+          data-handle
+          aria-hidden="true"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+        />
         <CollapsibleSection
           title="Night list"
           collapsed={game.nightListCollapsed}
@@ -152,9 +214,25 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   });
   const countable = entries.filter((entry) => !entry.skipped);
   const checkedCount = countable.filter((entry) => checkedIds.has(entry.id)).length;
+  // The next actionable entry — first unchecked, un-skipped — so the sheet's
+  // peek state can show "3/8 · Empath" instead of a bare count (issue #194
+  // AC). Undefined once everything's checked off.
+  const nextEntry = entries.find((entry) => !entry.skipped && !checkedIds.has(entry.id));
+  const progressText = `${checkedCount}/${countable.length}${
+    nextEntry ? ` · ${nextEntry.label}` : " done"
+  }`;
 
   return (
-    <section className={styles.panel} aria-label="Night list">
+    <section className={styles.panel} aria-label="Night list" data-night-sheet>
+      <div
+        className={styles.handle}
+        data-handle
+        aria-hidden="true"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      />
       <CollapsibleSection
         title={phaseLabel(phase, nightNumber)}
         collapsed={game.nightListCollapsed}
@@ -258,12 +336,12 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
         </button>
       </CollapsibleSection>
 
-      {/* Kept outside CollapsibleSection, unlike the checklist itself — a
-          storyteller collapsing this panel to reclaim circle width (issue
-          #168) still needs this glanceable "how much is left" count without
-          re-expanding the whole entries list (code review finding). */}
+      {/* Kept outside CollapsibleSection, unlike the checklist itself — the
+          sheet's peek state (issue #194) still needs this glanceable "how
+          much is left, what's next" line without expanding the whole entries
+          list (code review finding from the panel's original issue #168). */}
       <p className={styles.progress} role="status">
-        {checkedCount}/{countable.length} done
+        {progressText}
       </p>
     </section>
   );

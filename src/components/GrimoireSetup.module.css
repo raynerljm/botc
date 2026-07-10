@@ -309,16 +309,16 @@
   max-width: 100%;
 }
 
-/* Grid (not flex) so the night list can sit *before* the circle in visual
-   order on mobile — where it's genuinely reachable without a long scroll
-   past every seat token (issue #58) — while DOM/tab order stays circle,
-   night list, day phase throughout; only the grid-area assignment moves
-   per breakpoint, nothing is reparented. */
+/* Grid (not flex) so Day phase can sit beside the circle at wider
+   breakpoints while DOM/tab order stays circle, then day phase (issue #58);
+   only the grid-area assignment moves per breakpoint, nothing is reparented.
+   The night list isn't a grid item at all any more — it renders as a fixed
+   bottom sheet (NightList.module.css, issue #194), floating over whichever
+   of these areas is underneath it rather than sharing space with them. */
 .circleLayout {
   display: grid;
   grid-template-columns: 1fr;
   grid-template-areas:
-    "nightlist"
     "circle"
     "dayphase";
   gap: 1rem;
@@ -335,10 +335,6 @@
   display: none;
 }
 
-.nightListArea {
-  grid-area: nightlist;
-}
-
 .circleArea {
   grid-area: circle;
 }
@@ -347,14 +343,12 @@
   grid-area: dayphase;
 }
 
-/* Tablet+: the night list and day phase sit beside the board as their own
-   column instead of the night list coming first, full-width, above it. */
+/* Tablet+: Day phase sits beside the board as its own column instead of
+   stacking full-width below it. */
 @media (min-width: 768px) {
   .circleLayout {
     grid-template-columns: 1fr 24rem;
-    grid-template-areas:
-      "circle nightlist"
-      "circle dayphase";
+    grid-template-areas: "circle dayphase";
     align-items: start;
   }
 
@@ -373,11 +367,13 @@
     min-width: 0;
   }
 
-  /* Both side panels collapsed down to just their headings (issue #168) —
-     the 24rem reservation is no longer earning its keep, so let the column
-     shrink to its collapsed content and hand the freed width to the circle.
-     GrimoireBoard's own resize-fit logic (#98) re-measures the now-wider
-     column via its ResizeObserver and grows the circle to match. */
+  /* Day phase collapsed down to just its heading (originally issue #168,
+     when this also required Night list collapsed — now a fixed sheet outside
+     this grid entirely, issue #194) — the 24rem reservation is no longer
+     earning its keep, so let the column shrink to its collapsed content and
+     hand the freed width to the circle. GrimoireBoard's own resize-fit logic
+     (#98) re-measures the now-wider column via its ResizeObserver and grows
+     the circle to match. */
   .circleLayout[data-side-collapsed] {
     grid-template-columns: 1fr auto;
   }
