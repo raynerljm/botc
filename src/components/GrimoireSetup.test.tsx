@@ -157,7 +157,7 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     ).toBeInTheDocument();
   });
 
-  it("walks a full draw: tap, immediate private reveal, hide & pass, next seat", async () => {
+  it("walks a full draw: tap, immediate private reveal, hide & pass straight to the next seat (issue #185)", async () => {
     const user = userEvent.setup();
     const washerwoman = getCharacter("washerwoman")!;
     const imp = getCharacter("imp")!;
@@ -194,11 +194,11 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
-    // Privacy guard: the reveal is gone until the next player confirms.
+    // No intermediate "Card hidden" privacy screen — the next seat's tokens
+    // are shuffled and face-down, so it's safe to go straight there
+    // (issue #185). The reveal itself is gone either way.
     expect(screen.queryByText(firstDrawn.ability)).not.toBeInTheDocument();
-    expect(screen.getByText(/Pass the device to Player 2/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
+    expect(screen.queryByText(/Card hidden/)).not.toBeInTheDocument();
 
     // Seat 2's turn: exactly one face-down token remains.
     expect(screen.getByText(/Player 2.*tap a token/i)).toBeInTheDocument();
@@ -287,7 +287,6 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     expect(seat1Character).toBeDefined();
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     // Seat 1 is fully drawn and revealed by now — but seat 2 is mid-draw,
     // holding the device, so seat 1's identity must not leak anywhere on
@@ -327,26 +326,17 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
 
-    // Mid pass-around: the privacy message is up, and nothing else on the
-    // setup screen — seat names, manual-assign dropdowns (which would list
-    // the remaining bag characters by name), or the traveller control —
-    // should render alongside it.
-    expect(
-      screen.getByText(/Card hidden\. Pass the device to/),
-    ).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Seat \d name/)).not.toBeInTheDocument();
+    // Straight to the next seat's own choosing stage (issue #185) — no
+    // intermediate "Card hidden" screen — which keeps the seats list hidden
+    // too (issue #158). It only reappears once the whole draw session ends.
+    expect(screen.queryByText(/Card hidden/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
     expect(
       screen.queryByLabelText(/Assign seat \d manually/),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Add traveller" }),
     ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
-
-    // The next seat's own choosing stage keeps the seats list hidden too
-    // (issue #158) — it only reappears once the whole draw session ends.
-    expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
   });
 
   it("hides every seat's manual-assign select while a draw session is active, so bag composition never appears on screen (issue #111)", async () => {
@@ -390,7 +380,6 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     // Seat 1 is already assigned and seat 3 is still unassigned, so before
     // this fix the seats list would show both an "Assigned" and a "Draw in
@@ -435,7 +424,6 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     // Seat 2 is the last unassigned seat — drawing it flips setupComplete
     // true in the same tick the reveal appears, so the grimoire board must
@@ -492,7 +480,6 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
@@ -524,16 +511,25 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
 
   it("keeps export and end-game controls reachable through a private reveal (issue #21 AC), hiding them only during the pass-around itself", async () => {
     const user = userEvent.setup();
-    render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);
+    // A single seat so its draw is both first and last — its "Hide & pass"
+    // has no next seat's blind grid to skip straight to (issue #185), so it
+    // still lands on the "hidden" pass-around guard this test exercises.
+    render(
+      <GrimoireSetup
+        game={makeGame({
+          playerCount: 1,
+          selectedCharacters: [getCharacter("washerwoman")!],
+        })}
+      />,
+    );
 
     await user.click(screen.getByRole("button", { name: "Start bag draw" }));
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
 
-    // Reveal is up, but this isn't the last seat — export/end-game stay
-    // reachable through it. The Game panel starts collapsed pre-first-night
-    // (issue #79), so open it first.
+    // Reveal is up — export/end-game stay reachable through it. The Game
+    // panel starts collapsed pre-first-night (issue #79), so open it first.
     await user.click(screen.getByRole("button", { name: "Game" }));
     expect(
       screen.getByRole("button", { name: "Export game" }),
@@ -572,9 +568,9 @@ describe("draw session survives a reload (issue #108)", () => {
   // Simulates a page reload the same way GamePage does on a real
   // navigation: tear down the component instance entirely and remount
   // fresh from the persisted document.
-  function reload(unmount: () => void) {
+  function reload(unmount: () => void): () => void {
     unmount();
-    render(<GrimoireSetup game={loadGame() as GameDocument} />);
+    return render(<GrimoireSetup game={loadGame() as GameDocument} />).unmount;
   }
 
   it("keeps drawn seats masked and the ritual alive after a reload at the 'Card hidden' screen", async () => {
@@ -591,12 +587,16 @@ describe("draw session survives a reload (issue #108)", () => {
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
-    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+    // A live "Hide & pass" would skip straight to seat 2's blind grid
+    // (issue #185), so the only way to land on the "Card hidden" guard for a
+    // non-last seat is a reload mid-reveal (resumeDrawSession's privacy
+    // fallback) — reached here, then reloaded again to confirm it holds.
+    const remounted = reload(unmount);
     expect(
       screen.getByText(/Card hidden\. Pass the device to/),
     ).toBeInTheDocument();
 
-    reload(unmount);
+    reload(remounted);
 
     // The privacy guard is restored — the ritual did not silently end into
     // an open grimoire.
@@ -737,7 +737,6 @@ describe("draw session survives a reload (issue #108)", () => {
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
     await user.click(
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
@@ -810,7 +809,6 @@ describe("recovering from a bag shorter than the seat count (issue #118 AC1)", (
       screen.getAllByRole("button", { name: /Face-down token/ })[0],
     );
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     // Seat 2 draws — the bag is now empty, one seat still unassigned.
     await user.click(
@@ -899,6 +897,61 @@ describe("naming the drawn seat's player (issue #54)", () => {
     expect(loadGame()!.players[0].name).toBe("Substitute Sam");
   });
 
+  it("advances straight to the next draw's token grid once a quick-pick name is chosen, with no extra tap (issue #185)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+
+    await user.click(screen.getByRole("button", { name: "Bailey" }));
+
+    expect(loadGame()!.players[0].name).toBe("Bailey");
+    // Straight to seat 2's own choosing stage — no "Hide & pass" tap, no
+    // intermediate "Card hidden" screen.
+    expect(screen.getByText(/Player 2.*tap a token/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Card hidden/)).not.toBeInTheDocument();
+  });
+
+  it("advances straight to the next draw's token grid after naming yourself with a typed custom name (issue #185)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({ playerCount: 2 });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+
+    await user.type(screen.getByLabelText(/player name/i), "Substitute Sam");
+    await user.click(screen.getByRole("button", { name: /name yourself/i }));
+
+    expect(loadGame()!.players[0].name).toBe("Substitute Sam");
+    expect(screen.getByText(/Player 2.*tap a token/i)).toBeInTheDocument();
+  });
+
+  it("does not offer a name already assigned to an earlier seat this game in the quick-pick (issue #185)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        getCharacter("baron")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+    await user.click(screen.getByRole("button", { name: "Bailey" }));
+
+    // Seat 2 is now drawing — "Bailey" is already seated, so it must not be
+    // offered again.
+    await user.click(screen.getAllByRole("button", { name: /Face-down token/ })[0]);
+    expect(screen.queryByRole("button", { name: "Bailey" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Casey" })).toBeInTheDocument();
+  });
+
   it("offers the name picker only once a token has been revealed, not while still choosing", async () => {
     const user = userEvent.setup();
     const game = makeGame({ playerCount: 2 });
@@ -920,7 +973,6 @@ describe("naming the drawn seat's player (issue #54)", () => {
     expect(screen.queryByLabelText("Seat 1 name")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Hide & pass" }));
-    await user.click(screen.getByRole("button", { name: "Ready to draw" }));
 
     // The field stays hidden through the rest of the draw session too — the
     // next seat's own choosing stage hides the whole seats list (issue #158),

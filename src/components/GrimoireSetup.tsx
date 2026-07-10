@@ -23,6 +23,7 @@ import {
   withRestoredReminder,
   type Alignment,
   type BagToken,
+  type DrawSession,
   type EndedNightSnapshot,
   type GameDocument,
   type Player,
@@ -781,15 +782,61 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     chooseToken(tokenId);
   }
 
-  // Every seat's reveal — including the last — goes through the same
-  // privacy guard before the device changes hands (issue #110): the last
-  // seat has no next seat to pass to, but the drawer must still lose sight
-  // of the card before the grimoire (everyone else's identity) can open.
+  // Where a reveal goes next. Whenever another seat is still waiting and the
+  // bag has a token for it, this skips the "hidden" privacy screen entirely
+  // and opens that seat's shuffled, face-down grid directly — safe, because
+  // nothing about the next seat's identity is visible yet (issue #185).
+  // Otherwise (the last seat, or the bag ran dry) what comes next is *not*
+  // blind — it's either the finished grimoire or the setup screen's seats
+  // list, both of which show other seats' identities — so the "hidden"
+  // privacy guard and its explicit hand-off tap are still required there,
+  // exactly as before this change. Shared by both of a reveal's exits — the
+  // "Hide & pass" button below and the name picker's onSelect — so the
+  // transition is decided in exactly one place (code review finding).
+  function nextRevealSession(currentGame: GameDocument): DrawSession {
+    const session = currentGame.drawSession!;
+    const seat = nextUnassignedSeatOf(currentGame);
+    return seat && currentGame.bag.length > 0
+      ? { seatId: seat.id, stage: "choosing" }
+      : { ...session, stage: "hidden" };
+  }
+
   function hideAndPass() {
     const currentGame = gameRef.current;
-    const session = currentGame.drawSession;
-    if (!session) return;
-    update({ ...currentGame, drawSession: { ...session, stage: "hidden" } });
+    if (!currentGame.drawSession) return;
+    const next = nextRevealSession(currentGame);
+    if (next.stage === "choosing") setTokenOrder(shuffleTokens(currentGame.bag));
+    update({ ...currentGame, drawSession: next });
+  }
+
+  // Since "Hide & pass" can now land straight on the next seat's face-down
+  // grid instead of a static privacy screen (issue #185), a double-click
+  // risks the same issue #111 hazard chooseTokenOnClick guards against: the
+  // second click's screen position can coincide with a token that just
+  // appeared where this button was, drawing it before the device is handed
+  // off. Same event.detail guard, same reasoning.
+  function hideAndPassOnClick(event: MouseEvent<HTMLButtonElement>) {
+    if (event.detail > 1) return;
+    hideAndPass();
+  }
+
+  // Names the drawing seat and advances the reveal in one update — merges
+  // what would otherwise be a rename() then hideAndPass() pair into a
+  // single update()/saveGame(), so picking a name doesn't fire the
+  // game-changed event (and its full games-store read/write) twice (code
+  // review finding).
+  function nameAndAdvance(playerId: string, name: string) {
+    const currentGame = gameRef.current;
+    if (!currentGame.drawSession) return;
+    const next = nextRevealSession(currentGame);
+    if (next.stage === "choosing") setTokenOrder(shuffleTokens(currentGame.bag));
+    update({
+      ...currentGame,
+      players: currentGame.players.map((player) =>
+        player.id === playerId ? { ...player, name } : player,
+      ),
+      drawSession: next,
+    });
   }
 
   // The bag can run dry between two seats' turns (a bag built shorter than
@@ -943,6 +990,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     draw?.stage === "revealed" && drawingSeat?.characterId
       ? characterById.get(drawingSeat.characterId)
       : undefined;
+  // Every other seat's current name, fed to the reveal's name picker so it
+  // can't re-offer a "Regular players" name that's already seated (issue
+  // #185) — computed once here rather than inline in the JSX below.
+  const otherPlayerNames = draw
+    ? game.players.filter((p) => p.id !== draw.seatId).map((p) => p.name)
+    : [];
   // Every seat filled — the setup screens give way to the grimoire itself.
   const setupComplete =
     game.players.length > 0 &&
@@ -1067,12 +1120,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 <h2>{revealedCharacter.name}</h2>
                 <p>{revealedCharacter.ability}</p>
                 <PlayerNamePicker
-                  onSelect={(name) => renamePlayer(draw.seatId, name)}
+                  excludeNames={otherPlayerNames}
+                  onSelect={(name) => nameAndAdvance(draw.seatId, name)}
                 />
                 <button
                   type="button"
                   className={styles.drawAction}
-                  onClick={hideAndPass}
+                  onClick={hideAndPassOnClick}
                 >
                   Hide &amp; pass
                 </button>
@@ -1082,10 +1136,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
 
           {draw.stage === "hidden" && (
             <div className={styles.privacyGuard}>
-              {/* Every reveal — the last seat's included (issue #110) —
-                  lands on this guard, live or resumed from a reload. With
-                  no next seat to pass to, the honest instruction is to hand
-                  back, and the button ends the ritual. */}
+              {/* Reached live only when what's next isn't blind — the last
+                  seat's hand-off (issue #110) or a bag-shortfall mid-ritual
+                  (issue #118) — plus any reload mid-reveal (resumeDrawSession).
+                  A normal seat-to-seat pass skips straight past this guard
+                  (issue #185: nextRevealSession). With no next seat to pass
+                  to, the honest instruction is to hand back, and the button
+                  ends the ritual. */}
               <p>
                 {nextUnassignedSeat
                   ? `Card hidden. Pass the device to ${nextUnassignedSeat.name}.`

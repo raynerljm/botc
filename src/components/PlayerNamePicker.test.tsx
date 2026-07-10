@@ -146,3 +146,42 @@ describe("naming yourself from the same input when there's no matching player (i
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+describe("excluding names already assigned to an earlier seat (issue #185)", () => {
+  it("does not offer an excluded name in the 'Regular players' quick-pick", () => {
+    render(<PlayerNamePicker onSelect={vi.fn()} excludeNames={["Jordan"]} />);
+
+    expect(screen.queryByRole("button", { name: "Jordan" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alex" })).toBeInTheDocument();
+  });
+
+  it("excludes case-insensitively", () => {
+    render(<PlayerNamePicker onSelect={vi.fn()} excludeNames={["jordan"]} />);
+
+    expect(screen.queryByRole("button", { name: "Jordan" })).not.toBeInTheDocument();
+  });
+
+  it("still offers 'Name yourself' when the typed text exactly matches an excluded name, instead of a dead end (code review finding)", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<PlayerNamePicker onSelect={onSelect} excludeNames={["Jordan"]} />);
+
+    await user.type(screen.getByRole("textbox"), "Jordan");
+
+    expect(screen.queryByRole("button", { name: "Jordan" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /name yourself.*jordan/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /name yourself/i }));
+    expect(onSelect).toHaveBeenCalledWith("Jordan");
+  });
+
+  it("still offers every regular player when nothing is excluded", () => {
+    render(<PlayerNamePicker onSelect={vi.fn()} />);
+
+    for (const name of REGULAR_PLAYERS) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+});
