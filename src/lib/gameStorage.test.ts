@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "./characters";
-import { createGame, type GameDocument } from "./gameDocument";
+import { createGame, GAME_SCHEMA_VERSION, type GameDocument } from "./gameDocument";
 import {
   clearGames,
   deleteGame,
@@ -221,7 +221,11 @@ describe("notes migration (issue #193: schemaVersion 20 -> 21)", () => {
     );
 
     const game = loadGame()!;
-    expect(game.schemaVersion).toBe(21);
+    // The current schema version, not the v21 milestone issue #193 itself
+    // introduced — a later, unrelated bump (issue #192) chains straight past
+    // it via upgradeV21Rotation, so a migrated v20 document ends up fully
+    // current rather than stuck one bump behind.
+    expect(game.schemaVersion).toBe(GAME_SCHEMA_VERSION);
     expect(game.notes).toEqual([
       { id: "general", title: "General", text: "Slayer shot the Imp on day 3." },
     ]);
@@ -252,6 +256,41 @@ describe("notes migration (issue #193: schemaVersion 20 -> 21)", () => {
 
     const game = loadGame()!;
     expect(game.notesCollapsed).toBe(false);
+  });
+});
+
+describe("rotation migration (issue #192: schemaVersion 21 -> 22, chained after the notes migration)", () => {
+  it("backfills rotation on a v20 document, chaining straight through both migrations to the current version", () => {
+    const legacy = {
+      ...makeGame("Pre-#193 Game"),
+      schemaVersion: 20,
+      notes: "x",
+    } as unknown as Record<string, unknown>;
+    delete legacy.rotation;
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: legacy.id, games: [legacy] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.schemaVersion).toBe(GAME_SCHEMA_VERSION);
+    expect(game.rotation).toBe(0);
+  });
+
+  it("backfills rotation on a real v21 document (notes already sectioned, rotation never existed yet)", () => {
+    const v21 = {
+      ...makeGame("Pre-#192 Game"),
+      schemaVersion: 21,
+    } as unknown as Record<string, unknown>;
+    delete v21.rotation;
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: v21.id, games: [v21] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.schemaVersion).toBe(GAME_SCHEMA_VERSION);
+    expect(game.rotation).toBe(0);
   });
 });
 

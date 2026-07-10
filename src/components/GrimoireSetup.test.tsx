@@ -3559,3 +3559,14 @@ describe("night list renders as a fixed bottom sheet (issue #194)", () => {
     expect(sheet?.parentElement).toBe(circle.parentElement);
   });
 });
+
+describe("rotating the grimoire circle (issue #192)", () => {
+  it("persists the rotation across a reload", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+
+    const reloaded = loadGame()!;
+    expect(reloaded.rotation).toBe(45);
+  });
+});

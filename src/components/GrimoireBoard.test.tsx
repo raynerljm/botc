@@ -81,6 +81,7 @@ function makeHandlers() {
     onRenameCommit: vi.fn(),
     onMove: vi.fn(),
     onReCircle: vi.fn(),
+    onRotate: vi.fn(),
     onToggleDead: vi.fn(),
     onToggleGhostVote: vi.fn(),
     onAddReminder: vi.fn(),
@@ -129,6 +130,7 @@ function renderBoard(
       nominatorTodayIds?: ReadonlySet<string>;
       nomineeTodayIds?: ReadonlySet<string>;
       onOpenSetupWalkthrough?: () => void;
+      rotation?: number;
     }
   > = {},
 ) {
@@ -139,6 +141,7 @@ function renderBoard(
     almanacUrl,
     nominatorTodayIds,
     nomineeTodayIds,
+    rotation = 0,
     ...handlerOverrides
   } = overrides;
   const handlers = { ...makeHandlers(), ...handlerOverrides };
@@ -152,6 +155,7 @@ function renderBoard(
       activeFabled={activeFabled ?? []}
       nominatorTodayIds={nominatorTodayIds}
       nomineeTodayIds={nomineeTodayIds}
+      rotation={rotation}
       {...handlers}
     />,
   );
@@ -169,6 +173,7 @@ describe("GrimoireBoard rendering", () => {
         characterById={characterById}
         activeFabled={[]}
         claimOptions={claimOptions}
+        rotation={0}
         {...noop}
       />,
     );
@@ -220,6 +225,7 @@ describe("GrimoireBoard rendering", () => {
         players={[makePlayer({ isLunatic: true, characterId: "lunatic" })]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         almanacUrl={null}
         reminders={[]}
         activeFabled={[]}
@@ -420,6 +426,7 @@ describe("token menu", () => {
         players={[makePlayer({ characterId: "custom-oracle" })]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         almanacUrl="https://example.com/almanac"
         activeFabled={[]}
         {...noop}
@@ -446,6 +453,7 @@ describe("token menu", () => {
         players={[makePlayer({ characterId: "custom-oracle" })]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         almanacUrl="javascript:alert(1)"
         activeFabled={[]}
         {...noop}
@@ -474,6 +482,7 @@ describe("token menu", () => {
         players={[makePlayer({ characterId: "imp" })]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         almanacUrl="https://example.com/almanac"
         activeFabled={[]}
         {...noop}
@@ -651,6 +660,7 @@ describe("acts-as (issue #17)", () => {
         players={[makePlayer({ characterId: "philosopher" })]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         almanacUrl={null}
         reminders={[]}
         activeFabled={[]}
@@ -746,6 +756,169 @@ describe("re-circle", () => {
     fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
 
     expect(wrap.style.left).not.toBe("20%");
+  });
+});
+
+describe("rotate the grimoire (issue #192)", () => {
+  it("offers controls to rotate the grimoire clockwise and counterclockwise, stepping the persisted rotation", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([makePlayer()], { rotation: 0 });
+
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+    expect(handlers.onRotate).toHaveBeenCalledWith(45);
+
+    await user.click(screen.getByRole("button", { name: "Rotate left" }));
+    expect(handlers.onRotate).toHaveBeenCalledWith(315);
+  });
+
+  it("rotates a computed-circle seat around the centre by the persisted rotation", () => {
+    // A single seat sits at circlePosition(0, 1) — the top, (50, 5). A
+    // quarter turn should land it where the next seat clockwise would sit.
+    const { container } = renderBoard([makePlayer({ id: "p1", seat: 1 })], {
+      rotation: 90,
+    });
+
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(95);
+    expect(parseFloat(wrap.style.top)).toBeCloseTo(50);
+  });
+
+  it("also rotates a hand-dragged token's stored position, not just computed seats", () => {
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 50, y: 5 } })],
+      { rotation: 90 },
+    );
+
+    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(95);
+    expect(parseFloat(wrap.style.top)).toBeCloseTo(50);
+  });
+
+  it("does not re-distort a free-standing reminder's out-of-range canonical position before rotating it for display (Copilot review finding)", () => {
+    // Simulates the canonical position a rotated corner-drag can legitimately
+    // produce for a free-standing reminder — out of the usual [4, 96] range,
+    // but only because it hasn't been rotated back into display space yet.
+    const { container } = renderBoard([makePlayer()], {
+      rotation: 45,
+      reminders: [
+        makeReminder({ id: "r1", position: { x: 115.05382386916239, y: 50 } }),
+      ],
+    });
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    // Rotating the raw canonical value once and clamping only the result
+    // lands it back at the pad's corner (96, 96) — pre-clamping the
+    // canonical value before rotating (the bug) would instead distort it to
+    // (~82.5, ~82.5), well short of the corner.
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(96);
+    expect(parseFloat(wrap.style.top)).toBeCloseTo(96);
+  });
+
+  it("keeps a token's own label and art upright regardless of rotation", () => {
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      rotation: 90,
+    });
+
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    // Only the token's *position* moves with rotation — nothing about its
+    // own content ever gets a rotate transform, so it always renders upright.
+    expect(summary.style.transform).toBe("");
+  });
+
+  it("keeps an anchored reminder tracking its seat through the rotation", () => {
+    const { container } = renderBoard([makePlayer({ id: "p1", seat: 1 })], {
+      rotation: 90,
+      reminders: [makeReminder({ id: "r1", anchorPlayerId: "p1" })],
+    });
+
+    const reminderWrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+    // The seat itself rotates to (95, 50); the reminder should still park
+    // directly beside it, not at its pre-rotation offset.
+    expect(parseFloat(reminderWrap.style.left)).toBeCloseTo(95);
+    expect(parseFloat(reminderWrap.style.top)).toBeCloseTo(62);
+  });
+
+  it("stores a seat-anchored reminder's fallback position in the canonical (un-rotated) frame, not the rotated display frame", async () => {
+    const user = userEvent.setup();
+    // Canonical (50, 5); displayed rotated 90 degrees at (95, 50).
+    const { onAddReminder } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 50, y: 5 } })],
+      { rotation: 90 },
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const dialog = screen.getByRole("dialog", { name: "Add reminder" });
+    const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+    await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+    // parkBeside of the canonical (50, 5), not of the rotated (95, 50) —
+    // otherwise this reminder's stored fallback position would be rotated a
+    // second time once it's ever read as free-standing (e.g. after its
+    // anchor seat is later removed and the removal is undone).
+    expect(onAddReminder).toHaveBeenCalledWith({
+      characterId: "washerwoman",
+      label: "Townsfolk",
+      position: { x: 55, y: 5 },
+      anchorPlayerId: "p1",
+    });
+  });
+
+  it("persists the un-rotated position when a hand-dragged token is moved while the circle is rotated", () => {
+    const { container, onMove } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 50, y: 20 } })],
+      { rotation: 90 },
+    );
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    // Displayed at (80, 50) on the 400px board, i.e. pixel (320, 200) —
+    // dragging 20px right (+5%) moves the display position to (85, 50).
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 320, clientY: 200 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 340, clientY: 200 }));
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 340, clientY: 200 }));
+
+    // The dropped (85, 50) display position, un-rotated by -90 degrees, is
+    // (50, 15) in the canonical frame the game document actually stores.
+    expect(onMove).toHaveBeenCalledTimes(1);
+    const [, savedPosition] = onMove.mock.calls[0];
+    expect(savedPosition.x).toBeCloseTo(50);
+    expect(savedPosition.y).toBeCloseTo(15);
+  });
+
+  it("does not snap a token dropped near a corner under a non-90-degree rotation to a different spot than where it was released", () => {
+    const { container, onMove } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 50, y: 50 } })],
+      { rotation: 45 },
+    );
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    // A rotation around the centre fixes the centre, so this token displays
+    // at (50, 50) regardless of rotation. Drag far enough that clampPct's
+    // independent per-axis clamp kicks in on both axes, landing the drop at
+    // the corner (96, 96).
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 200, clientY: 200 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 384, clientY: 384 }));
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 384, clientY: 384 }));
+
+    expect(onMove).toHaveBeenCalledTimes(1);
+    const [, savedPosition] = onMove.mock.calls[0];
+    // Un-rotating (96, 96) by -45 degrees, unclamped, is (~115, 50). If this
+    // were clamped a second time (as it used to be — code review finding),
+    // it would come back as (96, 50) instead, and re-rendering that would
+    // visibly snap the token away from the corner it was actually dropped at.
+    expect(savedPosition.x).toBeCloseTo(115.05, 1);
+    expect(savedPosition.y).toBeCloseTo(50);
   });
 });
 
@@ -1590,6 +1763,7 @@ describe("swap character", () => {
         players={[makePlayer()]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         activeFabled={["angel"]}
         {...noop}
       />,
@@ -1929,6 +2103,7 @@ describe("Drunk reveal", () => {
         players={[makePlayer({ isDrunk: true, characterId: "drunk" })]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         activeFabled={[]}
         {...noop}
       />,
@@ -1957,6 +2132,7 @@ describe("Fabled", () => {
         players={[makePlayer()]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         activeFabled={["angel"]}
         {...noop}
       />,
@@ -1979,6 +2155,7 @@ describe("Fabled", () => {
         players={[makePlayer()]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         activeFabled={["angel"]}
         {...makeHandlers()}
       />,
@@ -1999,6 +2176,7 @@ describe("Fabled", () => {
         players={[makePlayer()]}
         characterById={byId}
         claimOptions={claimOptions}
+        rotation={0}
         activeFabled={["angel"]}
         {...handlers}
       />,
