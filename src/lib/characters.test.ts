@@ -92,6 +92,17 @@ describe("base editions", () => {
       "barista", "harlot", "butcher", "bonecollector", "deviant",
     ]);
   });
+
+  it("covers exactly the dataset's characters for each edition, so the hand-maintained order stays in sync with characters.json", () => {
+    for (const edition of ["tb", "bmr", "snv"] as const) {
+      const ordered = getEditionCharacters(edition).map((c) => c.id).sort();
+      const fromDataset = allCharacters
+        .filter((c) => c.edition === edition)
+        .map((c) => c.id)
+        .sort();
+      expect(ordered).toEqual(fromDataset);
+    }
+  });
 });
 
 describe("character sheet grouping", () => {
