@@ -366,7 +366,7 @@ describe("playerPick step", () => {
     expect(optionNames).toContain("Cara — Chef");
   });
 
-  it("flags a disguised Drunk candidate, matching GrimoireBoard's own '(actually the Drunk)' note (code review finding)", async () => {
+  it("flags a disguised Drunk candidate, since this picker has no token/reminder nearby to show it another way (issue #186)", async () => {
     const user = userEvent.setup();
     renderWalkthrough({
       steps: [fortuneTellerStep],

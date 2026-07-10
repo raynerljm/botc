@@ -92,9 +92,9 @@ function isGoodPlayer(player: Player, characterById: Map<string, Character>): bo
 // The storyteller already knows every player's assigned character, so
 // showing it alongside their name (issue #56) makes a player-pick faster
 // and less error-prone than matching bare names to seats by memory. A
-// disguised Drunk gets the same "(actually the Drunk)" flag GrimoireBoard
-// already shows on their token, so picking them here doesn't read as
-// picking their apparent character for real (code review finding).
+// disguised Drunk/Lunatic is flagged here too (code review finding) — this
+// picker has no token or reminder chip nearby to read the seat's true state
+// from, unlike the grimoire board (issue #186), so the inline flag stays.
 function playerOptionLabel(
   player: Player,
   characterById: Map<string, Character>,

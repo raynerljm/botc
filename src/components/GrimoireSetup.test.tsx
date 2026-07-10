@@ -2830,6 +2830,36 @@ describe("automatic Drunk reminder token (issue #186)", () => {
 
     expect((loadGame() as GameDocument).reminders).toHaveLength(0);
   });
+
+  it("backfills the reminder on load for a game document that predates automatic placement", () => {
+    const base = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("washerwoman")!,
+      extraCopies: {},
+    });
+    // Simulates a pre-#186 document: the seat is already the Drunk's
+    // stand-in (as chooseToken/assignManually used to leave it, before this
+    // issue), but no reminder was ever created for it.
+    const legacyGame: GameDocument = {
+      ...base,
+      players: base.players.map((p) => ({
+        ...p,
+        characterId: "washerwoman",
+        startingCharacterId: "washerwoman",
+        isDrunk: true,
+      })),
+    };
+    render(<GrimoireSetup game={legacyGame} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    expect(within(circle).getByText("Drunk")).toBeInTheDocument();
+    expect(
+      within(circle).queryByText(/actually the Drunk/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("board layout order (issue #58)", () => {

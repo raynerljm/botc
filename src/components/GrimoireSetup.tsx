@@ -14,12 +14,14 @@ import {
   anchoredReminderPosition,
   defaultPlayerName,
   DRUNK_ID,
+  drunkStandInReminderId,
   firstNightEnded,
   insertAtSeat,
   livePlayerPosition,
   parkBeside,
   resumeDrawSession,
   shuffleTokens,
+  withBackfilledDrunkReminders,
   withRestoredReminder,
   type Alignment,
   type BagToken,
@@ -91,10 +93,17 @@ function seatPositionOptions(
 export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const router = useRouter();
   // A remount is where a persisted mid-reveal draw session gets coerced back
-  // to the privacy guard (issue #108) — see resumeDrawSession.
+  // to the privacy guard (issue #108) — see resumeDrawSession. It's also
+  // where a game document from before issue #186 (or any Drunk seat whose
+  // automatic reminder never got created) gets its "Drunk" reminder
+  // backfilled — see withBackfilledDrunkReminders.
   const [game, setGame] = useState(() => ({
     ...initialGame,
     drawSession: resumeDrawSession(initialGame.drawSession),
+    reminders: withBackfilledDrunkReminders(
+      initialGame.reminders,
+      initialGame.players,
+    ),
   }));
   // Mirrors `game`, updated synchronously by every update() call — lets a
   // handler that fires more than once per click (the setup walkthrough's
@@ -258,14 +267,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       isDrunk: token.isDrunkStandIn,
       isLunatic: token.isLunaticStandIn,
     };
-  }
-
-  // Deterministic (not crypto.randomUUID()) so a seat only ever carries one
-  // of these — a re-assignment replaces it outright instead of stacking a
-  // second one, and revealDrunk/swapCharacter (below) know exactly which
-  // reminder to drop when the disguise ends.
-  function drunkStandInReminderId(playerId: string): string {
-    return `drunkstandin:${playerId}`;
   }
 
   function withoutDrunkStandInReminder(
