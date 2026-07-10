@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import type { Character } from "@/lib/characters";
+import { pauseDayTimer } from "@/lib/dayTimer";
 import type { GameDocument } from "@/lib/gameDocument";
 import {
   computeNightList,
@@ -41,7 +42,19 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   }
 
   function startNight() {
-    onChange({ ...game, nightOpen: true, nightChecked: [], nightUnskipped: [] });
+    // The day timer's own controls (DayPhase.tsx) are unreachable once the
+    // night list is open, so a still-running discussion countdown would
+    // otherwise keep deriving from wall-clock time all night and read a
+    // stale/expired value the moment day resumes (issue #190 code review
+    // finding). Pausing freezes its remaining time instead — a no-op if it
+    // wasn't running (lib/dayTimer.ts).
+    onChange({
+      ...game,
+      nightOpen: true,
+      nightChecked: [],
+      nightUnskipped: [],
+      dayTimer: pauseDayTimer(game.dayTimer),
+    });
   }
 
   function endNight() {

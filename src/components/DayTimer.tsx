@@ -6,7 +6,6 @@ import {
   DAY_TIMER_PRESETS_MINUTES,
   dayTimerRemainingMs,
   formatDayTimerMs,
-  isDayTimerExpired,
   pauseDayTimer,
   resetDayTimer,
   resumeDayTimer,
@@ -23,18 +22,20 @@ export interface DayTimerProps {
 
 export function DayTimer({ game, onChange }: DayTimerProps) {
   const timer = game.dayTimer;
+  const remainingMs = dayTimerRemainingMs(timer);
+  const expired = timer.status !== "idle" && remainingMs <= 0;
+
   // The timer's own state is an absolute end time, never a ticking counter
   // (lib/dayTimer.ts) — this just forces a redraw once a second so the
-  // displayed countdown visibly moves while running.
+  // displayed countdown visibly moves while running. Stops once expired —
+  // there's nothing left to count down, so ticking further would only ever
+  // re-render the same frozen "Time's up" state.
   const [, forceTick] = useState(0);
   useEffect(() => {
-    if (timer.status !== "running") return;
+    if (timer.status !== "running" || expired) return;
     const id = setInterval(() => forceTick((tick) => tick + 1), 1000);
     return () => clearInterval(id);
-  }, [timer.status]);
-
-  const remainingMs = dayTimerRemainingMs(timer);
-  const expired = isDayTimerExpired(timer);
+  }, [timer.status, expired]);
 
   function start(minutes: number) {
     onChange({ ...game, dayTimer: startDayTimer(minutes * 60_000) });
@@ -68,7 +69,11 @@ export function DayTimer({ game, onChange }: DayTimerProps) {
 
       {timer.status !== "idle" && (
         <div className={styles.running} data-expired={expired || undefined}>
-          <span className={styles.remaining} role="timer" aria-live="polite">
+          {/* role="timer" is implicitly aria-live="off" per the ARIA spec —
+              deliberately not overridden to "polite", which would otherwise
+              have a screen reader re-announce the remaining time every
+              second for as long as the countdown runs. */}
+          <span className={styles.remaining} role="timer">
             {expired ? "Time's up" : formatDayTimerMs(remainingMs)}
           </span>
           <div className={styles.controls}>

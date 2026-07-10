@@ -1,11 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter, type Character } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
 
 import { NightList } from "./NightList";
+
+afterEach(() => {
+  // A failed assertion between useFakeTimers()/useRealTimers() would
+  // otherwise leave fake timers active for a later test, hanging userEvent
+  // (which relies on real timers).
+  vi.useRealTimers();
+});
 
 function characters(...ids: string[]): Character[] {
   return ids.map((id) => getCharacter(id)!);
@@ -69,6 +76,44 @@ describe("Night list: starting and ending a night", () => {
     expect(latest.nightOpen).toBe(true);
     expect(latest.nightChecked).toEqual([]);
     expect(latest.nightUnskipped).toEqual([]);
+  });
+
+  it("pauses a running day timer on Start night, so it can't drift blind while its controls are unreachable (issue #190 code review finding)", async () => {
+    // Real timers throughout — userEvent's internals rely on them, and
+    // pausing only needs to freeze *some* positive remaining time, not an
+    // exact value, so there's no need to mock the clock here.
+    const user = userEvent.setup();
+    const endAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      dayTimer: { status: "running", endAt, remainingMs: 5 * 60_000 },
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+
+    expect(latest.dayTimer.status).toBe("paused");
+    expect(latest.dayTimer.endAt).toBeNull();
+    // Close to the full 5 minutes — pausing freezes the remaining time
+    // instead of resetting it or leaving it deriving from wall-clock time.
+    expect(latest.dayTimer.remainingMs).toBeGreaterThan(4.9 * 60_000);
+    expect(latest.dayTimer.remainingMs).toBeLessThanOrEqual(5 * 60_000);
+  });
+
+  it("leaves an idle day timer alone on Start night", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0 });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+
+    expect(latest.dayTimer).toEqual(game.dayTimer);
   });
 
   it("increments the night counter and closes the night when ended", async () => {

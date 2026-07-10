@@ -10,16 +10,19 @@
   gap: 0.5rem;
 }
 
-.preset {
+.widget button {
   min-height: 2.75rem;
   padding: 0.5rem 0.9rem;
-  background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   color: var(--foreground);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.preset {
+  background: var(--surface-raised);
 }
 
 .running {
@@ -65,13 +68,5 @@
 }
 
 .control {
-  min-height: 2.75rem;
-  padding: 0.5rem 0.9rem;
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
 }
