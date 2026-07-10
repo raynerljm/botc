@@ -13,6 +13,7 @@ import {
   insertAtSeat,
   isEndGamePanelCollapsed,
   nextPadReminderPosition,
+  reorderSeatsAfterMove,
   resumeDrawSession,
   shuffleTokens,
   withBackfilledDrunkReminders,
@@ -177,6 +178,83 @@ describe("circlePosition", () => {
     // Symmetric around the centre (50, 50).
     expect(right.x - 50).toBeCloseTo(50 - left.x);
     expect(bottom.y - 50).toBeCloseTo(50 - top.y);
+  });
+});
+
+describe("reorderSeatsAfterMove (issue #188)", () => {
+  // Four seats spaced evenly clockwise from the top: 1 top, 2 right, 3
+  // bottom, 4 left — mirrors circlePosition's own layout so a drop that
+  // lands back on a seat's existing spot is a no-op.
+  function fourSeatedPlayers() {
+    return [
+      makePlayer({ id: "p1", seat: 1 }),
+      makePlayer({ id: "p2", seat: 2 }),
+      makePlayer({ id: "p3", seat: 3 }),
+      makePlayer({ id: "p4", seat: 4 }),
+    ];
+  }
+
+  it("leaves every seat number unchanged when the drop stays in the same clockwise slot", () => {
+    const players = fourSeatedPlayers();
+
+    // Nudged a little clockwise from dead-top, but not far enough to pass
+    // seat 2 (at the right) — still the "first" seat clockwise from the top.
+    const result = reorderSeatsAfterMove(players, "p1", { x: 55, y: 8 });
+
+    expect(result.find((p) => p.id === "p1")).toMatchObject({ seat: 1, position: { x: 55, y: 8 } });
+    expect(result.find((p) => p.id === "p2")!.seat).toBe(2);
+    expect(result.find((p) => p.id === "p3")!.seat).toBe(3);
+    expect(result.find((p) => p.id === "p4")!.seat).toBe(4);
+  });
+
+  it("renumbers seats to match the new clockwise order when a token is dropped between two other seats", () => {
+    const players = fourSeatedPlayers();
+
+    // Drag seat 1 (top) clockwise past seat 2 (right), landing between seat
+    // 2 (right) and seat 3 (bottom).
+    const between = {
+      x: (circlePosition(1, 4).x + circlePosition(2, 4).x) / 2,
+      y: (circlePosition(1, 4).y + circlePosition(2, 4).y) / 2,
+    };
+    const result = reorderSeatsAfterMove(players, "p1", between);
+
+    expect(result.find((p) => p.id === "p2")!.seat).toBe(1);
+    expect(result.find((p) => p.id === "p1")!.seat).toBe(2);
+    expect(result.find((p) => p.id === "p3")!.seat).toBe(3);
+    expect(result.find((p) => p.id === "p4")!.seat).toBe(4);
+    // The dragged token keeps its dropped position, not a snapped-back one.
+    expect(result.find((p) => p.id === "p1")!.position).toEqual(between);
+  });
+
+  it("keeps seat numbers contiguous and unique after a reorder", () => {
+    const players = fourSeatedPlayers();
+    const between = {
+      x: (circlePosition(1, 4).x + circlePosition(2, 4).x) / 2,
+      y: (circlePosition(1, 4).y + circlePosition(2, 4).y) / 2,
+    };
+
+    const result = reorderSeatsAfterMove(players, "p1", between);
+
+    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("reorders players who are already free-dragged off the standard circle, going by their live position rather than their old seat number", () => {
+    const players = [
+      makePlayer({ id: "p1", seat: 1, position: { x: 50, y: 5 } }),
+      makePlayer({ id: "p2", seat: 2, position: { x: 95, y: 50 } }),
+      makePlayer({ id: "p3", seat: 3, position: { x: 50, y: 95 } }),
+    ];
+
+    // Drag seat 1 (top) clockwise past seat 2 (right), to land between it
+    // and seat 3 (bottom).
+    const result = reorderSeatsAfterMove(players, "p1", { x: 72.5, y: 72.5 });
+
+    expect(result.find((p) => p.id === "p2")!.seat).toBe(1);
+    expect(result.find((p) => p.id === "p1")!.seat).toBe(2);
+    expect(result.find((p) => p.id === "p3")!.seat).toBe(3);
+    // Untouched players keep their own free-dragged position — only their
+    // seat number changes.
+    expect(result.find((p) => p.id === "p2")!.position).toEqual({ x: 95, y: 50 });
   });
 });
 

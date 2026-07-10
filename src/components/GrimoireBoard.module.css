@@ -374,11 +374,6 @@
   cursor: pointer;
 }
 
-.seatControls {
-  display: flex;
-  gap: 0.5rem;
-}
-
 .detail {
   width: 100%;
 }

@@ -19,6 +19,7 @@ import {
   insertAtSeat,
   livePlayerPosition,
   parkBeside,
+  reorderSeatsAfterMove,
   resumeDrawSession,
   shuffleTokens,
   withBackfilledDrunkReminders,
@@ -324,8 +325,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     renamePlayer(playerId, normalized);
   }
 
+  // Dragging a token is the seat-reorder gesture (issue #188): where it's
+  // dropped determines the new clockwise seat order for everyone, not just
+  // the moved seat's own position.
   function movePlayer(playerId: string, position: PlayerPosition) {
-    update({ ...game, players: updatePlayer(playerId, { position }) });
+    update({ ...game, players: reorderSeatsAfterMove(game.players, playerId, position) });
   }
 
   // Every seat's dragged position is cleared, so the next render falls back
@@ -334,27 +338,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     update({
       ...game,
       players: game.players.map((player) => ({ ...player, position: null })),
-    });
-  }
-
-  // Reordering only swaps the two seats' numbers — the players array itself
-  // stays in whatever order it was already in, since GrimoireBoard sorts by
-  // seat before rendering.
-  function reorderSeat(playerId: string, direction: "earlier" | "later") {
-    const bySeat = [...game.players].sort((a, b) => a.seat - b.seat);
-    const index = bySeat.findIndex((p) => p.id === playerId);
-    const swapIndex = direction === "earlier" ? index - 1 : index + 1;
-    if (index === -1 || swapIndex < 0 || swapIndex >= bySeat.length) return;
-
-    const current = bySeat[index];
-    const swapWith = bySeat[swapIndex];
-    update({
-      ...game,
-      players: game.players.map((player) => {
-        if (player.id === current.id) return { ...player, seat: swapWith.seat };
-        if (player.id === swapWith.id) return { ...player, seat: current.seat };
-        return player;
-      }),
     });
   }
 
@@ -1397,7 +1380,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onRenameCommit={commitPlayerName}
                 onMove={movePlayer}
                 onReCircle={reCircle}
-                onReorderSeat={reorderSeat}
                 onToggleDead={toggleDead}
                 onToggleGhostVote={toggleGhostVote}
                 onAddReminder={addReminder}

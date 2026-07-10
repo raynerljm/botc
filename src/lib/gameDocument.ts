@@ -780,6 +780,52 @@ export function createGame({
   };
 }
 
+// Dragging a token is the single reorder gesture (issue #188) — where it
+// lands determines the new seat order, replacing the old dedicated "move
+// seat earlier/later" buttons. Every other seat keeps its own live position
+// (its own drag, or its computed circle slot under its *old* seat number);
+// only the moved seat's position changes. Sorting everyone's live position
+// by clockwise angle from the top — the same convention circlePosition
+// itself renders from — then relabels seats 1..N in that order, so a drop
+// that doesn't cross anyone reproduces the same numbers and one that lands
+// between two seats slots in between them.
+export function reorderSeatsAfterMove(
+  players: Player[],
+  movedPlayerId: string,
+  position: PlayerPosition,
+): Player[] {
+  const bySeat = [...players].sort((a, b) => a.seat - b.seat);
+  const total = bySeat.length;
+  const livePosition = new Map<string, PlayerPosition>(
+    bySeat.map((player, index) => [
+      player.id,
+      player.id === movedPlayerId
+        ? position
+        : (player.position ?? circlePosition(index, total)),
+    ]),
+  );
+  // Normalized so the top of the circle (circlePosition's own index-0 angle)
+  // sorts first, ascending clockwise from there — matching circlePosition's
+  // own angle formula exactly reproduces the existing order when nothing
+  // actually crossed another seat.
+  function clockwiseAngle(pos: PlayerPosition): number {
+    const raw = Math.atan2(pos.y - 50, pos.x - 50) + Math.PI / 2;
+    return ((raw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  }
+  const reordered = [...bySeat].sort((a, b) => {
+    const diff = clockwiseAngle(livePosition.get(a.id)!) - clockwiseAngle(livePosition.get(b.id)!);
+    // Ties (e.g. two untouched seats at the exact same angle) fall back to
+    // the existing seat order instead of an arbitrary sort result.
+    return diff !== 0 ? diff : a.seat - b.seat;
+  });
+  const seatById = new Map(reordered.map((player, index) => [player.id, index + 1]));
+  return players.map((player) =>
+    player.id === movedPlayerId
+      ? { ...player, position, seat: seatById.get(player.id)! }
+      : { ...player, seat: seatById.get(player.id)! },
+  );
+}
+
 // Makes room at `seat` by bumping every seat at or past it up by one, so a
 // newly created player can take that seat number without colliding — seat
 // order matters mechanically (CONTEXT.md: Seat), so a mid-game addition has
