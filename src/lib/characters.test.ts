@@ -56,6 +56,42 @@ describe("base editions", () => {
     expect(troubleBrewing.map((c) => c.id)).toContain("scapegoat");
     expect(troubleBrewing.every((c) => c.edition === "tb")).toBe(true);
   });
+
+  it("orders Trouble Brewing's characters in official script order, not dataset order", () => {
+    expect(getEditionCharacters("tb").map((c) => c.id)).toEqual([
+      "washerwoman", "librarian", "investigator", "chef", "empath",
+      "fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin",
+      "slayer", "soldier", "mayor",
+      "butler", "drunk", "recluse", "saint",
+      "poisoner", "spy", "scarletwoman", "baron",
+      "imp",
+      "bureaucrat", "thief", "gunslinger", "scapegoat", "beggar",
+    ]);
+  });
+
+  it("orders Bad Moon Rising's characters in official script order", () => {
+    expect(getEditionCharacters("bmr").map((c) => c.id)).toEqual([
+      "grandmother", "sailor", "chambermaid", "exorcist", "innkeeper",
+      "gambler", "gossip", "courtier", "professor", "minstrel", "tealady",
+      "pacifist", "fool",
+      "tinker", "moonchild", "goon", "lunatic",
+      "godfather", "devilsadvocate", "assassin", "mastermind",
+      "zombuul", "pukka", "shabaloth", "po",
+      "apprentice", "matron", "judge", "bishop", "voudon",
+    ]);
+  });
+
+  it("orders Sects & Violets' characters in official script order", () => {
+    expect(getEditionCharacters("snv").map((c) => c.id)).toEqual([
+      "clockmaker", "dreamer", "snakecharmer", "mathematician", "flowergirl",
+      "towncrier", "oracle", "savant", "seamstress", "philosopher", "artist",
+      "juggler", "sage",
+      "mutant", "sweetheart", "barber", "klutz",
+      "eviltwin", "witch", "cerenovus", "pithag",
+      "fanggu", "vigormortis", "nodashii", "vortox",
+      "barista", "harlot", "butcher", "bonecollector", "deviant",
+    ]);
+  });
 });
 
 describe("character sheet grouping", () => {
@@ -78,6 +114,9 @@ describe("character sheet grouping", () => {
       demon: 1,
       traveller: 5,
     });
+    // groupByTeam only buckets by team; the official within-team order
+    // (script sheet, bag builder, pickers) has to survive the grouping.
+    expect(groups[0].characters[0].id).toBe("washerwoman");
   });
 
   it("omits teams with no characters instead of rendering empty groups", () => {
