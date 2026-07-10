@@ -638,6 +638,30 @@ describe("acts-as (issue #17)", () => {
     ) as HTMLElement;
     expect(within(summary).queryByText(/acts as/i)).not.toBeInTheDocument();
   });
+
+  it("still offers the acts-as picker when the eligible character id can't be resolved in characterById (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    // A hand-edited/inconsistent game document can reference a characterId
+    // that isn't in the script's character pool — eligibility is a pure id
+    // check and must not silently fail closed just because the id didn't
+    // resolve to a full Character.
+    const byId = new Map([["imp", getCharacter("imp")!]]);
+    render(
+      <GrimoireBoard
+        players={[makePlayer({ characterId: "philosopher" })]}
+        characterById={byId}
+        claimOptions={claimOptions}
+        almanacUrl={null}
+        reminders={[]}
+        activeFabled={[]}
+        {...makeHandlers()}
+      />,
+    );
+
+    await user.click(screen.getByText("Alice"));
+
+    expect(screen.getByLabelText(/acts as/i)).toBeInTheDocument();
+  });
 });
 
 describe("ghost votes", () => {

@@ -2115,6 +2115,63 @@ describe("acts-as (issue #17)", () => {
     expect(reloaded.players[0].actsAs).toBeNull();
     expect(reloaded.players[0].actsAsSetOnNight).toBeNull();
   });
+
+  it("resets a checked acts-as entry's state on a swap between two eligible characters, since it now means a different wake (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    const philosopher = getCharacter("philosopher")!;
+    const alchemist = getCharacter("alchemist")!;
+    const imp = getCharacter("imp")!;
+    const empath = getCharacter("empath")!;
+    // Empath acts on the first night for both Philosopher and Alchemist, so
+    // the acts-as entry stays visible across the swap without "Show all".
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, alchemist, imp, empath],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${philosopher.name} as ${empath.name}`,
+      }),
+    );
+    const playerId = seated.players[0].id;
+    expect(loadGame()!.nightChecked).toContain(`actsas:${playerId}`);
+
+    // Swap Philosopher -> Alchemist: both stay eligible so actsAs itself is
+    // kept, but the wake this drives is a different physical token to run
+    // (Alchemist, not Philosopher), so the stale checkmark must not carry
+    // over — the same reasoning charEntryId pruning already applies to a
+    // player's own character entry.
+    await selectOption(
+      user,
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "alchemist",
+    );
+
+    expect(loadGame()!.players[0].actsAs).toBe("empath");
+    expect(loadGame()!.nightChecked).not.toContain(`actsas:${playerId}`);
+    expect(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${alchemist.name} as ${empath.name}`,
+      }),
+    ).not.toBeChecked();
+  });
 });
 
 describe("night-list bookkeeping stays coherent (issue #128)", () => {

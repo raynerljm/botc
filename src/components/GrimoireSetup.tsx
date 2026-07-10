@@ -572,10 +572,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     // real night-list wake for an ability the new character doesn't have.
     const clearsActsAs =
       Boolean(player?.actsAs) && !ACTS_AS_CAPABLE_IDS.has(characterId);
-    const entryIds = [
-      charEntryId(playerId),
-      ...(clearsActsAs ? [actsAsEntryId(playerId)] : []),
-    ];
+    // Pruned on every swap, not only one that clears actsAs — even a swap
+    // between two eligible characters (e.g. Philosopher -> Alchemist) keeps
+    // the same actsAs target but wakes a different physical token, so a
+    // pre-existing checked/un-skipped state for it is just as stale as
+    // charEntryId's below (Copilot review finding). Harmless when no
+    // acts-as entry exists.
+    const entryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
     update({
       ...game,
       players: updatePlayer(playerId, {

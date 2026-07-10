@@ -772,8 +772,13 @@ export function GrimoireBoard({
             // stand-in (issue #163).
             const isHiddenLunatic =
               player.isLunatic && character?.id !== LUNATIC_ID;
-            const actsAsCapable = character
-              ? ACTS_AS_CAPABLE_IDS.has(character.id)
+            // Eligibility is a pure id check, so it's read straight off
+            // player.characterId rather than the resolved character — a
+            // hand-edited/inconsistent game document whose id doesn't
+            // resolve in characterById must not silently hide the picker
+            // for an otherwise-eligible character (Copilot review finding).
+            const actsAsCapable = player.characterId
+              ? ACTS_AS_CAPABLE_IDS.has(player.characterId)
               : false;
             const menuOpen = isMenuOpenFor("player", player.id);
 
