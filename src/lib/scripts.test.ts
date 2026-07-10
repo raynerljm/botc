@@ -79,6 +79,16 @@ describe("getScriptById", () => {
     expect(script?.characters.map((c) => c.id)).toContain("imp");
   });
 
+  it("orders a base edition's characters as its official script sheet does (issue #209), the single source ScriptSheet/BagBuilder/pickers all read from", () => {
+    const script = getScriptById("tb");
+    expect(script?.characters.slice(0, 4).map((c) => c.id)).toEqual([
+      "washerwoman",
+      "librarian",
+      "investigator",
+      "chef",
+    ]);
+  });
+
   it("carries its display name in meta.name too, for consumers that only read meta (e.g. sharing)", () => {
     expect(getScriptById("tb")?.meta.name).toBe("Trouble Brewing");
   });

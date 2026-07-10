@@ -49,6 +49,17 @@ describe("parseScript: bare ids and id references", () => {
     ]);
   });
 
+  it("preserves the JSON's own ordering, not official/alphabetical order (issue #209)", () => {
+    const result = parseScript(JSON.stringify(["imp", "washerwoman", "poisoner"]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.script.characters.map((c) => c.id)).toEqual([
+      "imp",
+      "washerwoman",
+      "poisoner",
+    ]);
+  });
+
   it("deduplicates a character named more than once, keeping the first occurrence", () => {
     const result = parseScript(
       JSON.stringify(["alchemist", "washerwoman", { id: "Alchemist" }]),

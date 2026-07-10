@@ -46,14 +46,51 @@ export const baseEditions: BaseEdition[] = [
   { id: "snv", name: "Sects & Violets" },
 ];
 
-export function getEditionCharacters(editionId: BaseEditionId): Character[] {
-  return allCharacters.filter((c) => c.edition === editionId);
-}
-
 const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
 
 export function getCharacter(id: string): Character | undefined {
   return charactersById.get(id);
+}
+
+// The vendored dataset is sorted by id (see docs/dataset.md), so it carries
+// no official ordering of its own. Base editions have no script-tool JSON of
+// their own to derive order from (unlike uploaded/library scripts — see
+// parseScript), so their canonical script-sheet order is hand-transcribed
+// here, per team, matching the official character sheets.
+const BASE_EDITION_ORDER: Record<BaseEditionId, string[]> = {
+  tb: [
+    "washerwoman", "librarian", "investigator", "chef", "empath",
+    "fortuneteller", "undertaker", "monk", "ravenkeeper", "virgin",
+    "slayer", "soldier", "mayor",
+    "butler", "drunk", "recluse", "saint",
+    "poisoner", "spy", "scarletwoman", "baron",
+    "imp",
+    "bureaucrat", "thief", "gunslinger", "scapegoat", "beggar",
+  ],
+  bmr: [
+    "grandmother", "sailor", "chambermaid", "exorcist", "innkeeper",
+    "gambler", "gossip", "courtier", "professor", "minstrel",
+    "tealady", "pacifist", "fool",
+    "tinker", "moonchild", "goon", "lunatic",
+    "godfather", "devilsadvocate", "assassin", "mastermind",
+    "zombuul", "pukka", "shabaloth", "po",
+    "apprentice", "matron", "judge", "bishop", "voudon",
+  ],
+  snv: [
+    "clockmaker", "dreamer", "snakecharmer", "mathematician", "flowergirl",
+    "towncrier", "oracle", "savant", "seamstress", "philosopher",
+    "artist", "juggler", "sage",
+    "mutant", "sweetheart", "barber", "klutz",
+    "eviltwin", "witch", "cerenovus", "pithag",
+    "fanggu", "vigormortis", "nodashii", "vortox",
+    "barista", "harlot", "butcher", "bonecollector", "deviant",
+  ],
+};
+
+export function getEditionCharacters(editionId: BaseEditionId): Character[] {
+  return BASE_EDITION_ORDER[editionId]
+    .map((id) => getCharacter(id))
+    .filter((c): c is Character => c !== undefined);
 }
 
 // Value equality against the vendored dataset, not object identity — a game
