@@ -3510,6 +3510,14 @@ describe("collapsing the Day Phase side panel reclaims circle width (originally 
     const reloaded = loadGame()!;
     expect(reloaded.dayPhaseCollapsed).toBe(true);
   });
+
+  it("does not react to Night list's own collapsed state, unlike before issue #194", async () => {
+    const { user, circle } = await completeSetup();
+    const layout = circle.parentElement as HTMLElement;
+
+    await user.click(screen.getByRole("button", { name: "Night list" }));
+    expect(layout).not.toHaveAttribute("data-side-collapsed");
+  });
 });
 
 describe("night list renders as a fixed bottom sheet (issue #194)", () => {

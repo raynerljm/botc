@@ -40,7 +40,6 @@ const SHEET_DRAG_THRESHOLD_PX = 10;
 interface HandleDrag {
   pointerId: number;
   startY: number;
-  dragging: boolean;
 }
 
 export function NightList({ game, characterById, onChange }: NightListProps) {
@@ -59,26 +58,28 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   // is visible" pre-sheet (issue #168), which is exactly the peek state, so
   // no new persisted field/schema bump is needed.
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    dragRef.current = { pointerId: event.pointerId, startY: event.clientY, dragging: false };
-  }
-
-  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    if (!drag.dragging && Math.abs(event.clientY - drag.startY) >= SHEET_DRAG_THRESHOLD_PX) {
-      drag.dragging = true;
-    }
+    // Without capture, a fast swipe carries the pointer off the handle's own
+    // small hit area within the first few pixels of movement — the browser
+    // then stops delivering pointermove/pointerup to it entirely, dropping
+    // the gesture. GrimoireBoard's own token drag (line ~526) captures for
+    // the same reason; code review (issue #194) caught this handle missing it.
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, startY: event.clientY };
   }
 
   function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    if (drag.dragging) {
+    // The sheet has no live visual follow while dragging (unlike a token
+    // being repositioned), so only the start/end positions matter — no
+    // pointermove tracking needed in between (code review simplification).
+    const deltaY = event.clientY - drag.startY;
+    if (Math.abs(deltaY) >= SHEET_DRAG_THRESHOLD_PX) {
       // Dragging up (toward the top of the screen, decreasing clientY)
       // expands; dragging down collapses — always resolves to the direction
       // the thumb was actually headed, regardless of the state it started in.
-      toggleCollapsed(event.clientY - drag.startY > 0);
+      toggleCollapsed(deltaY > 0);
     } else {
       // No meaningful movement: treat it as a tap, same as tapping the
       // heading button does.
@@ -86,9 +87,28 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
     }
   }
 
-  function handlePointerCancel() {
+  function handlePointerCancel(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
   }
+
+  // Rendered identically in both the not-open and open-night branches below
+  // — hoisted so the two never drift out of sync.
+  const dragHandle = (
+    // Decorative drag handle — a bottom sheet's standard pointer/touch
+    // affordance (issue #194). Screen-reader users still get an accessible
+    // expand/collapse control via the heading button below, so this is
+    // aria-hidden rather than a second, redundant control.
+    <div
+      className={styles.handle}
+      data-handle
+      aria-hidden="true"
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+    />
+  );
 
   function startNight() {
     // The day timer's own controls (DayPhase.tsx) are unreachable once the
@@ -173,19 +193,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   if (!game.nightOpen) {
     return (
       <section className={styles.panel} aria-label="Night list" data-night-sheet>
-        {/* Decorative drag handle — a bottom sheet's standard pointer/touch
-            affordance (issue #194). Screen-reader users still get an
-            accessible expand/collapse control via the heading button below,
-            so this is aria-hidden rather than a second, redundant control. */}
-        <div
-          className={styles.handle}
-          data-handle
-          aria-hidden="true"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-        />
+        {dragHandle}
         <CollapsibleSection
           title="Night list"
           collapsed={game.nightListCollapsed}
@@ -224,15 +232,7 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
 
   return (
     <section className={styles.panel} aria-label="Night list" data-night-sheet>
-      <div
-        className={styles.handle}
-        data-handle
-        aria-hidden="true"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-      />
+      {dragHandle}
       <CollapsibleSection
         title={phaseLabel(phase, nightNumber)}
         collapsed={game.nightListCollapsed}

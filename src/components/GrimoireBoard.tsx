@@ -246,10 +246,11 @@ export function GrimoireBoard({
     // function already accounts for via wrapper/body layout, its footprint
     // has to be measured directly and subtracted from the board's height
     // budget, or an expanded sheet would silently cover the bottom seats.
-    function sheetReservePx(): number {
-      const sheet = document.querySelector<HTMLElement>("[data-night-sheet]");
-      return sheet?.getBoundingClientRect().height ?? 0;
-    }
+    // Looked up once (not per-measure) — its identity doesn't change over
+    // this mount's lifetime, same reasoning as `wrapper` and `rootFontSizePx`
+    // above (code review finding: this used to run a fresh document-wide
+    // query on every single resize/observer tick).
+    const sheet = document.querySelector<HTMLElement>("[data-night-sheet]");
 
     function measure() {
       const rect = node!.getBoundingClientRect();
@@ -257,8 +258,9 @@ export function GrimoireBoard({
       // can read a negative `rect.top`, which would otherwise overstate how
       // much height is left below the board.
       const topPx = Math.max(0, rect.top);
+      const sheetReservePx = sheet?.getBoundingClientRect().height ?? 0;
       const availableHeightPx =
-        window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX - sheetReservePx();
+        window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX - sheetReservePx;
       const size = fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx);
       if (size === lastSize) return;
       lastSize = size;
@@ -287,7 +289,6 @@ export function GrimoireBoard({
       observer = new ResizeObserver(measure);
       observer.observe(wrapper);
       observer.observe(document.body);
-      const sheet = document.querySelector<HTMLElement>("[data-night-sheet]");
       if (sheet) {
         sheetObserver = new ResizeObserver(measure);
         sheetObserver.observe(sheet);
