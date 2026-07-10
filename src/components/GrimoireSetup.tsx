@@ -14,12 +14,15 @@ import {
   anchoredReminderPosition,
   defaultPlayerName,
   DRUNK_ID,
+  drunkStandInReminderId,
   firstNightEnded,
   insertAtSeat,
   livePlayerPosition,
   parkBeside,
   resumeDrawSession,
   shuffleTokens,
+  withBackfilledDrunkReminders,
+  withoutDrunkStandInReminder,
   withRestoredReminder,
   type Alignment,
   type BagToken,
@@ -91,10 +94,17 @@ function seatPositionOptions(
 export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const router = useRouter();
   // A remount is where a persisted mid-reveal draw session gets coerced back
-  // to the privacy guard (issue #108) — see resumeDrawSession.
+  // to the privacy guard (issue #108) — see resumeDrawSession. It's also
+  // where a game document from before issue #186 (or any Drunk seat whose
+  // automatic reminder never got created) gets its "Drunk" reminder
+  // backfilled — see withBackfilledDrunkReminders.
   const [game, setGame] = useState(() => ({
     ...initialGame,
     drawSession: resumeDrawSession(initialGame.drawSession),
+    reminders: withBackfilledDrunkReminders(
+      initialGame.reminders,
+      initialGame.players,
+    ),
   }));
   // Mirrors `game`, updated synchronously by every update() call — lets a
   // handler that fires more than once per click (the setup walkthrough's
@@ -258,6 +268,28 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       isDrunk: token.isDrunkStandIn,
       isLunatic: token.isLunaticStandIn,
     };
+  }
+
+  // Issue #186: a Drunk stand-in used to be flagged with "(actually the
+  // Drunk)" inline copy on the token/seat list. Now the storyteller reads
+  // the seat's true state from an ordinary reminder token instead — placed
+  // automatically the moment the stand-in lands on a seat, whether by draw
+  // or manual assignment, so there's nothing left to opt into.
+  function withDrunkStandInReminder(
+    reminders: ReminderToken[],
+    token: BagToken,
+    playerId: string,
+    players: Player[],
+  ): ReminderToken[] {
+    if (!token.isDrunkStandIn) return reminders;
+    const reminder: ReminderToken = {
+      id: drunkStandInReminderId(playerId),
+      characterId: DRUNK_ID,
+      label: "Drunk",
+      position: parkBeside(livePlayerPosition(playerId, players)),
+      anchorPlayerId: playerId,
+    };
+    return [...withoutDrunkStandInReminder(reminders, playerId), reminder];
   }
 
   // The one non-draw handler reachable while a draw transition may have
@@ -548,6 +580,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     { endDisguise = true }: { endDisguise?: boolean } = {},
   ) {
     const character = getCharacter(characterId);
+    const wasDrunk = game.players.find((p) => p.id === playerId)?.isDrunk;
     const entryIds = [charEntryId(playerId)];
     update({
       ...game,
@@ -557,6 +590,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           ? { characterId, isDrunk: false, isLunatic: false }
           : { characterId },
       ),
+      // The auto-placed "Drunk" reminder (issue #186) is only meaningful
+      // while the seat is still disguised — once the disguise ends (a
+      // reveal, or a storyteller correction to some other character), it's
+      // either redundant (the token now reads "Drunk" itself) or wrong (the
+      // seat is a different character entirely).
+      reminders:
+        endDisguise && wasDrunk
+          ? withoutDrunkStandInReminder(game.reminders, playerId)
+          : game.reminders,
       characterPool: withCharacterInPool(game.characterPool, character),
       // The night-list entry id doesn't encode which character it was for
       // (issue #128), so a mid-night swap would otherwise inherit whatever
@@ -763,6 +805,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           ? { ...player, ...tokenAssignmentPatch(token) }
           : player,
       ),
+      reminders: withDrunkStandInReminder(
+        currentGame.reminders,
+        token,
+        session.seatId,
+        currentGame.players,
+      ),
       drawSession: { ...session, stage: "revealed" },
     });
   }
@@ -879,6 +927,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         player.id === playerId
           ? { ...player, ...tokenAssignmentPatch(token) }
           : player,
+      ),
+      reminders: withDrunkStandInReminder(
+        currentGame.reminders,
+        token,
+        playerId,
+        currentGame.players,
       ),
       drawSession:
         currentGame.drawSession?.seatId === playerId
@@ -1443,11 +1497,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       {player.isTraveller && (
                         <span className={styles.alignment}>
                           {player.travellerAlignment}
-                        </span>
-                      )}
-                      {player.isDrunk && (
-                        <span className={styles.drunkNote}>
-                          (actually the Drunk)
                         </span>
                       )}
                       {player.isLunatic && (

@@ -185,20 +185,20 @@ describe("GrimoireBoard rendering", () => {
     expect(container.querySelectorAll("img")).toHaveLength(2);
   });
 
-  it("marks a Drunk stand-in as actually the Drunk", () => {
+  it("doesn't annotate a Drunk stand-in's token with inline copy (issue #186) — a reminder token carries that instead", () => {
     renderBoard([makePlayer({ isDrunk: true })]);
 
-    expect(screen.getByText(/actually the Drunk/i)).toBeInTheDocument();
+    expect(screen.queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
   });
 
   // Capitalize is opt-in (.noteCapitalized) rather than the .note default —
-  // applying it to every .note mangled the Drunk's parenthesized note into
-  // "(Actually The Drunk)". The Drunk note must render plain .note, not the
-  // capitalized variant used by the traveller-alignment note.
-  it("renders the Drunk note without the capitalize modifier applied to the traveller-alignment note", () => {
-    renderBoard([makePlayer({ isDrunk: true })]);
+  // applying it to every .note mangled the Lunatic's parenthesized note into
+  // "(Actually The Lunatic)". The Lunatic note must render plain .note, not
+  // the capitalized variant used by the traveller-alignment note.
+  it("renders the Lunatic note without the capitalize modifier applied to the traveller-alignment note", () => {
+    renderBoard([makePlayer({ isLunatic: true })]);
 
-    const note = screen.getByText("(actually the Drunk)");
+    const note = screen.getByText("(actually the Lunatic)");
     expect(styles.noteCapitalized).toBeTruthy();
     expect(note.className.split(" ")).not.toContain(styles.noteCapitalized);
   });

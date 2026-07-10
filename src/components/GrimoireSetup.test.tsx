@@ -1296,8 +1296,8 @@ describe("travellers addable at setup with alignment", () => {
   });
 });
 
-describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
-  it("shows both the stand-in identity and that they're actually the Drunk", async () => {
+describe("Drunk seat display (stand-in identity, issue #186)", () => {
+  it("shows the stand-in identity without inline '(actually the Drunk)' copy — a reminder token carries that instead", async () => {
     const user = userEvent.setup();
     const washerwoman = getCharacter("washerwoman")!;
     const game = createGame({
@@ -1310,7 +1310,7 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     });
     render(<GrimoireSetup game={game} />);
 
-    await selectOption(user, 
+    await selectOption(user,
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
@@ -1319,7 +1319,7 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     const summary = circle.querySelector("details > summary") as HTMLElement;
     expect(within(summary).getByText("Washerwoman")).toBeInTheDocument();
-    expect(within(summary).getByText(/actually the Drunk/i)).toBeInTheDocument();
+    expect(within(summary).queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
 
     expect(loadGame()!.players[0].isDrunk).toBe(true);
   });
@@ -1328,7 +1328,7 @@ describe("Drunk seat display (stand-in identity + actually the Drunk)", () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
 
-    await selectOption(user, 
+    await selectOption(user,
       screen.getByLabelText("Assign seat 1 manually"),
       "Washerwoman",
     );
@@ -1441,7 +1441,7 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
     const user = userEvent.setup();
     const { step } = await drunkBoard(user);
 
-    await selectOption(user, 
+    await selectOption(user,
       within(step).getByLabelText(/new stand-in/i),
       "Grandmother",
     );
@@ -1454,7 +1454,6 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
     const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
     const summary = wrap.querySelector("details > summary") as HTMLElement;
     expect(within(summary).getByText("Grandmother")).toBeInTheDocument();
-    expect(within(summary).getByText(/actually the Drunk/i)).toBeInTheDocument();
   });
 
   it("excludes a Townsfolk already held by another player from the picker", async () => {
@@ -1817,6 +1816,10 @@ describe("mid-game token management (issue #15)", () => {
     expect(
       within(wrap).queryByRole("button", { name: /reveal drunk/i }),
     ).not.toBeInTheDocument();
+    // The auto-placed "Drunk" reminder (issue #186) is redundant once the
+    // token itself openly reads "Drunk" — dropped on reveal instead of
+    // sitting there stale.
+    expect(loadGame()!.reminders).toHaveLength(0);
   });
 
   it("clears the Drunk stand-in note once a generic swap moves the seat to a different character", async () => {
@@ -1846,6 +1849,7 @@ describe("mid-game token management (issue #15)", () => {
     expect(
       within(wrap).queryByRole("button", { name: /reveal drunk/i }),
     ).not.toBeInTheDocument();
+    expect(loadGame()!.reminders).toHaveLength(0);
   });
 
   it("clears the Lunatic stand-in note once a generic swap moves the seat to a different character (issue #163)", async () => {
@@ -2736,6 +2740,172 @@ describe("reminder tokens (issue #14)", () => {
     // than silently keeping whatever stale position the reminder happened
     // to store while anchored (which never updated as the seat moved).
     expect(reloaded.reminders[0].position).toBeDefined();
+  });
+});
+
+describe("automatic Drunk reminder token (issue #186)", () => {
+  it("places a 'Drunk' reminder on the seat when a stand-in is assigned manually", async () => {
+    const user = userEvent.setup();
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("washerwoman")!,
+      extraCopies: {},
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const playerId = reloaded.players[0].id;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0]).toMatchObject({
+      characterId: "drunk",
+      label: "Drunk",
+      anchorPlayerId: playerId,
+    });
+  });
+
+  it("places a 'Drunk' reminder on the seat when a stand-in is drawn from the bag", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("washerwoman")!,
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const playerId = reloaded.players[0].id;
+    expect(reloaded.reminders).toHaveLength(1);
+    expect(reloaded.reminders[0]).toMatchObject({
+      characterId: "drunk",
+      label: "Drunk",
+      anchorPlayerId: playerId,
+    });
+  });
+
+  it("survives a reload", async () => {
+    const user = userEvent.setup();
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("washerwoman")!,
+      extraCopies: {},
+    });
+    const { unmount } = render(<GrimoireSetup game={game} />);
+
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+    unmount();
+    render(<GrimoireSetup game={loadGame() as GameDocument} />);
+
+    expect((loadGame() as GameDocument).reminders).toHaveLength(1);
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    expect(within(circle).getByText("Drunk")).toBeInTheDocument();
+  });
+
+  it("doesn't place a reminder for an ordinary (non-stand-in) assignment", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);
+
+    await selectOption(user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+
+    expect((loadGame() as GameDocument).reminders).toHaveLength(0);
+  });
+
+  it("backfills the reminder on load for a game document that predates automatic placement", () => {
+    const base = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: getCharacter("washerwoman")!,
+      extraCopies: {},
+    });
+    // Simulates a pre-#186 document: the seat is already the Drunk's
+    // stand-in (as chooseToken/assignManually used to leave it, before this
+    // issue), but no reminder was ever created for it.
+    const legacyGame: GameDocument = {
+      ...base,
+      players: base.players.map((p) => ({
+        ...p,
+        characterId: "washerwoman",
+        startingCharacterId: "washerwoman",
+        isDrunk: true,
+      })),
+    };
+    render(<GrimoireSetup game={legacyGame} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    expect(within(circle).getByText("Drunk")).toBeInTheDocument();
+    expect(
+      within(circle).queryByText(/actually the Drunk/i),
+    ).not.toBeInTheDocument();
+  });
+
+  // Copilot review finding on this PR: withoutDrunkStandInReminder used to
+  // match only the new drunkstandin:<playerId> id, so a legacy
+  // walkthrough-placed reminder — the exact one withBackfilledDrunkReminders
+  // recognizes as "already there" and leaves alone — was never removed by
+  // Reveal Drunk/swapCharacter, leaving it stale forever.
+  it("removes a legacy walkthrough-placed reminder (not just the new drunkstandin id) on Reveal Drunk", async () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const base = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: washerwoman,
+      extraCopies: {},
+    });
+    const playerId = base.players[0].id;
+    const legacyGame: GameDocument = {
+      ...base,
+      players: base.players.map((p) => ({
+        ...p,
+        characterId: "washerwoman",
+        startingCharacterId: "washerwoman",
+        isDrunk: true,
+      })),
+      reminders: [
+        {
+          id: `setupwalkthrough:${playerId}:0`,
+          characterId: "drunk",
+          label: "Drunk",
+          position: { x: 10, y: 20 },
+          anchorPlayerId: playerId,
+        },
+      ],
+    };
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={legacyGame} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelector("[data-player-id]") as HTMLElement;
+    await user.click(within(wrap).getByText("Player 1"));
+    await user.click(
+      within(wrap).getByRole("button", { name: /reveal drunk/i }),
+    );
+
+    expect(loadGame()!.reminders).toHaveLength(0);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   buildBagTokens,
   circlePosition,
   createGame,
+  drunkStandInReminderId,
   firstNightEnded,
   GAME_SCHEMA_VERSION,
   heldCharacterIds,
@@ -14,6 +15,7 @@ import {
   nextPadReminderPosition,
   resumeDrawSession,
   shuffleTokens,
+  withBackfilledDrunkReminders,
   withRestoredReminder,
   type DrawSession,
   type GameDocument,
@@ -96,6 +98,39 @@ describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => 
 
   it("doesn't duplicate a reminder whose id is already present", () => {
     expect(withRestoredReminder([reminder], reminder)).toEqual([reminder]);
+  });
+});
+
+describe("withBackfilledDrunkReminders (issue #186 migration)", () => {
+  it("adds a 'Drunk' reminder for a seat that predates automatic placement", () => {
+    const players = [makePlayer({ id: "p1", isDrunk: true, characterId: "washerwoman" })];
+    const reminders = withBackfilledDrunkReminders([], players);
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toMatchObject({
+      id: drunkStandInReminderId("p1"),
+      characterId: "drunk",
+      label: "Drunk",
+      anchorPlayerId: "p1",
+    });
+  });
+
+  it("doesn't duplicate a Drunk reminder that's already anchored to the seat, even under a legacy id", () => {
+    const players = [makePlayer({ id: "p1", isDrunk: true })];
+    const legacyReminder: ReminderToken = {
+      id: "setupwalkthrough:p1:0",
+      characterId: "drunk",
+      label: "Drunk",
+      position: { x: 10, y: 20 },
+      anchorPlayerId: "p1",
+    };
+    expect(withBackfilledDrunkReminders([legacyReminder], players)).toEqual([
+      legacyReminder,
+    ]);
+  });
+
+  it("leaves a non-Drunk seat's reminders untouched", () => {
+    const players = [makePlayer({ id: "p1", isDrunk: false })];
+    expect(withBackfilledDrunkReminders([], players)).toEqual([]);
   });
 });
 
