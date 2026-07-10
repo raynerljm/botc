@@ -19,11 +19,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // field), again for issue #168 (GameDocument gained the required
 // `nightListCollapsed`/`dayPhaseCollapsed` fields), again for issue #165
 // (GameDocument gained the required `lastEndedNightSnapshot` field), and
-// again for issue #163 (Player gained the required `isLunatic` field), and
-// again for issue #191 (Nomination gained the required `lockedIn` field) —
-// a document saved under an older shape must be rejected by gameStorage's
-// version check rather than loaded with any of these fields silently
-// undefined.
+// again for issue #163 (Player gained the required `isLunatic` field), again
+// for issue #191 (Nomination gained the required `lockedIn` field), and
+// again for issue #191's `ghostVoteSpenderIds` field (Copilot review
+// finding, same issue) — a document saved under an older shape must be
+// rejected by gameStorage's version check rather than loaded with any of
+// these fields silently undefined.
 //
 // Not bumped for issue #189 (GameDocument lost the `claimsCollapsed` field,
 // the bottom Claims panel it toggled having been removed): unlike every
@@ -161,6 +162,13 @@ export interface Nomination {
   // state and clears this back to false, so a mistake is always correctable
   // without losing the recorded votes themselves.
   lockedIn: boolean;
+  // The player ids this nomination's most recent lock-in actually spent a
+  // ghost vote for — snapshotted at lock-in time rather than recomputed
+  // from each player's *current* dead status, so a later "Mark alive"
+  // correction can't leave a reopened nomination unable to find (and thus
+  // never restore) the ghost vote it spent (Copilot review finding on
+  // issue #191). Empty while open or for an exile.
+  ghostVoteSpenderIds: string[];
 }
 
 // Night-phase state captured immediately before "End night" clears it, so a

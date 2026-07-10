@@ -44,6 +44,7 @@ function makeNomination(overrides: Partial<Nomination> = {}): Nomination {
     threshold: 3,
     isExile: false,
     lockedIn: false,
+    ghostVoteSpenderIds: [],
     ...overrides,
   };
 }

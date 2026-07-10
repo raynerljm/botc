@@ -117,6 +117,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       threshold: nominationThreshold(selectedNominee, game.players),
       isExile: selectedNominee.isTraveller,
       lockedIn: false,
+      ghostVoteSpenderIds: [],
     };
     onChange({ ...game, nominations: [...game.nominations, nomination] });
     // Reset to the empty placeholder state — starting the next nomination is
@@ -141,36 +142,49 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
 
   // Finalizes the tally: spends the ghost vote of every dead voter on an
   // execution (never on an exile) and makes the nomination read-only.
+  // Snapshots exactly who was charged onto the nomination itself (Copilot
+  // review finding) — reopen must restore precisely these spenders, not
+  // whoever is currently dead, which can differ if a death gets corrected
+  // between lock-in and reopen.
   function lockInNomination(nomination: Nomination) {
-    const spenders = new Set(ghostVoteSpendersOnLockIn(nomination, game.players));
+    const spenders = ghostVoteSpendersOnLockIn(nomination, game.players);
+    const spenderSet = new Set(spenders);
     onChange({
       ...game,
       nominations: game.nominations.map((n) =>
-        n.id === nomination.id ? { ...n, lockedIn: true } : n,
+        n.id === nomination.id
+          ? { ...n, lockedIn: true, ghostVoteSpenderIds: spenders }
+          : n,
       ),
       players: game.players.map((p) =>
-        spenders.has(p.id) ? { ...p, ghostVoteSpent: true } : p,
+        spenderSet.has(p.id) ? { ...p, ghostVoteSpent: true } : p,
       ),
     });
   }
 
   // Reopens a locked nomination to correct a mistake, restoring each ghost
   // vote it spent — unless that same player's vote is still genuinely held
-  // by a different, still-locked nomination recorded today. Refuses to open
-  // a second nomination alongside one that's already open (code review
-  // finding): the rest of this file's bookkeeping — the create-form's
-  // gating, hasSpentGhostVoteElsewhereToday's "locked-in nominations only"
-  // rule — all assume at most one nomination is ever open at a time, and
-  // the "Reopen" button is the only path that could otherwise break that
-  // (the JSX below hides it for the same reason, this is the data-layer
+  // by a different, still-locked nomination recorded today. Restores
+  // exactly the nomination's own snapshotted ghostVoteSpenderIds, not
+  // whoever is currently dead (Copilot review finding: a player revived
+  // after lock-in would otherwise never be found, and their ghost vote
+  // would stay stuck spent forever). Refuses to open a second nomination
+  // alongside one that's already open (earlier code review finding): the
+  // rest of this file's bookkeeping — the create-form's gating,
+  // hasSpentGhostVoteElsewhereToday's "locked-in nominations only" rule —
+  // all assume at most one nomination is ever open at a time, and the
+  // "Reopen" button is the only path that could otherwise break that (the
+  // JSX below hides it for the same reason, this is the data-layer
   // backstop).
   function reopenNomination(nomination: Nomination) {
     if (openNomination && openNomination.id !== nomination.id) return;
-    const spenders = new Set(ghostVoteSpendersOnLockIn(nomination, game.players));
+    const spenders = new Set(nomination.ghostVoteSpenderIds);
     onChange({
       ...game,
       nominations: game.nominations.map((n) =>
-        n.id === nomination.id ? { ...n, lockedIn: false } : n,
+        n.id === nomination.id
+          ? { ...n, lockedIn: false, ghostVoteSpenderIds: [] }
+          : n,
       ),
       players: game.players.map((p) => {
         if (!spenders.has(p.id)) return p;

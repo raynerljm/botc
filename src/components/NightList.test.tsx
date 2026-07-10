@@ -143,7 +143,7 @@ describe("Night list: starting and ending a night", () => {
       night: 0,
       nightOpen: true,
       nominations: [
-        { id: "n1", nominatorId: "p1", nomineeId: "p2", votes: [], threshold: 1, isExile: false, lockedIn: false },
+        { id: "n1", nominatorId: "p1", nomineeId: "p2", votes: [], threshold: 1, isExile: false, lockedIn: false, ghostVoteSpenderIds: [] },
       ],
     });
     let latest = game;
@@ -243,6 +243,7 @@ describe("Night list: undoing a transition (issue #165)", () => {
       threshold: 1,
       isExile: false,
       lockedIn: false,
+      ghostVoteSpenderIds: [],
     };
     const game = gameWith(["washerwoman", "imp"], {
       night: 0,

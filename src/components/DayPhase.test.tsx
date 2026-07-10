@@ -177,7 +177,7 @@ describe("Day phase: recording a nomination", () => {
     const withNomination = {
       ...game,
       nominations: [
-        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2, isExile: false, lockedIn: true },
+        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2, isExile: false, lockedIn: true, ghostVoteSpenderIds: [] },
       ],
     };
     renderDayPhase(withNomination);
@@ -210,6 +210,7 @@ describe("Day phase: collapsing the panel (issue #168)", () => {
           threshold: 2,
           isExile: false,
           lockedIn: false,
+          ghostVoteSpenderIds: [],
         },
       ],
     };
@@ -868,6 +869,48 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
     await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
 
     expect(latest.nominations[0].votes).not.toContain(ghost.id);
+  });
+
+  it("restores a lock-in's ghost vote on reopen even if that voter was revived in the meantime (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    const dead: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => (i === 2 ? { ...p, dead: true } : p)),
+    };
+    let latest = dead;
+    const { rerender } = renderDayPhase(dead, (next) => {
+      latest = next;
+    });
+    const [nominator, nominee, ghost] = dead.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.nominations[0].ghostVoteSpenderIds).toEqual([ghost.id]);
+
+    // The storyteller corrects a mistaken death — the ghost is marked alive
+    // again — entirely outside this nomination, before it's ever reopened.
+    const revived: GameDocument = {
+      ...latest,
+      players: latest.players.map((p) => (p.id === ghost.id ? { ...p, dead: false } : p)),
+    };
+    rerender(<DayPhase game={revived} onChange={(next) => (latest = next)} />);
+
+    await user.click(screen.getByRole("button", { name: "Reopen" }));
+
+    // Restored via the nomination's own snapshotted spender ids, not by
+    // recomputing "who's currently dead" — the now-alive ghost's earlier
+    // spend is still found and undone.
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
+    expect(latest.nominations[0].lockedIn).toBe(false);
+    expect(latest.nominations[0].ghostVoteSpenderIds).toEqual([]);
   });
 
   it("never spends a ghost vote on an exile (Traveller) nomination, even once locked in", async () => {

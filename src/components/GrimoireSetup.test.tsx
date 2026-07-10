@@ -1730,6 +1730,7 @@ describe("mid-game token management (issue #15)", () => {
           threshold: 1,
           isExile: false,
           lockedIn: false,
+          ghostVoteSpenderIds: [],
         },
       ],
     };
@@ -1769,6 +1770,7 @@ describe("mid-game token management (issue #15)", () => {
           threshold: 1,
           isExile: true,
           lockedIn: false,
+          ghostVoteSpenderIds: [],
         },
       ],
     };
