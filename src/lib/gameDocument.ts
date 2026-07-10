@@ -19,12 +19,19 @@ import { normalizeCharacterId } from "./scriptParser";
 // field), again for issue #168 (GameDocument gained the required
 // `nightListCollapsed`/`dayPhaseCollapsed` fields), again for issue #165
 // (GameDocument gained the required `lastEndedNightSnapshot` field), and
-// again for issue #163 (Player gained the required `isLunatic` field), and
-// again for issue #189 (GameDocument lost the `claimsCollapsed` field, the
-// bottom Claims panel it toggled having been removed) — a document saved
-// under an older shape must be rejected by gameStorage's version check
-// rather than loaded with any of these fields silently undefined.
-export const GAME_SCHEMA_VERSION = 18;
+// again for issue #163 (Player gained the required `isLunatic` field) — a
+// document saved under an older shape must be rejected by gameStorage's
+// version check rather than loaded with any of these fields silently
+// undefined.
+//
+// Not bumped for issue #189 (GameDocument lost the `claimsCollapsed` field,
+// the bottom Claims panel it toggled having been removed): unlike every
+// bump above, a field going away can't leave an old document with anything
+// silently undefined — a v17 save just carries one harmless, never-read
+// extra key. Bumping here would only cost every storyteller with a game in
+// progress their one and only saved copy (ADR 0001: client-only, single
+// document, no server backup) for no compatibility gain.
+export const GAME_SCHEMA_VERSION = 17;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.

@@ -19,9 +19,13 @@ export interface DemonBluffsPanelProps {
 
 const GOOD_TEAMS = new Set<Character["team"]>(["townsfolk", "outsider"]);
 
-export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
+export function DemonBluffsPanel({
+  game,
+  onChange,
+  hidden,
+}: DemonBluffsPanelProps & { hidden?: boolean }) {
   return (
-    <section className={styles.panel} aria-label="Demon bluffs">
+    <section className={styles.panel} aria-label="Demon bluffs" hidden={hidden}>
       <CollapsibleSection
         title="Demon bluffs"
         collapsed={game.demonBluffsCollapsed}

@@ -519,6 +519,33 @@ describe("claims", () => {
 
     expect(screen.queryByText(/claims/i)).not.toBeInTheDocument();
   });
+
+  it("keeps a claim visible instead of silently resetting to 'No claim' when it isn't in claimOptions", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ claim: "poisoner" })]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/^claim$/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
+  });
+
+  it("scopes the claim select to exactly 'No claim' plus every claimOptions character, grouped by team", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/^claim$/i);
+
+    expect(await getSelectOptions(user, select)).toEqual([
+      { value: "", label: "No claim" },
+      { value: "librarian", label: claimOptions[0].name },
+      { value: "monk", label: claimOptions[1].name },
+      { value: "recluse", label: claimOptions[2].name },
+    ]);
+  });
 });
 
 describe("acts-as (issue #17)", () => {
