@@ -72,15 +72,6 @@ export function EndGamePanel({
           </p>
         )}
 
-        <label className={styles.notes}>
-          Notes
-          <textarea
-            value={game.notes}
-            placeholder="Anything worth remembering about this game…"
-            onChange={(event) => onChange({ notes: event.target.value })}
-          />
-        </label>
-
         <div className={styles.actions}>
           {ended ? (
             <button type="button" onClick={reopen}>

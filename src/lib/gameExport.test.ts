@@ -173,19 +173,23 @@ describe("buildGameSnapshot", () => {
     expect(snapshot.playerCount).toBe(3);
   });
 
-  it("carries winner, notes, start and end timestamps for an ended game", () => {
+  it("carries winner, sectioned notes, start and end timestamps for an ended game", () => {
+    const notes = [
+      { id: "general", title: "General", text: "Great game overall." },
+      { id: "day-3", title: "Day 3", text: "Slayer shot the Imp." },
+    ];
     const snapshot = buildGameSnapshot(
       makeGame({
         winner: "good",
         endedAt: "2026-07-04T02:30:00.000Z",
-        notes: "Slayer shot the Imp on day 3.",
+        notes,
       }),
     );
 
     expect(snapshot.winner).toBe("good");
     expect(snapshot.startedAt).toBe("2026-07-04T00:00:00.000Z");
     expect(snapshot.endedAt).toBe("2026-07-04T02:30:00.000Z");
-    expect(snapshot.notes).toBe("Slayer shot the Imp on day 3.");
+    expect(snapshot.notes).toEqual(notes);
   });
 
   it("snapshots an in-progress game with a null winner and end time", () => {

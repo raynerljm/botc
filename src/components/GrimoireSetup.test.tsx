@@ -543,6 +543,32 @@ describe("bag draw: shuffle, immediate reveal, hide & pass", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps the Notes panel reachable during play, not just from the end-game panel (issue #193 AC), hiding it only during the pass-around itself", async () => {
+    const user = userEvent.setup();
+    render(
+      <GrimoireSetup
+        game={makeGame({
+          playerCount: 1,
+          selectedCharacters: [getCharacter("washerwoman")!],
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+
+    // Reveal is up — Notes starts expanded (unlike the Game panel), so its
+    // General section is already reachable behind the reveal.
+    expect(screen.getByLabelText("General")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hide & pass" }));
+
+    // Mid pass-around: hidden, same lifecycle as export/end-game above.
+    expect(screen.queryByLabelText("General")).not.toBeInTheDocument();
+  });
+
   it("doesn't claim aria-modal on the reveal, since Share via QR/Game stay reachable behind it by design (issue #122)", async () => {
     const user = userEvent.setup();
     render(<GrimoireSetup game={twoSeatTwoCharacterGame()} />);

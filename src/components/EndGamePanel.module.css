@@ -15,25 +15,6 @@
   font-weight: 700;
 }
 
-.notes {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.notes textarea {
-  min-height: 4rem;
-  padding: 0.5rem;
-  font: inherit;
-  color: var(--foreground);
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  resize: vertical;
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;

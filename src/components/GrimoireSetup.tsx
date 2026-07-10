@@ -36,6 +36,7 @@ import {
   type ReminderToken,
   type SetupWalkthroughStepStatus,
 } from "@/lib/gameDocument";
+import { withUpdatedNotesSection } from "@/lib/gameNotes";
 import { saveGame } from "@/lib/gameStorage";
 import { actsAsEntryId, charEntryId, currentNightNumber } from "@/lib/nightList";
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
@@ -45,6 +46,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { DayPhase } from "./DayPhase";
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
 import { EndGamePanel } from "./EndGamePanel";
+import { GameNotes } from "./GameNotes";
 import { GrimoireBoard } from "./GrimoireBoard";
 import { NightList } from "./NightList";
 import { PlayerNamePicker } from "./PlayerNamePicker";
@@ -1532,6 +1534,25 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <ShareScriptButton
             meta={shareableScriptMeta}
             characters={game.scriptCharacters}
+          />
+          {/* Reachable during play, not just from the end-game panel (issue
+              #193 AC) — same always-reachable placement as EndGamePanel
+              below. Unlike EndGamePanel's plain patch-onChange, editing a
+              notes section is a read-modify-write against the notes array,
+              so it must read from gameRef.current (not this render's stale
+              `game`) or a same-tick draw-stage write to `notes` could be
+              silently reverted (code review finding). */}
+          <GameNotes
+            game={game}
+            onChangeSection={(id, text) =>
+              update({
+                ...gameRef.current,
+                notes: withUpdatedNotesSection(gameRef.current.notes, id, text),
+              })
+            }
+            onToggleCollapsed={(collapsed) =>
+              update({ ...gameRef.current, notesCollapsed: collapsed })
+            }
           />
           <EndGamePanel
             game={game}

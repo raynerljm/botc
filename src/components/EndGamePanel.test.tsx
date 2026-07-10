@@ -131,19 +131,6 @@ describe("EndGamePanel", () => {
     expect(downloadGameSnapshot).toHaveBeenCalledWith(game);
   });
 
-  it("records free-text notes", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<EndGamePanel game={makeGame()} onChange={onChange} />);
-
-    await user.type(screen.getByLabelText(/notes/i), "x");
-
-    // Exactly the changed field, never a whole document spread from the
-    // `game` prop — a stale spread from this always-mounted panel could
-    // revert a same-tick draw-stage write (Cursor review finding).
-    expect(onChange).toHaveBeenCalledWith({ notes: "x" });
-  });
-
   it("can reopen an ended game to keep playing", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
@@ -164,7 +151,9 @@ describe("EndGamePanel", () => {
   it("starts collapsed before the first night has ended (issue #79)", () => {
     render(<EndGamePanel game={makeGame({ night: 0 })} onChange={vi.fn()} />);
 
-    expect(screen.queryByLabelText(/notes/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /good wins/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Game" })).toBeInTheDocument();
   });
 
@@ -184,7 +173,7 @@ describe("EndGamePanel", () => {
     await user.click(screen.getByRole("button", { name: "Game" }));
     rerender(<EndGamePanel game={latest} onChange={vi.fn()} />);
 
-    expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /good wins/i })).toBeInTheDocument();
   });
 
   it("persists a manual collapse toggle onto the game document", async () => {

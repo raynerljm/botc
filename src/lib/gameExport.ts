@@ -5,16 +5,18 @@ import {
   type GameDocument,
   type Player,
 } from "./gameDocument";
+import type { NotesSection } from "./gameNotes";
 import { formatDateStampSGT } from "./gameTime";
 
 // The export is its own versioned format (ADR 0002), independent of the game
 // document's schema version (ADR 0001) — a document-schema bump must not
 // silently restamp exports whose shape hasn't changed. Bumped to 2 for issue
-// #15's activeFabled field, to 3 for issue #126's isDrunk field, and to 4 for
-// issue #163's isLunatic field — additions to the snapshot shape itself
-// (unlike claim/demonBluffs, which were already part of v1's shape as
-// placeholders).
-export const EXPORT_SCHEMA_VERSION = 4;
+// #15's activeFabled field, to 3 for issue #126's isDrunk field, to 4 for
+// issue #163's isLunatic field, and to 5 for issue #193's `notes` shape
+// change (freeform string to sectioned notes) — additions/shape changes to
+// the snapshot shape itself (unlike claim/demonBluffs, which were already
+// part of v1's shape as placeholders).
+export const EXPORT_SCHEMA_VERSION = 5;
 
 // The exported snapshot shape (ADR 0002: a snapshot, not an event log).
 export interface SnapshotPlayer {
@@ -45,7 +47,7 @@ export interface GameSnapshot {
   winner: Alignment | null;
   startedAt: string;
   endedAt: string | null;
-  notes: string;
+  notes: NotesSection[];
 }
 
 // A player's alignment for the snapshot: travellers carry the alignment the

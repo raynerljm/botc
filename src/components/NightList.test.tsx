@@ -155,6 +155,55 @@ describe("Night list: starting and ending a night", () => {
 
     expect(latest.nominations).toEqual([]);
   });
+
+  it("creates a Night 1 notes section when the first night starts (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0 });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+
+    expect(latest.notes).toContainEqual({ id: "night-1", title: "Night 1", text: "" });
+  });
+
+  it("creates a Day 1 notes section when the first night ends (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+
+    expect(latest.notes).toContainEqual({ id: "day-1", title: "Day 1", text: "" });
+  });
+
+  it("does not wipe an already-jotted night section when Start night runs again after Back (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "night-1", title: "Night 1", text: "Everyone's asleep already." },
+      ],
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+
+    expect(latest.notes).toContainEqual({
+      id: "night-1",
+      title: "Night 1",
+      text: "Everyone's asleep already.",
+    });
+  });
 });
 
 describe("Night list: undoing a transition (issue #165)", () => {
@@ -206,6 +255,51 @@ describe("Night list: undoing a transition (issue #165)", () => {
 
     expect(latest.nightChecked).toEqual([]);
     expect(latest.nightUnskipped).toEqual([]);
+  });
+
+  it("removes the Night 1 notes section Start night created, if it's still empty, on Back (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: false });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    expect(latest.notes).toContainEqual({ id: "night-1", title: "Night 1", text: "" });
+    rerender(
+      <NightList game={latest} characterById={characterById(latest)} onChange={(next) => {
+        latest = next;
+      }} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+
+    expect(latest.notes.find((s) => s.id === "night-1")).toBeUndefined();
+  });
+
+  it("keeps the Night 1 notes section on Back once the storyteller has written something in it (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "night-1", title: "Night 1", text: "Already jotted something." },
+      ],
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+
+    expect(latest.notes).toContainEqual({
+      id: "night-1",
+      title: "Night 1",
+      text: "Already jotted something.",
+    });
   });
 
   it("does not offer to reopen a night that hasn't ended yet", () => {
@@ -278,6 +372,56 @@ describe("Night list: undoing a transition (issue #165)", () => {
     expect(latest.nightChecked).toEqual(["char:p1"]);
     expect(latest.nightUnskipped).toEqual(["char:p2"]);
     expect(latest.nominations).toEqual([nomination]);
+  });
+
+  it("removes the Day 1 notes section End night created, if it's still empty, on Reopen (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+    expect(latest.notes).toContainEqual({ id: "day-1", title: "Day 1", text: "" });
+    rerender(
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={(next) => {
+          latest = next;
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+
+    expect(latest.notes.find((s) => s.id === "day-1")).toBeUndefined();
+  });
+
+  it("keeps the Day 1 notes section on Reopen once the storyteller has written something in it (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nightOpen: false,
+      lastEndedNightSnapshot: { nightChecked: [], nightUnskipped: [], nominations: [] },
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "day-1", title: "Day 1", text: "Alice nominated Bob." },
+      ],
+    });
+    let latest = game;
+    renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+
+    expect(latest.notes).toContainEqual({
+      id: "day-1",
+      title: "Day 1",
+      text: "Alice nominated Bob.",
+    });
   });
 
   it("also pauses a running day timer on undoing End night (Copilot review finding on issue #190: this path reopens the night too)", async () => {
