@@ -91,7 +91,9 @@ export function getEditionCharacters(editionId: BaseEditionId): Character[] {
   return EDITION_CHARACTER_ORDER[editionId].map((id) => {
     const character = charactersById.get(id);
     if (!character) {
-      throw new Error(`Unknown character id in edition order: ${id}`);
+      throw new Error(
+        `Unknown character id "${id}" in edition order for "${editionId}"`,
+      );
     }
     return character;
   });
