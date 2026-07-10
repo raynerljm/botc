@@ -1369,13 +1369,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <div
             className={styles.circleLayout}
             hidden={showWalkthrough || screenObscured}
-            // Both side panels collapsed is the only case that actually frees
-            // width for the circle to grow into — the two panels share one
-            // grid column, so collapsing only one still leaves the column
-            // reserved for whichever panel is still expanded (issue #168).
-            data-side-collapsed={
-              (game.nightListCollapsed && game.dayPhaseCollapsed) || undefined
-            }
+            // Night list moved out of this grid into a fixed bottom sheet
+            // (issue #194) — it no longer shares the side column with Day
+            // phase, so reclaiming width now depends only on Day phase's own
+            // collapsed state (originally issue #168, both panels together).
+            data-side-collapsed={game.dayPhaseCollapsed || undefined}
           >
             <div
               role="region"
@@ -1420,9 +1418,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 }
               />
             </div>
-            <div className={styles.nightListArea}>
-              <NightList game={game} characterById={characterById} onChange={update} />
-            </div>
+            {/* Renders as a fixed-position bottom sheet (NightList.module.css)
+                rather than a grid item — it's positioned here in the DOM
+                (issue #58: circle before night list in DOM/tab order still
+                holds) purely so its own CollapsibleSection/handle markup
+                lives beside the components it's paired with; its box escapes
+                the grid entirely via `position: fixed` (issue #194). */}
+            <NightList game={game} characterById={characterById} onChange={update} />
             <div className={styles.dayPhaseArea}>
               <DayPhase game={game} onChange={update} />
             </div>

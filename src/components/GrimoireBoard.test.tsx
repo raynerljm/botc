@@ -2078,6 +2078,80 @@ describe("board sizing (issue #78)", () => {
     expect(board.style.height).toBe("640px");
   });
 
+  describe("reserving space for the night list's bottom sheet (issue #194)", () => {
+    let sheet: HTMLElement;
+
+    afterEach(() => {
+      sheet?.remove();
+    });
+
+    // A `[data-night-sheet]` element elsewhere in the document — standing in
+    // for NightList's own fixed-position root, which this suite doesn't
+    // render (renderBoard mounts GrimoireBoard in isolation).
+    function stubSheet(heightPx: number) {
+      sheet = document.createElement("div");
+      sheet.setAttribute("data-night-sheet", "");
+      document.body.appendChild(sheet);
+      vi.spyOn(sheet, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 0,
+        height: heightPx,
+        right: 0,
+        bottom: heightPx,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      });
+    }
+
+    it("shrinks the circle by the sheet's current height", () => {
+      stubSheet(200);
+      // Same geometry as "fits the shorter of the available width and
+      // available height" above (604px unreserved) minus the sheet's 200px.
+      const board = measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+
+      expect(board.style.width).toBe("404px");
+      expect(board.style.height).toBe("404px");
+    });
+
+    it("never shrinks below the legibility floor even when the sheet alone would demand more room", () => {
+      stubSheet(500);
+      const board = measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+
+      expect(board.style.width).toBe("320px");
+      expect(board.style.height).toBe("320px");
+    });
+
+    it("grows back once the sheet collapses to a shorter peek height", () => {
+      stubSheet(300);
+      measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+
+      // The sheet collapsing (peek state) shrinks its own rendered box.
+      // jsdom has no real ResizeObserver to fire on that box-size change on
+      // its own, so this drives the same `measure()` recomputation through
+      // the window-resize path instead — the formula under test
+      // (`availableHeightPx` minus the sheet's *current* height) is
+      // identical either way; only the trigger differs from a real browser.
+      vi.spyOn(sheet, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 60,
+        right: 0,
+        bottom: 60,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      });
+      fireEvent(window, new Event("resize"));
+
+      const board = document.querySelector("[data-board]") as HTMLElement;
+      expect(board.style.width).toBe("544px");
+      expect(board.style.height).toBe("544px");
+    });
+  });
+
   it("keeps measuring the current board after it's unmounted and remounted", async () => {
     // Info tokens show mode (issue #19) replaces the whole board with a
     // different subtree, then swaps the original board back in on "Done" —

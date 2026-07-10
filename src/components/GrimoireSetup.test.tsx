@@ -3512,31 +3512,50 @@ describe("post-draw setup walkthrough (issue #26)", () => {
   });
 });
 
-describe("collapsing the Night List/Day Phase side panels reclaims circle width (issue #168)", () => {
-  it("flags the layout for the circle to reclaim width only once both side panels are collapsed", async () => {
+describe("collapsing the Day Phase side panel reclaims circle width (originally issue #168)", () => {
+  // Night list moved out of this shared side column into a fixed bottom
+  // sheet (issue #194) — it's no longer part of what "both side panels
+  // collapsed" used to mean, so reclaiming width now tracks Day phase alone.
+  it("flags the layout for the circle to reclaim width once Day phase is collapsed", async () => {
     const { user, circle } = await completeSetup();
     const layout = circle.parentElement as HTMLElement;
-    expect(layout).not.toHaveAttribute("data-side-collapsed");
-
-    await user.click(screen.getByRole("button", { name: "Night list" }));
     expect(layout).not.toHaveAttribute("data-side-collapsed");
 
     await user.click(screen.getByRole("button", { name: "Day phase" }));
     expect(layout).toHaveAttribute("data-side-collapsed", "true");
 
-    // Reopening either one gives the width back to the side column.
-    await user.click(screen.getByRole("button", { name: "Night list" }));
+    await user.click(screen.getByRole("button", { name: "Day phase" }));
     expect(layout).not.toHaveAttribute("data-side-collapsed");
   });
 
-  it("persists each panel's collapsed state across a reload", async () => {
+  it("persists the panel's collapsed state across a reload", async () => {
     const { user } = await completeSetup();
 
-    await user.click(screen.getByRole("button", { name: "Night list" }));
     await user.click(screen.getByRole("button", { name: "Day phase" }));
 
     const reloaded = loadGame()!;
-    expect(reloaded.nightListCollapsed).toBe(true);
     expect(reloaded.dayPhaseCollapsed).toBe(true);
+  });
+
+  it("does not react to Night list's own collapsed state, unlike before issue #194", async () => {
+    const { user, circle } = await completeSetup();
+    const layout = circle.parentElement as HTMLElement;
+
+    await user.click(screen.getByRole("button", { name: "Night list" }));
+    expect(layout).not.toHaveAttribute("data-side-collapsed");
+  });
+});
+
+describe("night list renders as a fixed bottom sheet (issue #194)", () => {
+  it("renders as a direct sibling of the circle/day-phase grid areas, not wrapped in its own grid cell", async () => {
+    const { circle } = await completeSetup();
+
+    const nightListHeading = screen.getByRole("heading", { name: /night list|first night/i });
+    const sheet = nightListHeading.closest("section");
+    // No `.nightListArea` grid-cell wrapper remains (issue #194) — the
+    // sheet's own root section sits directly under `.circleLayout`,
+    // alongside `circleArea`, and escapes the grid via its own fixed
+    // positioning (NightList.module.css) rather than a `grid-area`.
+    expect(sheet?.parentElement).toBe(circle.parentElement);
   });
 });

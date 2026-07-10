@@ -240,13 +240,27 @@ export function GrimoireBoard({
     // same-value change back into the ResizeObserver below on every tick.
     let lastSize: number | null = null;
 
+    // The night list renders as a fixed-position bottom sheet
+    // (NightList.module.css, issue #194), floating over the board rather
+    // than sharing grid space with it — so, unlike every other panel this
+    // function already accounts for via wrapper/body layout, its footprint
+    // has to be measured directly and subtracted from the board's height
+    // budget, or an expanded sheet would silently cover the bottom seats.
+    // Looked up once (not per-measure) — its identity doesn't change over
+    // this mount's lifetime, same reasoning as `wrapper` and `rootFontSizePx`
+    // above (code review finding: this used to run a fresh document-wide
+    // query on every single resize/observer tick).
+    const sheet = document.querySelector<HTMLElement>("[data-night-sheet]");
+
     function measure() {
       const rect = node!.getBoundingClientRect();
       // A mid-scroll resize (iOS Safari's chrome collapsing, iOS overscroll)
       // can read a negative `rect.top`, which would otherwise overstate how
       // much height is left below the board.
       const topPx = Math.max(0, rect.top);
-      const availableHeightPx = window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX;
+      const sheetReservePx = sheet?.getBoundingClientRect().height ?? 0;
+      const availableHeightPx =
+        window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX - sheetReservePx;
       const size = fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx);
       if (size === lastSize) return;
       lastSize = size;
@@ -264,14 +278,26 @@ export function GrimoireBoard({
     // column-width-only change that doesn't alter body's own box. Observing
     // both covers each other's blind spot.
     let observer: ResizeObserver | undefined;
+    // The bottom sheet is a `position: fixed` sibling — collapsing or
+    // expanding it changes its own box size without ever touching
+    // `document.body`'s (fixed elements don't participate in flow layout),
+    // so it needs its own dedicated observer to catch peek ⇄ expanded
+    // transitions (issue #194 AC: "the circle re-fits ... as the sheet
+    // expands and collapses").
+    let sheetObserver: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(measure);
       observer.observe(wrapper);
       observer.observe(document.body);
+      if (sheet) {
+        sheetObserver = new ResizeObserver(measure);
+        sheetObserver.observe(sheet);
+      }
     }
     boardMeasureCleanupRef.current = () => {
       window.removeEventListener("resize", measure);
       observer?.disconnect();
+      sheetObserver?.disconnect();
     };
   }, []);
 
