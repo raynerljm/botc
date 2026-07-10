@@ -202,33 +202,33 @@ describe("legacy migration (pre-#21 single-game key)", () => {
   });
 });
 
-describe("notes migration (issue #193: schemaVersion 18 -> 19)", () => {
-  // A v18 game as it existed on disk before issue #193: `notes` was a plain
+describe("notes migration (issue #193: schemaVersion 20 -> 21)", () => {
+  // A v20 game as it existed on disk before issue #193: `notes` was a plain
   // string, one schema version behind current.
-  function v18GameWithNotes(notes: string): GameDocument {
+  function v20GameWithNotes(notes: string): GameDocument {
     return {
       ...makeGame("Pre-#193 Game"),
-      schemaVersion: 18,
+      schemaVersion: 20,
       notes,
     } as unknown as GameDocument;
   }
 
-  it("upgrades a v18 game's freeform notes into the General section without losing the text", () => {
-    const legacy = v18GameWithNotes("Slayer shot the Imp on day 3.");
+  it("upgrades a v20 game's freeform notes into the General section without losing the text", () => {
+    const legacy = v20GameWithNotes("Slayer shot the Imp on day 3.");
     window.localStorage.setItem(
       "botc:games",
       JSON.stringify({ activeId: legacy.id, games: [legacy] }),
     );
 
     const game = loadGame()!;
-    expect(game.schemaVersion).toBe(19);
+    expect(game.schemaVersion).toBe(21);
     expect(game.notes).toEqual([
       { id: "general", title: "General", text: "Slayer shot the Imp on day 3." },
     ]);
   });
 
   it("still drops a game from any other outdated schema version", () => {
-    const ancient = { ...v18GameWithNotes("x"), schemaVersion: 5 };
+    const ancient = { ...v20GameWithNotes("x"), schemaVersion: 5 };
     window.localStorage.setItem(
       "botc:games",
       JSON.stringify({ activeId: ancient.id, games: [ancient] }),
@@ -238,12 +238,12 @@ describe("notes migration (issue #193: schemaVersion 18 -> 19)", () => {
     expect(listGames()).toHaveLength(0);
   });
 
-  it("backfills the new notesCollapsed field a real v18 document never had, rather than leaving it undefined", () => {
-    // A real pre-#193 v18 document never had `notesCollapsed` at all — that
+  it("backfills the new notesCollapsed field a real v20 document never had, rather than leaving it undefined", () => {
+    // A real pre-#193 v20 document never had `notesCollapsed` at all — that
     // field was introduced by the same bump that sectioned `notes`. Strip it
     // to reproduce the actual on-disk shape rather than a fixture that
     // already carries every current-schema field.
-    const legacy = v18GameWithNotes("x") as unknown as Record<string, unknown>;
+    const legacy = v20GameWithNotes("x") as unknown as Record<string, unknown>;
     delete legacy.notesCollapsed;
     window.localStorage.setItem(
       "botc:games",

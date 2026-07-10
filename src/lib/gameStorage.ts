@@ -27,19 +27,28 @@ function isStoredGame(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
+// The exact shape this migration upgrades a v20 document *to* — a fixed
+// literal, not a live read of GAME_SCHEMA_VERSION (Copilot review finding).
+// If a later, unrelated bump moves GAME_SCHEMA_VERSION past 21, this
+// migration must keep producing v21 documents (missing whatever fields that
+// later bump adds) so the version filter below still drops them, rather than
+// stamping a v20 document straight up to the *current* version and letting
+// it slip past the filter without those newer required fields.
+const NOTES_SECTIONS_SCHEMA_VERSION = 21;
+
 // Issue #193 changed `notes` from a single string to sectioned notes and
 // added the required `notesCollapsed` field, bumping GAME_SCHEMA_VERSION
-// from 18 to 19. Unlike every other bump, this one carries data storytellers
-// may already have written, so a v18 game is upgraded in place here rather
+// from 20 to 21. Unlike every other bump, this one carries data storytellers
+// may already have written, so a v20 game is upgraded in place here rather
 // than being silently dropped by the version filter below (AC: "without
 // data loss") — every other outdated version still gets dropped as before.
-function upgradeV18Notes(game: unknown): unknown {
-  if (!isStoredGame(game) || game.schemaVersion !== 18) return game;
+function upgradeV20Notes(game: unknown): unknown {
+  if (!isStoredGame(game) || game.schemaVersion !== 20) return game;
   return {
     ...game,
-    schemaVersion: GAME_SCHEMA_VERSION,
+    schemaVersion: NOTES_SECTIONS_SCHEMA_VERSION,
     notes: coerceNotes(game.notes),
-    // A real v18 document never had this field at all (it's new in v19) —
+    // A real v20 document never had this field at all (it's new in v21) —
     // backfill the same default `createGame` uses, or every migrated game
     // would carry an `undefined` where its type says `boolean` (code review
     // finding).
@@ -55,7 +64,7 @@ function parseStore(raw: string | null): GamesStore {
     if (!parsed || !Array.isArray(parsed.games)) return EMPTY_STORE;
     // Drop any game written by a different schema version rather than handing
     // back something the app can't render.
-    const games = parsed.games.map(upgradeV18Notes).filter(
+    const games = parsed.games.map(upgradeV20Notes).filter(
       (game): game is GameDocument =>
         isStoredGame(game) && game.schemaVersion === GAME_SCHEMA_VERSION,
     );

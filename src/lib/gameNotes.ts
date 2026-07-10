@@ -77,13 +77,32 @@ export function migrateLegacyNotes(legacyNotes: string): NotesSection[] {
   return [{ id: GENERAL_NOTES_SECTION_ID, title: "General", text: legacyNotes }];
 }
 
+function isNotesSection(value: unknown): value is NotesSection {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as NotesSection).id === "string" &&
+    typeof (value as NotesSection).title === "string" &&
+    typeof (value as NotesSection).text === "string"
+  );
+}
+
 // Coerces a raw `notes` value of unknown shape (a saved document from any
-// prior era) into the current sectioned form — shared by every notes
-// migration path (gameStorage's v18 upgrade and its pre-#21 legacy-key
-// promotion) so "what does an old/malformed notes value become" is answered
-// in exactly one place.
+// prior era — or hand-edited/corrupted localStorage, per the same
+// defensiveness this codebase already applies to other stored positions) into
+// the current sectioned form — shared by every notes migration path
+// (gameStorage's v20 upgrade and its pre-#21 legacy-key promotion) so "what
+// does an old/malformed notes value become" is answered in exactly one
+// place. An array is validated element-by-element rather than trusted
+// outright, and the persistent General section is guaranteed even if a
+// malformed array didn't carry one (Copilot review finding).
 export function coerceNotes(rawNotes: unknown): NotesSection[] {
   if (typeof rawNotes === "string") return migrateLegacyNotes(rawNotes);
-  if (Array.isArray(rawNotes)) return rawNotes as NotesSection[];
+  if (Array.isArray(rawNotes)) {
+    const sections = rawNotes.filter(isNotesSection);
+    return sections.some((section) => section.id === GENERAL_NOTES_SECTION_ID)
+      ? sections
+      : [{ id: GENERAL_NOTES_SECTION_ID, title: "General", text: "" }, ...sections];
+  }
   return createInitialNotes();
 }

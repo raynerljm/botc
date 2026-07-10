@@ -109,12 +109,33 @@ describe("coerceNotes", () => {
 
   it("passes an already-sectioned array through unchanged", () => {
     const notes = [{ id: "general", title: "General", text: "x" }];
-    expect(coerceNotes(notes)).toBe(notes);
+    expect(coerceNotes(notes)).toEqual(notes);
   });
 
   it("defaults to a fresh General section for anything else (missing/malformed)", () => {
     expect(coerceNotes(undefined)).toEqual(createInitialNotes());
     expect(coerceNotes(null)).toEqual(createInitialNotes());
+  });
+
+  it("drops array elements with the wrong shape rather than trusting them (Copilot review finding)", () => {
+    expect(
+      coerceNotes([
+        { id: "general", title: "General", text: "x" },
+        { id: "night-1", title: "Night 1" }, // missing `text`
+        "not even an object",
+        null,
+        { id: 42, title: "Bad id", text: "y" }, // wrong type
+      ]),
+    ).toEqual([{ id: "general", title: "General", text: "x" }]);
+  });
+
+  it("prepends a fresh General section to a well-formed array that's missing one (Copilot review finding)", () => {
+    expect(
+      coerceNotes([{ id: "night-1", title: "Night 1", text: "Imp killed Alice." }]),
+    ).toEqual([
+      { id: GENERAL_NOTES_SECTION_ID, title: "General", text: "" },
+      { id: "night-1", title: "Night 1", text: "Imp killed Alice." },
+    ]);
   });
 });
 
