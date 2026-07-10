@@ -19,11 +19,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // and again for issue #108 (GameDocument gained the required `drawSession`
 // field), again for issue #168 (GameDocument gained the required
 // `nightListCollapsed`/`dayPhaseCollapsed` fields), again for issue #165
-// (GameDocument gained the required `lastEndedNightSnapshot` field), and
-// again for issue #163 (Player gained the required `isLunatic` field), again
-// for issue #191 (Nomination gained the required `lockedIn` field), and
-// again for issue #191's `ghostVoteSpenderIds` field (Copilot review
-// finding, same issue) — a document saved under an older shape must be
+// (GameDocument gained the required `lastEndedNightSnapshot` field), again
+// for issue #163 (Player gained the required `isLunatic` field), again for
+// issue #191 (Nomination gained the required `lockedIn` field), again for
+// issue #191's `ghostVoteSpenderIds` field (Copilot review finding, same
+// issue), and again for issue #192 (GameDocument gained the required
+// `rotation` field) — a document saved under an older shape must be
 // rejected by gameStorage's version check rather than loaded with any of
 // these fields silently undefined.
 //
@@ -44,13 +45,14 @@ import { normalizeCharacterId } from "./scriptParser";
 // Bumped again for issue #190 (GameDocument gained the required `dayTimer`
 // field), again for issue #191 (Nomination gained the required `lockedIn`
 // field), again for issue #191's `ghostVoteSpenderIds` field (Copilot
-// review finding, same issue), and again for issue #193 (GameDocument's
+// review finding, same issue), again for issue #193 (GameDocument's
 // `notes` changed shape from a single string to sectioned notes, and
 // gained the required `notesCollapsed` field) — unlike every prior bump, a
 // v20 game's `notes` is upgraded in place by gameStorage rather than
 // dropped, since it may carry text the storyteller already wrote (issue
-// #193 AC: "without data loss").
-export const GAME_SCHEMA_VERSION = 21;
+// #193 AC: "without data loss") — and again for issue #192 (GameDocument
+// gained the required `rotation` field).
+export const GAME_SCHEMA_VERSION = 22;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -368,6 +370,12 @@ export interface GameDocument {
   // device sleep mid-count restores the correct remaining time rather than
   // losing or drifting it.
   dayTimer: DayTimer;
+  // Current orientation of the whole grimoire circle, in degrees clockwise
+  // from its default layout (issue #192: a quality-of-life control to face
+  // the circle toward the storyteller). Applied to every token's position at
+  // render time, never baked into a stored position, so re-circling or
+  // adding a seat still lays out relative to the same unrotated layout.
+  rotation: number;
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -379,6 +387,71 @@ export function circlePosition(index: number, total: number): PlayerPosition {
     x: 50 + radius * Math.cos(angle),
     y: 50 + radius * Math.sin(angle),
   };
+}
+
+// The fixed step a single "Rotate" tap advances the whole grimoire by
+// (issue #192) — 45 degrees gives 8 orientations, enough to face any seat
+// around a physical table without needing a free-form dial control.
+export const ROTATION_STEP_DEG = 45;
+
+// Advances the stored rotation by one tap in the given direction, wrapping
+// into [0, 360) so the value never grows unbounded across many taps and a
+// counterclockwise tap from 0 lands on a sensible positive angle rather than
+// a negative one.
+export function stepRotation(rotation: number, direction: 1 | -1): number {
+  return ((rotation + direction * ROTATION_STEP_DEG) % 360 + 360) % 360;
+}
+
+// The rotation matrix shared by rotatePosition and unrotatePosition below —
+// deliberately unclamped, since clamping belongs to each of those two at a
+// different point in the pipeline (see unrotatePosition's comment).
+function rotateAroundCentre(
+  position: PlayerPosition,
+  degrees: number,
+): PlayerPosition {
+  const rad = (degrees * Math.PI) / 180;
+  const dx = position.x - 50;
+  const dy = position.y - 50;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return {
+    x: 50 + dx * cos - dy * sin,
+    y: 50 + dx * sin + dy * cos,
+  };
+}
+
+// Rotates a board-percentage position around the pad's centre (50, 50) by
+// `degrees`, in the same clockwise-on-screen sense as circlePosition's own
+// index ordering (issue #192: rotating the whole grimoire to face the
+// storyteller). Clamped like every other computed position, since a token
+// dragged near a corner sits further from the centre than a computed circle
+// seat ever does and can otherwise rotate past the pad's [4,96] bounds.
+export function rotatePosition(
+  position: PlayerPosition,
+  degrees: number,
+): PlayerPosition {
+  const rotated = rotateAroundCentre(position, degrees);
+  return { x: clampPct(rotated.x), y: clampPct(rotated.y) };
+}
+
+// Undoes rotatePosition — turns a rotated display position back into the
+// canonical (unrotated) frame every stored position lives in. Deliberately
+// NOT clamped, unlike rotatePosition: the position being un-rotated here was
+// already clamped once, independently per axis, in the display/screen space
+// it was dropped in (a drag's pointer math, or a rotated seat position read
+// off the board) — and clamping a *second* time, after rotating, doesn't
+// commute with that first per-axis clamp except at multiples of 90 degrees.
+// Re-clamping here would snap a token dropped near a corner under an odd
+// rotation to a visibly different spot than where it was actually released
+// (code review finding). Every caller's own consumer already clamps at its
+// own point of use instead (reorderSeatsAfterMove for players, the
+// render-time fallback for free-standing reminders), so this only needs to
+// undo the rotation, not re-guard the bounds a second time.
+export function unrotatePosition(
+  position: PlayerPosition,
+  degrees: number,
+): PlayerPosition {
+  return rotateAroundCentre(position, -degrees);
 }
 
 // Keeps a token's centre within the pad instead of off the edge. Shared by
@@ -864,6 +937,7 @@ export function createGame({
     nightListCollapsed: false,
     notesCollapsed: false,
     dayTimer: createDayTimer(),
+    rotation: 0,
   };
 }
 

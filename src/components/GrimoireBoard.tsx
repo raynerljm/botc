@@ -29,6 +29,9 @@ import {
   LUNATIC_ID,
   nextPadReminderPosition,
   parkBeside,
+  rotatePosition,
+  stepRotation,
+  unrotatePosition,
   type Player,
   type PlayerPosition,
   type ReminderToken,
@@ -61,6 +64,11 @@ export interface GrimoireBoardProps {
   onRenameCommit: (playerId: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
+  // Current orientation of the whole grimoire circle, in degrees clockwise
+  // from its default layout (issue #192). Applied to every token's position
+  // at render time only — never baked into a stored position.
+  rotation: number;
+  onRotate: (rotation: number) => void;
   onToggleDead: (playerId: string) => void;
   onToggleGhostVote: (playerId: string) => void;
   onAddReminder: (input: {
@@ -198,6 +206,8 @@ export function GrimoireBoard({
   onRenameCommit,
   onMove,
   onReCircle,
+  rotation,
+  onRotate,
   onToggleDead,
   onToggleGhostVote,
   onAddReminder,
@@ -532,27 +542,41 @@ export function GrimoireBoard({
   // included) so dragging a reminder doesn't force a full seat-position
   // Map rebuild every frame for positions that haven't actually changed.
   const livePlayerDrag = liveDrag?.kind === "player" ? liveDrag : null;
-  const positionByPlayerId = useMemo(() => {
+  // Every seat's rotated resting position — the seat/pad layout position
+  // (never a live drag preview), with the persisted rotation applied. Split
+  // out from positionByPlayerId below so a menu's anchor side (which reads
+  // this directly further down) doesn't chase an in-progress drag (see that
+  // comment), while still rotating together with everything else (issue
+  // #192: "including hand-placed tokens").
+  const restingPositionByPlayerId = useMemo(() => {
     const map = new Map<string, PlayerPosition>();
     sorted.forEach((player, index) => {
+      const canonical = player.position
+        ? // Re-clamped the same way anchoredReminderPosition already
+          // clamps its anchor input: a hand-edited or pre-#117 exported
+          // document isn't guaranteed to be within [4,96], and an
+          // out-of-range stored position would otherwise make a drag's
+          // grab offset (GrimoireBoard.tsx's pointer handlers) jump the
+          // token to the clamp edge on pickup — the exact bug issue
+          // #167 fixed, just re-triggered by out-of-range legacy data.
+          { x: clampPct(player.position.x), y: clampPct(player.position.y) }
+        : circlePosition(index, total);
+      map.set(player.id, rotatePosition(canonical, rotation));
+    });
+    return map;
+  }, [sorted, total, rotation]);
+  const positionByPlayerId = useMemo(() => {
+    const map = new Map<string, PlayerPosition>();
+    sorted.forEach((player) => {
       map.set(
         player.id,
         livePlayerDrag?.id === player.id
           ? livePlayerDrag.position
-          : player.position
-            ? // Re-clamped the same way anchoredReminderPosition already
-              // clamps its anchor input: a hand-edited or pre-#117 exported
-              // document isn't guaranteed to be within [4,96], and an
-              // out-of-range stored position would otherwise make a drag's
-              // grab offset (GrimoireBoard.tsx's pointer handlers) jump the
-              // token to the clamp edge on pickup — the exact bug issue
-              // #167 fixed, just re-triggered by out-of-range legacy data.
-              { x: clampPct(player.position.x), y: clampPct(player.position.y) }
-            : circlePosition(index, total),
+          : restingPositionByPlayerId.get(player.id)!,
       );
     });
     return map;
-  }, [sorted, total, livePlayerDrag]);
+  }, [sorted, livePlayerDrag, restingPositionByPlayerId]);
   // Stable per-seat stack order of the reminders anchored to it, so several
   // reminders on one seat stack in a consistent order instead of jittering
   // as other unrelated reminders are added/removed elsewhere on the board.
@@ -640,8 +664,13 @@ export function GrimoireBoard({
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.dragged) {
       justDraggedRef.current = `${drag.kind}:${drag.id}`;
-      if (drag.kind === "player") onMove(drag.id, drag.lastPosition);
-      else onMoveReminder(drag.id, drag.lastPosition);
+      // drag.lastPosition is where the token was actually dropped on
+      // screen — already carrying the circle's current rotation. Persisted
+      // state is always in the unrotated canonical frame (issue #192), so
+      // the drop point is rotated back by the same amount before saving.
+      const canonicalPosition = unrotatePosition(drag.lastPosition, rotation);
+      if (drag.kind === "player") onMove(drag.id, canonicalPosition);
+      else onMoveReminder(drag.id, canonicalPosition);
       // Manually dragging the very reminder armed for tap-to-place is the
       // storyteller changing their mind about how to position it — leaving
       // placement armed would make the very next seat tap silently re-attach
@@ -773,6 +802,12 @@ export function GrimoireBoard({
         >
           Re-circle
         </button>
+        <button type="button" onClick={() => onRotate(stepRotation(rotation, -1))}>
+          Rotate left
+        </button>
+        <button type="button" onClick={() => onRotate(stepRotation(rotation, 1))}>
+          Rotate right
+        </button>
         {!hidden && (
           <button
             type="button"
@@ -868,7 +903,7 @@ export function GrimoireBoard({
         style={{ "--token-size": `${tokenSize}rem` } as React.CSSProperties}
       >
         {!hidden &&
-          sorted.map((player, index) => {
+          sorted.map((player) => {
             const character = player.characterId
               ? characterById.get(player.characterId)
               : undefined;
@@ -882,8 +917,7 @@ export function GrimoireBoard({
             // data-vside tracked the in-flight position, the menu would
             // flicker between anchors every pointermove instead of staying
             // put until the drag actually settles (code review finding).
-            const restingPosition =
-              player.position ?? circlePosition(index, total);
+            const restingPosition = restingPositionByPlayerId.get(player.id)!;
             const official = character ? isOfficialCharacter(character) : false;
             // True only while the player is still wearing the stand-in's
             // identity — once swapped to any other character (including a
@@ -1062,7 +1096,13 @@ export function GrimoireBoard({
                         onClick={() =>
                           setActiveOverlay({
                             type: "reminder",
-                            base: position,
+                            // Un-rotated back to the canonical frame every
+                            // stored position lives in (issue #192) — this
+                            // becomes the reminder's stored fallback
+                            // position (used once it's ever free-standing),
+                            // and storing the rotated display position here
+                            // would double-rotate it at that point.
+                            base: unrotatePosition(position, rotation),
                             playerId: player.id,
                           })
                         }
@@ -1197,15 +1237,22 @@ export function GrimoireBoard({
               ? positionByPlayerId.get(reminder.anchorPlayerId)
               : undefined;
             const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
-            // Clamped for the same reason as positionByPlayerId above — a
-            // free-standing reminder's stored position isn't guaranteed to
-            // be within [4,96] for legacy/hand-edited documents.
+            // anchorSeatPosition already carries the rotation (from
+            // positionByPlayerId), so an anchored reminder's offset rotates
+            // along with its seat for free; a free-standing one needs the
+            // same rotation applied directly to its own stored position
+            // (issue #192). rotatePosition already clamps its own output
+            // (the same [4,96] guarantee a free-standing reminder's stored
+            // position isn't guaranteed to have for legacy/hand-edited
+            // documents), so pre-clamping the un-rotated input here as well
+            // would just distort a legitimately-out-of-range *canonical*
+            // value — one a rotated drag can produce even from an in-bounds
+            // drop, since un-rotating doesn't commute with a per-axis clamp
+            // except at multiples of 90 degrees — before it ever gets
+            // rotated back into display space (Copilot review finding).
             const restingPosition = anchorSeatPosition
               ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
-              : {
-                  x: clampPct(reminder.position.x),
-                  y: clampPct(reminder.position.y),
-                };
+              : rotatePosition(reminder.position, rotation);
             const position =
               liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
                 ? liveDrag.position

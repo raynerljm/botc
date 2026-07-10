@@ -15,7 +15,11 @@ import {
   nextPadReminderPosition,
   reorderSeatsAfterMove,
   resumeDrawSession,
+  ROTATION_STEP_DEG,
+  rotatePosition,
   shuffleTokens,
+  stepRotation,
+  unrotatePosition,
   withBackfilledDrunkReminders,
   withRestoredReminder,
   type DrawSession,
@@ -180,6 +184,76 @@ describe("circlePosition", () => {
     // Symmetric around the centre (50, 50).
     expect(right.x - 50).toBeCloseTo(50 - left.x);
     expect(bottom.y - 50).toBeCloseTo(50 - top.y);
+  });
+});
+
+describe("rotatePosition (issue #192)", () => {
+  it("leaves a position unchanged when rotating by 0 degrees", () => {
+    expect(rotatePosition({ x: 60, y: 20 }, 0)).toEqual({ x: 60, y: 20 });
+  });
+
+  it("rotates a seat around the centre in the same clockwise sense as circlePosition's own layout", () => {
+    // circlePosition(0, 4) is the top seat, circlePosition(1, 4) is the seat
+    // one clockwise step further (the right) — rotating the top seat by a
+    // quarter turn should land it exactly on that same right-hand spot.
+    const top = circlePosition(0, 4);
+    const rotated = rotatePosition(top, 90);
+    const right = circlePosition(1, 4);
+    expect(rotated.x).toBeCloseTo(right.x);
+    expect(rotated.y).toBeCloseTo(right.y);
+  });
+
+  it("returns to the starting position after a full turn", () => {
+    const start = { x: 30, y: 70 };
+    const rotated = rotatePosition(start, 360);
+    expect(rotated.x).toBeCloseTo(start.x);
+    expect(rotated.y).toBeCloseTo(start.y);
+  });
+
+  it("clamps a rotated position back onto the pad instead of letting it drift off-screen", () => {
+    // A token dragged into a corner sits further from the centre than any
+    // computed circle seat ever does — rotating it can push it outside the
+    // [4,96] pad bounds clampPct otherwise guarantees everywhere else.
+    const corner = { x: 96, y: 96 };
+    const rotated = rotatePosition(corner, 45);
+    expect(rotated.y).toBeLessThanOrEqual(96);
+  });
+});
+
+describe("unrotatePosition (issue #192)", () => {
+  it("undoes rotatePosition for a position well within the pad's bounds", () => {
+    const start = { x: 60, y: 30 };
+    const rotated = rotatePosition(start, 45);
+    const back = unrotatePosition(rotated, 45);
+    expect(back.x).toBeCloseTo(start.x);
+    expect(back.y).toBeCloseTo(start.y);
+  });
+
+  it("does not clamp its result, unlike rotatePosition", () => {
+    // A drag drop already clamped independently per axis in display space
+    // (a corner of the square pad) doesn't sit on the same circle a rotation
+    // preserves — un-rotating it can legitimately land outside [4, 96].
+    // Clamping again here (as rotatePosition does) would snap it to a
+    // different spot than where it was actually dropped, since per-axis
+    // clamping only commutes with rotation at multiples of 90 degrees
+    // (code review finding).
+    const cornerDrop = { x: 96, y: 96 };
+    const canonical = unrotatePosition(cornerDrop, 45);
+    expect(canonical.x).toBeGreaterThan(96);
+  });
+});
+
+describe("stepRotation (issue #192)", () => {
+  it("steps clockwise by the fixed increment", () => {
+    expect(stepRotation(0, 1)).toBe(ROTATION_STEP_DEG);
+  });
+
+  it("steps counterclockwise by wrapping under 0", () => {
+    expect(stepRotation(0, -1)).toBe(360 - ROTATION_STEP_DEG);
+  });
+
+  it("wraps back to 0 once a full turn accumulates", () => {
+    expect(stepRotation(360 - ROTATION_STEP_DEG, 1)).toBe(0);
   });
 });
 

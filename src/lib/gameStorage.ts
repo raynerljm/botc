@@ -57,6 +57,31 @@ function upgradeV20Notes(game: unknown): unknown {
   };
 }
 
+// Same fixed-literal-target reasoning as NOTES_SECTIONS_SCHEMA_VERSION above,
+// one bump later: issue #192 added the required `rotation` field, moving
+// GAME_SCHEMA_VERSION from 21 to 22. Pinned so a later, unrelated bump can't
+// silently promote a v21 document past this one's own new field the same way
+// this migration chains past v20's.
+const ROTATION_SCHEMA_VERSION = 22;
+
+// Without this, upgradeV20Notes's own output (a v21 document) would be
+// dropped by the version filter below the moment GAME_SCHEMA_VERSION moved
+// to 22 for an unrelated reason (issue #192) — silently regressing the v20
+// notes migration above back to full data loss, since a v20 document would
+// no longer reach *any* schema version the filter still accepts. `rotation`
+// carries no storyteller-authored data, so (unlike notes) backfilling its
+// universal default is enough; nothing needs bespoke recovery here.
+function upgradeV21Rotation(game: unknown): unknown {
+  if (!isStoredGame(game) || game.schemaVersion !== NOTES_SECTIONS_SCHEMA_VERSION) {
+    return game;
+  }
+  return {
+    ...game,
+    schemaVersion: ROTATION_SCHEMA_VERSION,
+    rotation: typeof game.rotation === "number" ? game.rotation : 0,
+  };
+}
+
 function parseStore(raw: string | null): GamesStore {
   if (!raw) return EMPTY_STORE;
   try {
@@ -64,7 +89,7 @@ function parseStore(raw: string | null): GamesStore {
     if (!parsed || !Array.isArray(parsed.games)) return EMPTY_STORE;
     // Drop any game written by a different schema version rather than handing
     // back something the app can't render.
-    const games = parsed.games.map(upgradeV20Notes).filter(
+    const games = parsed.games.map(upgradeV20Notes).map(upgradeV21Rotation).filter(
       (game): game is GameDocument =>
         isStoredGame(game) && game.schemaVersion === GAME_SCHEMA_VERSION,
     );

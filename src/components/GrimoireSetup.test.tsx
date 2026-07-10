@@ -3947,3 +3947,14 @@ describe("the bottom sheet is phase-aware (issue #195)", () => {
     expect(screen.queryByLabelText("Nominator")).not.toBeInTheDocument();
   });
 });
+
+describe("rotating the grimoire circle (issue #192)", () => {
+  it("persists the rotation across a reload", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+
+    const reloaded = loadGame()!;
+    expect(reloaded.rotation).toBe(45);
+  });
+});
