@@ -20,6 +20,7 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
+  ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
   circlePosition,
   clampPct,
@@ -771,6 +772,9 @@ export function GrimoireBoard({
             // stand-in (issue #163).
             const isHiddenLunatic =
               player.isLunatic && character?.id !== LUNATIC_ID;
+            const actsAsCapable = character
+              ? ACTS_AS_CAPABLE_IDS.has(character.id)
+              : false;
             const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
@@ -837,7 +841,7 @@ export function GrimoireBoard({
                         Claims {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
                     )}
-                    {player.actsAs && (
+                    {actsAsCapable && player.actsAs && (
                       <span className={styles.claimBadge}>
                         Acts as {claimById.get(player.actsAs)?.name ?? player.actsAs}
                       </span>
@@ -953,36 +957,38 @@ export function GrimoireBoard({
                       />
                     </label>
 
-                    <label
-                      className={styles.field}
-                      htmlFor={`token-acts-as-${player.id}`}
-                    >
-                      Acts as
-                      <Select
-                        id={`token-acts-as-${player.id}`}
-                        className={styles.select}
-                        value={player.actsAs ?? ""}
-                        onChange={(next) => onSetActsAs(player.id, next || null)}
-                        entries={[
-                          { value: "", label: "Not acting as anyone" },
-                          // Same "keep an orphaned value selectable/visible"
-                          // safeguard as the Claim select above — an actsAs
-                          // target recorded before the script last changed
-                          // can reference a character no longer in
-                          // claimOptions (Copilot review finding).
-                          ...(player.actsAs && !claimById.has(player.actsAs)
-                            ? [{ value: player.actsAs, label: player.actsAs }]
-                            : []),
-                          ...claimGroups.map((group) => ({
-                            label: teamNames[group.team],
-                            options: group.characters.map((c) => ({
-                              value: c.id,
-                              label: c.name,
+                    {actsAsCapable && (
+                      <label
+                        className={styles.field}
+                        htmlFor={`token-acts-as-${player.id}`}
+                      >
+                        Acts as
+                        <Select
+                          id={`token-acts-as-${player.id}`}
+                          className={styles.select}
+                          value={player.actsAs ?? ""}
+                          onChange={(next) => onSetActsAs(player.id, next || null)}
+                          entries={[
+                            { value: "", label: "Not acting as anyone" },
+                            // Same "keep an orphaned value selectable/visible"
+                            // safeguard as the Claim select above — an actsAs
+                            // target recorded before the script last changed
+                            // can reference a character no longer in
+                            // claimOptions (Copilot review finding).
+                            ...(player.actsAs && !claimById.has(player.actsAs)
+                              ? [{ value: player.actsAs, label: player.actsAs }]
+                              : []),
+                            ...claimGroups.map((group) => ({
+                              label: teamNames[group.team],
+                              options: group.characters.map((c) => ({
+                                value: c.id,
+                                label: c.name,
+                              })),
                             })),
-                          })),
-                        ]}
-                      />
-                    </label>
+                          ]}
+                        />
+                      </label>
+                    )}
 
                     {character && (
                       <details className={styles.detail}>

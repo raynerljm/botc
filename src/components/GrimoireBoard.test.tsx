@@ -44,6 +44,9 @@ function makePlayer(overrides: Partial<Player> = {}): Player {
 const characterById = new Map([
   ["washerwoman", getCharacter("washerwoman")!],
   ["imp", getCharacter("imp")!],
+  ["philosopher", getCharacter("philosopher")!],
+  ["alchemist", getCharacter("alchemist")!],
+  ["boffin", getCharacter("boffin")!],
 ]);
 
 // Deliberately distinct from the "washerwoman"/"imp" characters used as
@@ -550,7 +553,7 @@ describe("claims", () => {
 describe("acts-as (issue #17)", () => {
   it("sets a player's acts-as target from their token menu", async () => {
     const user = userEvent.setup();
-    const handlers = renderBoard([makePlayer()]);
+    const handlers = renderBoard([makePlayer({ characterId: "philosopher" })]);
 
     await user.click(screen.getByText("Alice"));
     await selectOption(user, screen.getByLabelText(/acts as/i), "librarian");
@@ -560,7 +563,9 @@ describe("acts-as (issue #17)", () => {
 
   it("clears an acts-as target back to none", async () => {
     const user = userEvent.setup();
-    const handlers = renderBoard([makePlayer({ actsAs: "librarian" })]);
+    const handlers = renderBoard([
+      makePlayer({ characterId: "philosopher", actsAs: "librarian" }),
+    ]);
 
     await user.click(screen.getByText("Alice"));
     await selectOption(user, screen.getByLabelText(/acts as/i), "");
@@ -569,7 +574,9 @@ describe("acts-as (issue #17)", () => {
   });
 
   it("renders a small acts-as badge by the token", () => {
-    const { container } = renderBoard([makePlayer({ actsAs: "librarian" })]);
+    const { container } = renderBoard([
+      makePlayer({ characterId: "philosopher", actsAs: "librarian" }),
+    ]);
 
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
@@ -578,7 +585,9 @@ describe("acts-as (issue #17)", () => {
   });
 
   it("shows no acts-as badge when the player has no acts-as target", () => {
-    const { container } = renderBoard([makePlayer({ actsAs: null })]);
+    const { container } = renderBoard([
+      makePlayer({ characterId: "philosopher", actsAs: null }),
+    ]);
 
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
@@ -588,7 +597,7 @@ describe("acts-as (issue #17)", () => {
 
   it("keeps an acts-as target visible instead of silently resetting to 'Not acting as anyone' when it isn't in claimOptions (Copilot review finding)", async () => {
     const user = userEvent.setup();
-    renderBoard([makePlayer({ actsAs: "poisoner" })]);
+    renderBoard([makePlayer({ characterId: "philosopher", actsAs: "poisoner" })]);
 
     await user.click(screen.getByText("Alice"));
     const select = screen.getByLabelText(/acts as/i);
@@ -596,6 +605,38 @@ describe("acts-as (issue #17)", () => {
     expect(select.dataset.value).toBe("poisoner");
     const options = await getSelectOptions(user, select);
     expect(options.map((o) => o.value)).toContain("poisoner");
+  });
+
+  it.each(["philosopher", "alchemist", "boffin"])(
+    "offers the acts-as picker for %s",
+    async (characterId) => {
+      const user = userEvent.setup();
+      renderBoard([makePlayer({ characterId })]);
+
+      await user.click(screen.getByText("Alice"));
+
+      expect(screen.getByLabelText(/acts as/i)).toBeInTheDocument();
+    },
+  );
+
+  it("does not offer the acts-as picker for a character other than Philosopher, Alchemist, or Boffin (issue #187)", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ characterId: "washerwoman" })]);
+
+    await user.click(screen.getByText("Alice"));
+
+    expect(screen.queryByLabelText(/acts as/i)).not.toBeInTheDocument();
+  });
+
+  it("does not render the acts-as badge for a character other than Philosopher, Alchemist, or Boffin, even with a stale acts-as target (issue #187)", () => {
+    const { container } = renderBoard([
+      makePlayer({ characterId: "washerwoman", actsAs: "librarian" }),
+    ]);
+
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    expect(within(summary).queryByText(/acts as/i)).not.toBeInTheDocument();
   });
 });
 

@@ -446,6 +446,15 @@ export const DRUNK_ID = "drunk";
 // Same mechanic as DRUNK_ID, for the Lunatic's Demon stand-in (issue #163).
 export const LUNATIC_ID = "lunatic";
 
+// Characters that canonically resolve another character's ability
+// (CONTEXT.md: Acts as), and so are the only ones offered the "Acts as"
+// picker/badge — everyone else's token never shows it (issue #187).
+export const ACTS_AS_CAPABLE_IDS: ReadonlySet<string> = new Set([
+  "philosopher",
+  "alchemist",
+  "boffin",
+]);
+
 // Every character id currently held by a seated player — the "who holds
 // what" set several pickers filter against (GrimoireBoard's reminder
 // picker, the setup walkthrough's stand-in reassignment) so it's computed
