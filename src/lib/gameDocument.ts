@@ -31,7 +31,10 @@ import { normalizeCharacterId } from "./scriptParser";
 // extra key. Bumping here would only cost every storyteller with a game in
 // progress their one and only saved copy (ADR 0001: client-only, single
 // document, no server backup) for no compatibility gain.
-export const GAME_SCHEMA_VERSION = 17;
+//
+// Bumped again for issue #190 (GameDocument gained the required `dayTimer`
+// field).
+export const GAME_SCHEMA_VERSION = 18;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -160,6 +163,28 @@ export type EndedNightSnapshot = Pick<
   GameDocument,
   "nightChecked" | "nightUnskipped" | "nominations"
 >;
+
+export type DayTimerStatus = "idle" | "running" | "paused";
+
+// The daytime discussion countdown (CONTEXT.md doesn't name this yet; issue
+// #190). A running timer stores an absolute end time rather than a ticking
+// remaining-time counter, so a reload or device sleep mid-count re-derives
+// the true remaining time from wall-clock time instead of resuming from a
+// value that drifted while nothing was updating it.
+export interface DayTimer {
+  status: DayTimerStatus;
+  // Set only while status is "running" — the wall-clock instant the
+  // countdown reaches zero.
+  endAt: string | null;
+  // The frozen remaining time while paused or idle; meaningless while
+  // running, where remaining time is derived from endAt instead (see
+  // lib/dayTimer.ts).
+  remainingMs: number;
+}
+
+export function createDayTimer(): DayTimer {
+  return { status: "idle", endAt: null, remainingMs: 0 };
+}
 
 export interface Player {
   id: string;
@@ -301,6 +326,10 @@ export interface GameDocument {
   // deliberately reclaims the circle's width.
   nightListCollapsed: boolean;
   dayPhaseCollapsed: boolean;
+  // The daytime discussion countdown (issue #190), persisted so a reload or
+  // device sleep mid-count restores the correct remaining time rather than
+  // losing or drifting it.
+  dayTimer: DayTimer;
 }
 
 // The circle layout every seat without a dragged position renders at —
@@ -783,6 +812,7 @@ export function createGame({
     endGamePanelCollapsed: null,
     nightListCollapsed: false,
     dayPhaseCollapsed: false,
+    dayTimer: createDayTimer(),
   };
 }
 

@@ -16,6 +16,7 @@ import type { GameDocument, Nomination, Player } from "@/lib/gameDocument";
 
 import { Checkbox } from "./Checkbox";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { DayTimer } from "./DayTimer";
 import styles from "./DayPhase.module.css";
 import { Select, type SelectEntry } from "./Select";
 
@@ -155,6 +156,12 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
 
   return (
     <section className={styles.panel} aria-label="Day phase">
+      {/* Outside CollapsibleSection, like the block-holder status below —
+          a glanceable storyteller aid (issue #190) that must stay visible
+          even while the storyteller has collapsed the panel to reclaim
+          circle width (issue #168). */}
+      <DayTimer game={game} onChange={onChange} />
+
       <CollapsibleSection
         title={`Day ${day}`}
         collapsed={game.dayPhaseCollapsed}
