@@ -497,32 +497,51 @@ export function withRestoredReminder(
 // Deterministic id for a seat's automatically-placed "Drunk" reminder (issue
 // #186) — the same id every time a stand-in lands on this seat, so a
 // re-assignment (GrimoireSetup's chooseToken/assignManually) replaces it
-// outright instead of stacking a duplicate, and swapCharacter knows exactly
-// which reminder to drop once the disguise ends.
+// outright instead of stacking a duplicate.
 export function drunkStandInReminderId(playerId: string): string {
   return `drunkstandin:${playerId}`;
+}
+
+// Whether `reminders` already carries a Drunk-disguise reminder anchored to
+// this seat — matched by anchor + characterId, not the exact id, so a
+// reminder placed under the pre-#186 walkthrough id scheme
+// (setupwalkthrough:<stepId>:<index>) still counts. The single predicate
+// both withBackfilledDrunkReminders (add if absent) and
+// withoutDrunkStandInReminder (remove if present, GrimoireSetup.tsx) key off,
+// so a legacy-id'd reminder that backfill treats as "already there" is the
+// same one removal treats as "there to remove" (code review finding: the two
+// used to disagree, leaving a legacy reminder stale after a reveal/swap).
+function isDrunkStandInReminder(
+  reminder: ReminderToken,
+  playerId: string,
+): boolean {
+  return reminder.anchorPlayerId === playerId && reminder.characterId === DRUNK_ID;
+}
+
+export function withoutDrunkStandInReminder(
+  reminders: ReminderToken[],
+  playerId: string,
+): ReminderToken[] {
+  return reminders.filter((r) => !isDrunkStandInReminder(r, playerId));
 }
 
 // Repairs a game document that predates issue #186 (or any state where a
 // Drunk seat's reminder never got created by the new automatic-placement
 // code — e.g. a pre-#186 game whose reminder still carries the old
 // walkthrough-placed id). Every seat with isDrunk still true gets its
-// "Drunk" reminder backfilled if it doesn't already carry one (matched by
-// anchor + characterId, not the exact id, so a legacy differently-id'd
-// reminder still counts and isn't duplicated) — otherwise such a seat would
-// show no trace of the disguise at all, now that the inline "(actually the
-// Drunk)" copy is gone too. Called once at load (GrimoireSetup's initial
-// state, mirroring resumeDrawSession above), not on every update, so a
-// storyteller's later deliberate removal of the reminder is never fought.
+// "Drunk" reminder backfilled if it doesn't already carry one — otherwise
+// such a seat would show no trace of the disguise at all, now that the
+// inline "(actually the Drunk)" copy is gone too. Called once at load
+// (GrimoireSetup's initial state, mirroring resumeDrawSession above), not on
+// every update, so a storyteller's later deliberate removal of the reminder
+// is never fought.
 export function withBackfilledDrunkReminders(
   reminders: ReminderToken[],
   players: Player[],
 ): ReminderToken[] {
-  const hasDrunkReminder = (playerId: string) =>
-    reminders.some(
-      (r) => r.anchorPlayerId === playerId && r.characterId === DRUNK_ID,
-    );
-  const missing = players.filter((p) => p.isDrunk && !hasDrunkReminder(p.id));
+  const missing = players.filter(
+    (p) => p.isDrunk && !reminders.some((r) => isDrunkStandInReminder(r, p.id)),
+  );
   if (missing.length === 0) return reminders;
   return [
     ...reminders,

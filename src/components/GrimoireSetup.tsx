@@ -22,6 +22,7 @@ import {
   resumeDrawSession,
   shuffleTokens,
   withBackfilledDrunkReminders,
+  withoutDrunkStandInReminder,
   withRestoredReminder,
   type Alignment,
   type BagToken,
@@ -267,14 +268,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       isDrunk: token.isDrunkStandIn,
       isLunatic: token.isLunaticStandIn,
     };
-  }
-
-  function withoutDrunkStandInReminder(
-    reminders: ReminderToken[],
-    playerId: string,
-  ): ReminderToken[] {
-    const id = drunkStandInReminderId(playerId);
-    return reminders.filter((r) => r.id !== id);
   }
 
   // Issue #186: a Drunk stand-in used to be flagged with "(actually the

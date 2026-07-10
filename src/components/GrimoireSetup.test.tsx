@@ -2860,6 +2860,53 @@ describe("automatic Drunk reminder token (issue #186)", () => {
       within(circle).queryByText(/actually the Drunk/i),
     ).not.toBeInTheDocument();
   });
+
+  // Copilot review finding on this PR: withoutDrunkStandInReminder used to
+  // match only the new drunkstandin:<playerId> id, so a legacy
+  // walkthrough-placed reminder — the exact one withBackfilledDrunkReminders
+  // recognizes as "already there" and leaves alone — was never removed by
+  // Reveal Drunk/swapCharacter, leaving it stale forever.
+  it("removes a legacy walkthrough-placed reminder (not just the new drunkstandin id) on Reveal Drunk", async () => {
+    const washerwoman = getCharacter("washerwoman")!;
+    const base = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 1,
+      selectedCharacters: [getCharacter("drunk")!],
+      standIn: washerwoman,
+      extraCopies: {},
+    });
+    const playerId = base.players[0].id;
+    const legacyGame: GameDocument = {
+      ...base,
+      players: base.players.map((p) => ({
+        ...p,
+        characterId: "washerwoman",
+        startingCharacterId: "washerwoman",
+        isDrunk: true,
+      })),
+      reminders: [
+        {
+          id: `setupwalkthrough:${playerId}:0`,
+          characterId: "drunk",
+          label: "Drunk",
+          position: { x: 10, y: 20 },
+          anchorPlayerId: playerId,
+        },
+      ],
+    };
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={legacyGame} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const wrap = circle.querySelector("[data-player-id]") as HTMLElement;
+    await user.click(within(wrap).getByText("Player 1"));
+    await user.click(
+      within(wrap).getByRole("button", { name: /reveal drunk/i }),
+    );
+
+    expect(loadGame()!.reminders).toHaveLength(0);
+  });
 });
 
 describe("board layout order (issue #58)", () => {
