@@ -256,6 +256,55 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
     // seat number changes.
     expect(result.find((p) => p.id === "p2")!.position).toEqual({ x: 95, y: 50 });
   });
+
+  it("lets any seat become the new seat 1, not just whichever one already sits there untouched (code review finding)", () => {
+    const players = fourSeatedPlayers();
+
+    // Drag seat 3 (bottom) to just clockwise of its own old spot — nowhere
+    // near seat 1 (top), which never moves.
+    const result = reorderSeatsAfterMove(players, "p3", { x: 48, y: 94 });
+
+    expect(result.find((p) => p.id === "p3")!.seat).toBe(1);
+    // Seat 1 (top, untouched) no longer has an unbeatable claim on being
+    // first — it's pushed back by the reorder like any other seat.
+    expect(result.find((p) => p.id === "p1")!.seat).not.toBe(1);
+    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("takes over a seat's exact spot instead of silently no-op'ing when dropped precisely onto it (code review finding)", () => {
+    const players = fourSeatedPlayers();
+
+    // Drag seat 2 (right) to land exactly on seat 1's (top) position.
+    const result = reorderSeatsAfterMove(players, "p2", circlePosition(0, 4));
+
+    // p2 takes the earlier spot — this must be an actual reorder, not a
+    // no-op that leaves both seats exactly where they started.
+    expect(result.find((p) => p.id === "p2")!.seat).toBeLessThan(
+      result.find((p) => p.id === "p1")!.seat,
+    );
+    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("clamps an out-of-range stored position the same way GrimoireBoard's own render loop does, so seat order matches what's actually rendered (issue #167 class bug)", () => {
+    const moved = { x: 60, y: 40 };
+    const outOfRange = [
+      makePlayer({ id: "p1", seat: 1 }),
+      makePlayer({ id: "p2", seat: 2, position: { x: 150, y: 5 } }),
+      makePlayer({ id: "p3", seat: 3 }),
+    ];
+    const clamped = [
+      makePlayer({ id: "p1", seat: 1 }),
+      makePlayer({ id: "p2", seat: 2, position: { x: 96, y: 5 } }),
+      makePlayer({ id: "p3", seat: 3 }),
+    ];
+
+    const outOfRangeResult = reorderSeatsAfterMove(outOfRange, "p1", moved);
+    const clampedResult = reorderSeatsAfterMove(clamped, "p1", moved);
+
+    expect(outOfRangeResult.map((p) => ({ id: p.id, seat: p.seat }))).toEqual(
+      clampedResult.map((p) => ({ id: p.id, seat: p.seat })),
+    );
+  });
 });
 
 describe("nextPadReminderPosition (issue #71)", () => {
