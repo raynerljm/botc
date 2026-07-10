@@ -122,13 +122,33 @@ export function canRecordVote(voter: Player, isExile: boolean): boolean {
   return !voter.ghostVoteSpent;
 }
 
+// The dead voters an execution nomination's lock-in spends a ghost vote for
+// (issue #191: ghost votes are spent at lock-in, not as votes are toggled
+// while the nomination is still open). An exile never spends one
+// (CONTEXT.md: Exile "ghost votes are not spent on it"), so it always
+// yields none. A living voter is never in `votes` costing a ghost vote in
+// the first place, but filtering by `dead` here keeps this the single
+// source of truth rather than trusting callers to pre-filter.
+export function ghostVoteSpendersOnLockIn(
+  nomination: Nomination,
+  players: Player[],
+): string[] {
+  if (nomination.isExile) return [];
+  const deadIds = new Set(
+    players.filter((player) => player.dead).map((player) => player.id),
+  );
+  return nomination.votes.filter((playerId) => deadIds.has(playerId));
+}
+
 // Whether a dead player's ghost vote is already accounted for by some
-// *other* execution nomination recorded today. Un-checking a vote restores
-// `ghostVoteSpent` only when this really was the nomination that spent it —
-// not when an earlier (now-closed) nomination still holds their one vote
-// for the day, which would otherwise wrongly refund it. An exile vote never
-// counts here either way (CONTEXT.md: Exile "ghost votes are not spent on
-// it").
+// *other* locked-in execution nomination recorded today. Reopening a
+// nomination restores `ghostVoteSpent` only when this really was the
+// nomination that spent it — not when a different, still-locked nomination
+// today already holds their one vote for the day, which would otherwise
+// wrongly refund it. Only locked-in nominations count: an open nomination's
+// votes are just a live tally-in-progress and haven't spent anything yet
+// (issue #191). An exile vote never counts here either way (CONTEXT.md:
+// Exile "ghost votes are not spent on it").
 export function hasSpentGhostVoteElsewhereToday(
   nominations: Nomination[],
   playerId: string,
@@ -136,7 +156,9 @@ export function hasSpentGhostVoteElsewhereToday(
 ): boolean {
   return executionNominations(nominations).some(
     (nomination) =>
-      nomination.id !== currentNominationId && nomination.votes.includes(playerId),
+      nomination.id !== currentNominationId &&
+      nomination.lockedIn &&
+      nomination.votes.includes(playerId),
   );
 }
 

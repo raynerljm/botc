@@ -191,3 +191,21 @@
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+.lockIn {
+  composes: submit;
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+
+.reopen {
+  min-height: 2.75rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface-raised);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
