@@ -10,7 +10,7 @@ export interface CollapsibleSectionProps {
 }
 
 // Shared disclosure header for the board's secondary panels (Demon bluffs,
-// Claims, Game) — issue #79: their content used to always render, pushing
+// Game) — issue #79: their content used to always render, pushing
 // mid-game controls several screen-heights below the board. The heading
 // stays visible collapsed or not, so the panel is still scannable at a
 // glance; only the body underneath is hidden.

@@ -39,7 +39,6 @@ import { actsAsEntryId, charEntryId, currentNightNumber } from "@/lib/nightList"
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
-import { ClaimsList } from "./ClaimsList";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DayPhase } from "./DayPhase";
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
@@ -160,8 +159,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     [game.players, game.characterPool],
   );
 
-  // Claims (and Demon bluffs) aren't limited to in-play characters, so they
-  // resolve names from the script's full pool rather than characterById.
+  // "Acts as" targets aren't limited to in-play characters, so they resolve
+  // names from the script's full pool rather than characterById.
   const scriptCharacterById = useMemo(
     () => new Map(game.scriptCharacters.map((c) => [c.id, c] as const)),
     [game.scriptCharacters],
@@ -210,8 +209,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // scriptCharacters, not characterPool: characterPool only holds what's
   // already selected/built (gameDocument.ts), so a homebrew script's own
   // traveller — never in the vendored dataset — would otherwise be
-  // unreachable in a 0-traveller game exactly like the "Claims" pool a few
-  // lines up, this needs the "not in play yet" universe, not the in-play one.
+  // unreachable in a 0-traveller game; this needs the "not in play yet"
+  // universe, not the in-play one.
   const travellerAddOptions = useMemo(
     () => characterPickerPool(game.scriptCharacters, "traveller"),
     [game.scriptCharacters],
@@ -1436,16 +1435,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               to Demon" overlay) that unmounting would silently discard. Also
               hidden while a draw is obscured, same reasoning as the circle
               above. */}
-          <div hidden={showWalkthrough || screenObscured}>
-            <DemonBluffsPanel game={game} onChange={update} />
-            <ClaimsList
-              players={game.players}
-              claimOptions={game.scriptCharacters}
-              collapsed={game.claimsCollapsed}
-              onToggleCollapsed={(collapsed) => update({ ...game, claimsCollapsed: collapsed })}
-              onSetClaim={setClaim}
-            />
-          </div>
+          <DemonBluffsPanel
+            game={game}
+            onChange={update}
+            hidden={showWalkthrough || screenObscured}
+          />
           {showWalkthrough && (
             <SetupWalkthrough
               steps={walkthroughSteps}

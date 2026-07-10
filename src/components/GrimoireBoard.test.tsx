@@ -6,7 +6,6 @@ import { getCharacter } from "@/lib/characters";
 import type { Player, ReminderToken } from "@/lib/gameDocument";
 import { getSelectOptions, openListbox, selectOption } from "@/testUtils/selectOption";
 
-import { ClaimsList } from "./ClaimsList";
 import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireBoard.module.css";
 
@@ -519,6 +518,33 @@ describe("claims", () => {
     renderBoard([makePlayer({ claim: null })]);
 
     expect(screen.queryByText(/claims/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps a claim visible instead of silently resetting to 'No claim' when it isn't in claimOptions", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ claim: "poisoner" })]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/^claim$/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
+  });
+
+  it("scopes the claim select to exactly 'No claim' plus every claimOptions character, grouped by team", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/^claim$/i);
+
+    expect(await getSelectOptions(user, select)).toEqual([
+      { value: "", label: "No claim" },
+      { value: "librarian", label: claimOptions[0].name },
+      { value: "monk", label: claimOptions[1].name },
+      { value: "recluse", label: claimOptions[2].name },
+    ]);
   });
 });
 
@@ -2042,53 +2068,5 @@ describe("board sizing (issue #78)", () => {
 
     expect(board.style.width).toBe("604px");
     expect(board.style.height).toBe("604px");
-  });
-});
-
-describe("claim option parity with the Claims panel (issue #75)", () => {
-  it("offers the token menu's claim select the exact same options as the Claims panel select, given the same script", async () => {
-    const user = userEvent.setup();
-    renderBoard([makePlayer()]);
-    await user.click(screen.getByText("Alice"));
-    const boardSelect = screen.getByLabelText(/^claim$/i);
-
-    const { container: panelContainer } = render(
-      <ClaimsList
-        players={[makePlayer()]}
-        claimOptions={claimOptions}
-        collapsed={false}
-        onToggleCollapsed={vi.fn()}
-        onSetClaim={vi.fn()}
-      />,
-    );
-    const panelSelect = within(panelContainer).getByRole("combobox");
-
-    expect(await getSelectOptions(user, panelSelect)).toEqual(
-      await getSelectOptions(user, boardSelect),
-    );
-  });
-
-  it("both selects render the same orphaned-claim fallback option when the stored claim isn't in claimOptions", async () => {
-    const user = userEvent.setup();
-    renderBoard([makePlayer({ claim: "poisoner" })]);
-    await user.click(screen.getByText("Alice"));
-    const boardSelect = screen.getByLabelText(/^claim$/i);
-
-    const { container: panelContainer } = render(
-      <ClaimsList
-        players={[makePlayer({ claim: "poisoner" })]}
-        claimOptions={claimOptions}
-        collapsed={false}
-        onToggleCollapsed={vi.fn()}
-        onSetClaim={vi.fn()}
-      />,
-    );
-    const panelSelect = within(panelContainer).getByRole("combobox");
-
-    expect(boardSelect.dataset.value).toBe("poisoner");
-    expect(panelSelect.dataset.value).toBe("poisoner");
-    expect(await getSelectOptions(user, panelSelect)).toEqual(
-      await getSelectOptions(user, boardSelect),
-    );
   });
 });

@@ -15,13 +15,19 @@ import { useDialogDismiss } from "./useDialogDismiss";
 export interface DemonBluffsPanelProps {
   game: GameDocument;
   onChange: (next: GameDocument) => void;
+  // Only DemonBluffsPanel (the board-mounted wrapper) uses this — the same
+  // toggle threaded through to a plain `hidden` attribute on its root
+  // `<section>` in place of a wrapper `<div>` in the caller. DemonBluffsFields
+  // (the other consumer of this props type, for the setup walkthrough) has
+  // no root element of its own to hide, so it just ignores the field.
+  hidden?: boolean;
 }
 
 const GOOD_TEAMS = new Set<Character["team"]>(["townsfolk", "outsider"]);
 
-export function DemonBluffsPanel({ game, onChange }: DemonBluffsPanelProps) {
+export function DemonBluffsPanel({ game, onChange, hidden }: DemonBluffsPanelProps) {
   return (
-    <section className={styles.panel} aria-label="Demon bluffs">
+    <section className={styles.panel} aria-label="Demon bluffs" hidden={hidden}>
       <CollapsibleSection
         title="Demon bluffs"
         collapsed={game.demonBluffsCollapsed}

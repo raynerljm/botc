@@ -200,9 +200,9 @@
   color: var(--muted);
   /* An unbroken name (no spaces to wrap on) used to render as one line
      however wide it needed to be, cutting across the circle and painting
-     over neighbouring tokens/labels and the Claims panel. Clamping to two
-     lines with an ellipsis bounds both width and height so it can never
-     grow past its own row, regardless of wrap points. */
+     over neighbouring tokens/labels. Clamping to two lines with an
+     ellipsis bounds both width and height so it can never grow past its
+     own row, regardless of wrap points. */
   max-width: 6rem;
   overflow: hidden;
   overflow-wrap: anywhere;
