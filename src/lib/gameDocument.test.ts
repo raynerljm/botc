@@ -305,6 +305,14 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
       clampedResult.map((p) => ({ id: p.id, seat: p.seat })),
     );
   });
+
+  it("clamps an out-of-range drop position too, not just other players' stored positions (Copilot review finding)", () => {
+    const players = fourSeatedPlayers();
+
+    const result = reorderSeatsAfterMove(players, "p1", { x: 150, y: 8 });
+
+    expect(result.find((p) => p.id === "p1")!.position).toEqual({ x: 96, y: 8 });
+  });
 });
 
 describe("nextPadReminderPosition (issue #71)", () => {

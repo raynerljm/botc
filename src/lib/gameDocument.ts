@@ -797,6 +797,10 @@ export function reorderSeatsAfterMove(
   const total = bySeat.length;
   const movedIndex = bySeat.findIndex((p) => p.id === movedPlayerId);
   if (movedIndex === -1) return players;
+  // Clamped up front so a caller passing an out-of-range drop position can't
+  // sort or persist by a different point than GrimoireBoard's render loop
+  // would actually clamp it to (code review finding).
+  const clampedPosition = { x: clampPct(position.x), y: clampPct(position.y) };
 
   // A stored position isn't guaranteed to be within clampPct's [4,96] range
   // (a hand-edited or pre-#167 exported document) — clamped the same way
@@ -829,7 +833,7 @@ export function reorderSeatsAfterMove(
   const withAngle = bySeat.map((player, index) => ({
     player,
     angle: clockwiseAngleFromCut(
-      player.id === movedPlayerId ? position : liveSeatPosition(player, index),
+      player.id === movedPlayerId ? clampedPosition : liveSeatPosition(player, index),
     ),
   }));
   withAngle.sort((a, b) => {
@@ -848,7 +852,7 @@ export function reorderSeatsAfterMove(
   const seatById = new Map(withAngle.map((entry, index) => [entry.player.id, index + 1]));
   return players.map((player) =>
     player.id === movedPlayerId
-      ? { ...player, position, seat: seatById.get(player.id)! }
+      ? { ...player, position: clampedPosition, seat: seatById.get(player.id)! }
       : { ...player, seat: seatById.get(player.id)! },
   );
 }
