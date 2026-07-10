@@ -3540,3 +3540,14 @@ describe("collapsing the Night List/Day Phase side panels reclaims circle width 
     expect(reloaded.dayPhaseCollapsed).toBe(true);
   });
 });
+
+describe("rotating the grimoire circle (issue #192)", () => {
+  it("persists the rotation across a reload", async () => {
+    const { user } = await completeSetup();
+
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+
+    const reloaded = loadGame()!;
+    expect(reloaded.rotation).toBe(45);
+  });
+});

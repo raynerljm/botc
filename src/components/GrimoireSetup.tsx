@@ -343,6 +343,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     });
   }
 
+  function rotate(rotation: number) {
+    update({ ...game, rotation });
+  }
+
   function toggleDead(playerId: string) {
     const player = game.players.find((p) => p.id === playerId);
     if (!player) return;
@@ -1395,6 +1399,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onRenameCommit={commitPlayerName}
                 onMove={movePlayer}
                 onReCircle={reCircle}
+                rotation={game.rotation}
+                onRotate={rotate}
                 onToggleDead={toggleDead}
                 onToggleGhostVote={toggleGhostVote}
                 onAddReminder={addReminder}
