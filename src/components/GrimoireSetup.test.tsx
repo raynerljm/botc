@@ -2572,6 +2572,54 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
   });
 });
 
+describe("seat reordering by drag (issue #188)", () => {
+  function mockBoardRect(circle: HTMLElement) {
+    const board = circle.querySelector("[data-board]") as HTMLElement;
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, width: 400, height: 400, right: 400, bottom: 400, x: 0, y: 0,
+      toJSON() {},
+    });
+  }
+
+  it("renumbers every seat to match the new clockwise order once a dragged token is dropped, with no 'Move seat' buttons left to do it by hand", async () => {
+    const { user, circle } = await completeSetup(4, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+      getCharacter("monk")!,
+    ]);
+    mockBoardRect(circle);
+
+    const wraps = circle.querySelectorAll("[data-player-id]");
+    const seat1Wrap = wraps[0] as HTMLElement; // top
+    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!; // right
+    const seat1Id = seat1Wrap.dataset.playerId!;
+    const seat3Id = (wraps[2] as HTMLElement).dataset.playerId!; // bottom
+    const seat4Id = (wraps[3] as HTMLElement).dataset.playerId!; // left
+
+    // Drag seat 1 (top, 50%/5%) clockwise past seat 2 (right, 95%/50%) to
+    // land between it and seat 3 (bottom, 50%/95%), i.e. 72.5%/72.5%.
+    const summary = seat1Wrap.querySelector("summary") as HTMLElement;
+    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
+    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 190, clientY: 370 }));
+    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 190, clientY: 370 }));
+
+    const reloaded = loadGame() as GameDocument;
+    const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
+    expect(seatById.get(seat2Id)).toBe(1);
+    expect(seatById.get(seat1Id)).toBe(2);
+    expect(seatById.get(seat3Id)).toBe(3);
+    expect(seatById.get(seat4Id)).toBe(4);
+    // Contiguous and unique.
+    expect([...seatById.values()].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    expect(
+      within(seat1Wrap).queryByRole("button", { name: /move seat/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("reminder tokens (issue #14)", () => {
   async function completedBoard(user: ReturnType<typeof userEvent.setup>) {
     render(<GrimoireSetup game={makeGame({ playerCount: 2 })} />);

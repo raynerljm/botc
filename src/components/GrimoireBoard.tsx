@@ -60,7 +60,6 @@ export interface GrimoireBoardProps {
   onRenameCommit: (playerId: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
-  onReorderSeat: (playerId: string, direction: "earlier" | "later") => void;
   onToggleDead: (playerId: string) => void;
   onToggleGhostVote: (playerId: string) => void;
   onAddReminder: (input: {
@@ -186,7 +185,6 @@ export function GrimoireBoard({
   onRenameCommit,
   onMove,
   onReCircle,
-  onReorderSeat,
   onToggleDead,
   onToggleGhostVote,
   onAddReminder,
@@ -985,25 +983,6 @@ export function GrimoireBoard({
                         ]}
                       />
                     </label>
-
-                    <div className={styles.seatControls}>
-                      <button
-                        type="button"
-                        className={styles.menuButton}
-                        disabled={index === 0}
-                        onClick={() => onReorderSeat(player.id, "earlier")}
-                      >
-                        Move seat earlier
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.menuButton}
-                        disabled={index === total - 1}
-                        onClick={() => onReorderSeat(player.id, "later")}
-                      >
-                        Move seat later
-                      </button>
-                    </div>
 
                     {character && (
                       <details className={styles.detail}>

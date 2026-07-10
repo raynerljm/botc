@@ -786,6 +786,83 @@ export function createGame({
   };
 }
 
+// Dragging a token is the single reorder gesture (issue #188) — where it
+// lands determines the new seat order, replacing the old dedicated "move
+// seat earlier/later" buttons. Every other seat keeps its own live position
+// (its own drag, or its computed circle slot under its *old* seat number);
+// only the moved seat's position changes. Sorting everyone's live position
+// by clockwise angle relabels seats 1..N in that order, so a drop that
+// doesn't cross anyone reproduces the same numbers and one that lands
+// between two seats slots in between them.
+export function reorderSeatsAfterMove(
+  players: Player[],
+  movedPlayerId: string,
+  position: PlayerPosition,
+): Player[] {
+  const bySeat = [...players].sort((a, b) => a.seat - b.seat);
+  const total = bySeat.length;
+  const movedIndex = bySeat.findIndex((p) => p.id === movedPlayerId);
+  if (movedIndex === -1) return players;
+  // Clamped up front so a caller passing an out-of-range drop position can't
+  // sort or persist by a different point than GrimoireBoard's render loop
+  // would actually clamp it to (code review finding).
+  const clampedPosition = { x: clampPct(position.x), y: clampPct(position.y) };
+
+  // A stored position isn't guaranteed to be within clampPct's [4,96] range
+  // (a hand-edited or pre-#167 exported document) — clamped the same way
+  // GrimoireBoard's own render loop clamps one, so this never sorts by a
+  // different position than what's actually on screen (code review finding).
+  function liveSeatPosition(player: Player, index: number): PlayerPosition {
+    return player.position
+      ? { x: clampPct(player.position.x), y: clampPct(player.position.y) }
+      : circlePosition(index, total);
+  }
+
+  function rawAngle(pos: PlayerPosition): number {
+    return Math.atan2(pos.y - 50, pos.x - 50);
+  }
+
+  // The sort below needs one fixed point on the circle to call "0" so the
+  // circular order can become a line — anchoring that cut to a fixed screen
+  // point (e.g. the top) means whichever seat already sits there can never
+  // be overtaken, since nothing can sort below the sort's own minimum (code
+  // review finding). Anchoring it instead to the *moved* seat's own vacated
+  // spot means the one point guaranteed empty after the move is the cut, so
+  // the moved seat is always free to land anywhere in the new order,
+  // including first or last.
+  const cut = rawAngle(liveSeatPosition(bySeat[movedIndex], movedIndex));
+  function clockwiseAngleFromCut(pos: PlayerPosition): number {
+    const raw = rawAngle(pos) - cut;
+    return ((raw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  }
+
+  const withAngle = bySeat.map((player, index) => ({
+    player,
+    angle: clockwiseAngleFromCut(
+      player.id === movedPlayerId ? clampedPosition : liveSeatPosition(player, index),
+    ),
+  }));
+  withAngle.sort((a, b) => {
+    const diff = a.angle - b.angle;
+    if (diff !== 0) return diff;
+    // An exact tie (dropped precisely on another seat's position) reads as
+    // "take that seat's spot" rather than a no-op that leaves both parties
+    // exactly where they already were (code review finding) — every other
+    // tie (e.g. two untouched seats coincidentally sharing an angle) falls
+    // back to the existing seat order.
+    if (a.player.id === movedPlayerId) return -1;
+    if (b.player.id === movedPlayerId) return 1;
+    return a.player.seat - b.player.seat;
+  });
+
+  const seatById = new Map(withAngle.map((entry, index) => [entry.player.id, index + 1]));
+  return players.map((player) =>
+    player.id === movedPlayerId
+      ? { ...player, position: clampedPosition, seat: seatById.get(player.id)! }
+      : { ...player, seat: seatById.get(player.id)! },
+  );
+}
+
 // Makes room at `seat` by bumping every seat at or past it up by one, so a
 // newly created player can take that seat number without colliding — seat
 // order matters mechanically (CONTEXT.md: Seat), so a mid-game addition has

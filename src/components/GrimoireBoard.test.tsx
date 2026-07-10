@@ -78,7 +78,6 @@ function makeHandlers() {
     onRenameCommit: vi.fn(),
     onMove: vi.fn(),
     onReCircle: vi.fn(),
-    onReorderSeat: vi.fn(),
     onToggleDead: vi.fn(),
     onToggleGhostVote: vi.fn(),
     onAddReminder: vi.fn(),
@@ -618,24 +617,8 @@ describe("ghost votes", () => {
   });
 });
 
-describe("seat reordering", () => {
-  it("moves a seat earlier or later from its token menu", async () => {
-    const user = userEvent.setup();
-    const handlers = renderBoard([
-      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
-      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
-    ]);
-
-    await user.click(screen.getByText("Bob"));
-    const bobWrap = handlers.container.querySelector(
-      "[data-player-id='p2']",
-    ) as HTMLElement;
-    await user.click(within(bobWrap).getByRole("button", { name: /move seat earlier/i }));
-
-    expect(handlers.onReorderSeat).toHaveBeenCalledWith("p2", "earlier");
-  });
-
-  it("disables moving the first seat earlier and the last seat later", async () => {
+describe("seat reordering (issue #188)", () => {
+  it("offers no 'Move seat earlier'/'Move seat later' controls — dragging is the only reorder gesture", async () => {
     const user = userEvent.setup();
     const { container } = renderBoard([
       makePlayer({ id: "p1", seat: 1, name: "Alice" }),
@@ -646,13 +629,13 @@ describe("seat reordering", () => {
 
     await user.click(screen.getByText("Alice"));
     expect(
-      within(aliceWrap).getByRole("button", { name: /move seat earlier/i }),
-    ).toBeDisabled();
+      within(aliceWrap).queryByRole("button", { name: /move seat/i }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByText("Bob"));
     expect(
-      within(bobWrap).getByRole("button", { name: /move seat later/i }),
-    ).toBeDisabled();
+      within(bobWrap).queryByRole("button", { name: /move seat/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
