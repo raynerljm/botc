@@ -95,7 +95,7 @@
   margin-bottom: 1.5rem;
 }
 
-/* "Hide & pass" and "Ready to draw" — one tap per seat every game, and
+/* "Ready to draw" / "Open the grimoire" — one tap per seat every game, and
    previously fully unstyled (browser-default button chrome). */
 .drawAction {
   min-height: 2.75rem;
@@ -180,11 +180,11 @@
   gap: 1rem;
   padding: 2rem;
   /* Scrolls internally (issue #124) so a two-line ability wrap in landscape
-     — where the fixed viewport is short — never clips "Hide & pass" below
+     — where the fixed viewport is short — never clips the name picker below
      the fold with no way to reach it. Plain `center` clips a centered
      flexbox's overflow symmetrically off *both* ends, and scrollTop can't
      go negative to reach the clipped start — so on its own this would only
-     trade "Hide & pass" clipped for the token/character name clipped
+     trade the name picker clipped for the token/character name clipped
      instead. The `safe` keyword falls back to start-alignment once content
      overflows (top-anchored, nothing clipped pre-scroll) while keeping true
      centering whenever content already fits; unsupported browsers ignore

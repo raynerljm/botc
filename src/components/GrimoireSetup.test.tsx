@@ -92,7 +92,7 @@ async function completeSetup(
 // out of later seats' quick-picks.
 async function nameAndAdvance(
   user: ReturnType<typeof userEvent.setup>,
-  name = "Alex",
+  name: string,
 ) {
   await user.click(screen.getByRole("button", { name }));
 }
@@ -1022,6 +1022,35 @@ describe("naming the drawn seat's player (issue #54)", () => {
       screen.queryByRole("button", { name: "Bailey" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Casey" })).toBeInTheDocument();
+  });
+
+  it("ignores a stale re-fire of the previous seat's naming action once the next seat's reveal has taken over (code review finding)", async () => {
+    const user = userEvent.setup();
+    const game = makeGame({
+      playerCount: 3,
+      selectedCharacters: [
+        getCharacter("washerwoman")!,
+        getCharacter("imp")!,
+        getCharacter("baron")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await user.click(screen.getByRole("button", { name: "Start bag draw" }));
+    await user.click(
+      screen.getAllByRole("button", { name: /Face-down token/ })[0],
+    );
+    const staleAlexButton = screen.getByRole("button", { name: "Alex" });
+    fireEvent.click(staleAlexButton);
+
+    // Seat 1 is named and seat 2's own choosing stage is up — a second,
+    // stale fire of the same (now-detached) "Alex" button must not re-fire
+    // nameAndAdvance for seat 1 again and skip seat 2 straight to seat 3.
+    fireEvent.click(staleAlexButton);
+
+    expect(loadGame()!.players[0].name).toBe("Alex");
+    expect(loadGame()!.players[1].characterId).toBeNull();
+    expect(screen.getByText(/Player 2.*tap a token/i)).toBeInTheDocument();
   });
 
   it("offers the name picker only once a token has been revealed, not while still choosing", async () => {

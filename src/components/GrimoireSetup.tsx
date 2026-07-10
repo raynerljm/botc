@@ -888,11 +888,21 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // what would otherwise be a rename() then advance() pair into a single
   // update()/saveGame(), so picking a name doesn't fire the game-changed
   // event (and its full games-store read/write) twice (code review
-  // finding). Naming the drawing player is the only way to leave a reveal
-  // (issue #210) — this guarantees every seat ends up named.
+  // finding). Naming the drawing player is the only interactive way to
+  // leave a reveal (issue #210) — a reload mid-reveal is the one other
+  // exit, and that's resumeDrawSession's pre-existing privacy fallback
+  // (issue #108), unrelated to this change. The stage/seatId guard below
+  // closes the same issue #111-style double-tap hazard chooseToken and the
+  // old "Hide & pass" button guarded against: PickerGroup's quick-pick
+  // buttons carry no built-in double-click protection (they're shared with
+  // pickers that don't need it), and naming is now the *only* way to
+  // advance a reveal, so a stray second tap landing on the next seat's
+  // freshly-rendered face-down grid must be rejected rather than silently
+  // re-advancing past it (code review finding).
   function nameAndAdvance(playerId: string, name: string) {
     const currentGame = gameRef.current;
-    if (!currentGame.drawSession) return;
+    if (currentGame.drawSession?.seatId !== playerId) return;
+    if (currentGame.drawSession.stage !== "revealed") return;
     const next = nextRevealSession(currentGame);
     if (next.stage === "choosing")
       setTokenOrder(shuffleTokens(currentGame.bag));
