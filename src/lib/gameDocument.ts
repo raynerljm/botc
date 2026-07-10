@@ -288,8 +288,8 @@ export interface GameDocument {
   // Collapsed/expanded state for the board's secondary panels, persisted so
   // it survives a reload (issue #79: a 15-player game's always-expanded
   // panels push mid-game controls several screen-heights below the board).
-  // Demon bluffs is a plain manual toggle, defaulting expanded to match
-  // pre-#79 behavior. The end-game panel's default instead comes from
+  // Demon bluffs' collapse is a plain manual toggle, defaulting expanded to
+  // match pre-#79 behavior. The end-game panel's default instead comes from
   // `isEndGamePanelCollapsed` below — null here means "follow that computed
   // default," with an explicit true/false recording a deliberate manual
   // toggle that should stick regardless of night progression.
