@@ -580,7 +580,10 @@ describe("review step (Drunk)", () => {
     standInTeam: "townsfolk",
   };
 
-  it("places the Drunk reminder (not the stand-in character's) on confirm", async () => {
+  // Issue #186: the "Drunk" reminder is now placed automatically the moment
+  // the stand-in lands on a seat (GrimoireSetup's chooseToken/assignManually)
+  // — this step no longer places one itself, or it would duplicate it.
+  it("doesn't place its own reminder on confirm — the auto-placed one already covers it", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({
       steps: [drunkStep],
@@ -589,9 +592,7 @@ describe("review step (Drunk)", () => {
     const step = screen.getByRole("group", { name: drunkStep.title });
     await user.click(within(step).getByRole("button", { name: /confirm/i }));
 
-    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
-      expect.objectContaining({ characterId: "drunk", label: "Drunk" }),
-    ]);
+    expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
   });
 
   it("shows the current stand-in and offers a way to change it (issue #52)", () => {

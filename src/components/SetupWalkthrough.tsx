@@ -291,7 +291,18 @@ function StepPanel({
             </ConfirmOnlyControls>
           )}
 
-          {step.kind === "review" && (
+          {/* The Drunk's own reminder is placed automatically the moment
+              the stand-in lands on a seat (GrimoireSetup's
+              chooseToken/assignManually, issue #186) — this step just
+              confirms, or it would duplicate that reminder. The Lunatic
+              (issue #163) still places its own here, unaffected. */}
+          {step.kind === "review" && step.disguiseId === DRUNK_ID && (
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+              <p>{`The "${step.reminderLabel}" reminder token is already on their seat.`}</p>
+            </ConfirmOnlyControls>
+          )}
+
+          {step.kind === "review" && step.disguiseId !== DRUNK_ID && (
             <ReminderToggleControls
               reminderLabel={step.reminderLabel}
               onConfirm={(placeReminder) =>

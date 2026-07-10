@@ -826,9 +826,6 @@ export function GrimoireBoard({
                         <span className={styles.srOnly}> (dead)</span>
                       )}
                     </span>
-                    {isHiddenDrunk && (
-                      <span className={styles.note}>(actually the Drunk)</span>
-                    )}
                     {isHiddenLunatic && (
                       <span className={styles.note}>(actually the Lunatic)</span>
                     )}

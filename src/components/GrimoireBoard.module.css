@@ -218,10 +218,10 @@
 }
 
 /* Opt-in, not the default: capitalize suits the traveller-alignment note
-   ("good" -> "Good"), but applying it to every .note mangled the Drunk's
-   "(actually the Drunk)" into "(Actually The Drunk)". A future note that
-   isn't a single lowercase word stays correct by default instead of having
-   to know to opt out. */
+   ("good" -> "Good"), but applying it to every .note would mangle the
+   Lunatic's "(actually the Lunatic)" into "(Actually The Lunatic)". A future
+   note that isn't a single lowercase word stays correct by default instead
+   of having to know to opt out. */
 .noteCapitalized {
   composes: note;
   text-transform: capitalize;

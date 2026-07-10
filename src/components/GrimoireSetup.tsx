@@ -260,6 +260,44 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     };
   }
 
+  // Deterministic (not crypto.randomUUID()) so a seat only ever carries one
+  // of these — a re-assignment replaces it outright instead of stacking a
+  // second one, and revealDrunk/swapCharacter (below) know exactly which
+  // reminder to drop when the disguise ends.
+  function drunkStandInReminderId(playerId: string): string {
+    return `drunkstandin:${playerId}`;
+  }
+
+  function withoutDrunkStandInReminder(
+    reminders: ReminderToken[],
+    playerId: string,
+  ): ReminderToken[] {
+    const id = drunkStandInReminderId(playerId);
+    return reminders.filter((r) => r.id !== id);
+  }
+
+  // Issue #186: a Drunk stand-in used to be flagged with "(actually the
+  // Drunk)" inline copy on the token/seat list. Now the storyteller reads
+  // the seat's true state from an ordinary reminder token instead — placed
+  // automatically the moment the stand-in lands on a seat, whether by draw
+  // or manual assignment, so there's nothing left to opt into.
+  function withDrunkStandInReminder(
+    reminders: ReminderToken[],
+    token: BagToken,
+    playerId: string,
+    players: Player[],
+  ): ReminderToken[] {
+    if (!token.isDrunkStandIn) return reminders;
+    const reminder: ReminderToken = {
+      id: drunkStandInReminderId(playerId),
+      characterId: DRUNK_ID,
+      label: "Drunk",
+      position: parkBeside(livePlayerPosition(playerId, players)),
+      anchorPlayerId: playerId,
+    };
+    return [...withoutDrunkStandInReminder(reminders, playerId), reminder];
+  }
+
   // The one non-draw handler reachable while a draw transition may have
   // just landed in the same tick (the seat-name inputs during "choosing",
   // the reveal's name picker) — builds off gameRef.current so a rename can
@@ -548,6 +586,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     { endDisguise = true }: { endDisguise?: boolean } = {},
   ) {
     const character = getCharacter(characterId);
+    const wasDrunk = game.players.find((p) => p.id === playerId)?.isDrunk;
     const entryIds = [charEntryId(playerId)];
     update({
       ...game,
@@ -557,6 +596,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           ? { characterId, isDrunk: false, isLunatic: false }
           : { characterId },
       ),
+      // The auto-placed "Drunk" reminder (issue #186) is only meaningful
+      // while the seat is still disguised — once the disguise ends (a
+      // reveal, or a storyteller correction to some other character), it's
+      // either redundant (the token now reads "Drunk" itself) or wrong (the
+      // seat is a different character entirely).
+      reminders:
+        endDisguise && wasDrunk
+          ? withoutDrunkStandInReminder(game.reminders, playerId)
+          : game.reminders,
       characterPool: withCharacterInPool(game.characterPool, character),
       // The night-list entry id doesn't encode which character it was for
       // (issue #128), so a mid-night swap would otherwise inherit whatever
@@ -763,6 +811,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           ? { ...player, ...tokenAssignmentPatch(token) }
           : player,
       ),
+      reminders: withDrunkStandInReminder(
+        currentGame.reminders,
+        token,
+        session.seatId,
+        currentGame.players,
+      ),
       drawSession: { ...session, stage: "revealed" },
     });
   }
@@ -879,6 +933,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         player.id === playerId
           ? { ...player, ...tokenAssignmentPatch(token) }
           : player,
+      ),
+      reminders: withDrunkStandInReminder(
+        currentGame.reminders,
+        token,
+        playerId,
+        currentGame.players,
       ),
       drawSession:
         currentGame.drawSession?.seatId === playerId
@@ -1443,11 +1503,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       {player.isTraveller && (
                         <span className={styles.alignment}>
                           {player.travellerAlignment}
-                        </span>
-                      )}
-                      {player.isDrunk && (
-                        <span className={styles.drunkNote}>
-                          (actually the Drunk)
                         </span>
                       )}
                       {player.isLunatic && (
