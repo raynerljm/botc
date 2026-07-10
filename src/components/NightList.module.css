@@ -8,33 +8,16 @@
   color: var(--muted);
 }
 
+/* Shared with Day phase's own forward/back buttons (BottomSheet.module.css:
+   .forwardAction/.backAction, issue #195 code review finding — these two
+   rules used to be redefined identically in both sheets' CSS modules). */
 .startNight,
 .endNight {
-  padding: 0.6rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: var(--background);
-  cursor: pointer;
-  min-height: 2.75rem;
+  composes: forwardAction from "./BottomSheet.module.css";
 }
 
-/* Deliberately the inverse of .startNight/.endNight (outline, not filled) so
-   the back/undo control never reads as another forward action (issue #165
-   AC: "can't be confused with the forward Start / End actions"). */
 .back {
-  align-self: flex-start;
-  padding: 0.4rem 0.75rem;
-  font: inherit;
-  font-size: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  min-height: 2.25rem;
+  composes: backAction from "./BottomSheet.module.css";
 }
 
 .showAll {
@@ -75,7 +58,11 @@
 }
 
 .entry[data-checked] {
-  background-color: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
+  background-color: color-mix(
+    in srgb,
+    var(--accent) 12%,
+    var(--surface-raised)
+  );
 }
 
 .entry[data-skipped] {

@@ -82,6 +82,16 @@ export interface GrimoireBoardProps {
   // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
   // when there's nothing for it to show, so no button renders.
   onOpenSetupWalkthrough?: () => void;
+  // A value whose identity change signals that something outside this
+  // component's own DOM (its board node, its wrapper, and the observed
+  // body) has altered how much height is actually available for the circle
+  // — the bottom sheet swapping between the night list and Day phase (issue
+  // #195) is the only current caller, passed the current game phase. Kept
+  // generic (not "game phase") since this component has no notion of one.
+  // Every identity change after the first render triggers an immediate
+  // re-measure, rather than waiting for an unrelated resize to eventually
+  // exercise the sheet-observer's self-healing reattachment.
+  remeasureOn?: unknown;
 }
 
 // The token *icon* keeps shrinking at high player counts (visual density,
@@ -202,6 +212,7 @@ export function GrimoireBoard({
   onSetClaim,
   onSetActsAs,
   onOpenSetupWalkthrough,
+  remeasureOn,
 }: GrimoireBoardProps) {
   const claimById = useMemo(
     () => new Map(claimOptions.map((c) => [c.id, c] as const)),
@@ -212,6 +223,12 @@ export function GrimoireBoard({
   const claimGroups = useMemo(() => groupByTeam(claimOptions), [claimOptions]);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const boardMeasureCleanupRef = useRef<(() => void) | null>(null);
+  // The current mount's own `measure` — read by the `remeasureOn` effect
+  // below, which fires from a plain prop change rather than a DOM event, so
+  // it needs a way to reach into whichever measurement closure setBoardRef
+  // most recently set up (the ref callback itself can't be `await`ed or
+  // called imperatively from an unrelated effect).
+  const measureRef = useRef<(() => void) | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const justDraggedRef = useRef<string | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -228,6 +245,7 @@ export function GrimoireBoard({
     boardRef.current = node;
     boardMeasureCleanupRef.current?.();
     boardMeasureCleanupRef.current = null;
+    measureRef.current = null;
     if (!node) return;
     const wrapper = node.parentElement;
     if (!wrapper) return;
@@ -249,27 +267,39 @@ export function GrimoireBoard({
     // So, unlike every other panel this function already accounts for via
     // wrapper/body layout, its footprint has to be measured directly and
     // subtracted from the board's height budget, or an expanded sheet would
-    // silently cover the bottom seats.
+    // silently cover the bottom seats. Declared together, before either
+    // function below reads them, so nothing here depends on execution-order
+    // reasoning about which `let` initializes before which closure runs.
     let sheet = document.querySelector<HTMLElement>("[data-bottom-sheet]");
     let sheetObserver: ResizeObserver | undefined;
+    let observer: ResizeObserver | undefined;
 
-    // Re-finds the sheet only when the previously-found one has actually
-    // left the document — cheap on every other call (an `isConnected` read),
-    // so this stays a no-op on the hot path of a plain resize (code review
-    // finding on issue #194: querying document-wide on every tick). Needed
-    // because the mounted sheet is a genuinely different DOM node once the
-    // game phase swaps which component renders it (issue #195) — the board
-    // itself doesn't remount for that, so the node found at this effect's
-    // one-time setup would otherwise go stale and stop being observed the
-    // first time night/day ever changes.
+    // Two separate concerns, kept independent on purpose: (1) `sheet` itself
+    // must always point at whichever node currently matches
+    // `[data-bottom-sheet]`, since `measure()` below reads it directly for
+    // the reserve calculation regardless of ResizeObserver support; (2)
+    // `sheetObserver` is only ever worth creating once `observer` has
+    // confirmed the browser supports ResizeObserver at all. Tying (1)'s
+    // re-query to (2)'s support check (an earlier version of this function
+    // did) meant `sheet` silently went stale forever in any environment
+    // without ResizeObserver — including this test suite's jsdom, which has
+    // none (code review finding).
     function reattachSheetObserver() {
-      if (sheet && sheet.isConnected) return;
-      sheetObserver?.disconnect();
-      sheet = document.querySelector<HTMLElement>("[data-bottom-sheet]");
-      if (sheet && observer) {
-        sheetObserver = new ResizeObserver(measure);
-        sheetObserver.observe(sheet);
+      // Re-finds the sheet only when the previously-found one has actually
+      // left the document — cheap on every other call (an `isConnected`
+      // read), so this stays a no-op on the hot path of a plain resize
+      // (code review finding on issue #194: querying document-wide on every
+      // tick). Needed because the mounted sheet is a genuinely different DOM
+      // node once the game phase swaps which component renders it (issue
+      // #195) — the board itself doesn't remount for that.
+      if (!sheet || !sheet.isConnected) {
+        sheetObserver?.disconnect();
+        sheetObserver = undefined;
+        sheet = document.querySelector<HTMLElement>("[data-bottom-sheet]");
       }
+      if (!observer || !sheet || sheetObserver) return;
+      sheetObserver = new ResizeObserver(measure);
+      sheetObserver.observe(sheet);
     }
 
     function measure() {
@@ -293,6 +323,7 @@ export function GrimoireBoard({
       node!.style.height = `${size}px`;
     }
 
+    measureRef.current = measure;
     measure();
     window.addEventListener("resize", measure);
     // `wrapper` alone catches its own box changing size (the containing
@@ -302,7 +333,6 @@ export function GrimoireBoard({
     // and document.body alone catches top-offset shifts but can miss a
     // column-width-only change that doesn't alter body's own box. Observing
     // both covers each other's blind spot.
-    let observer: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(measure);
       observer.observe(wrapper);
@@ -312,7 +342,13 @@ export function GrimoireBoard({
       // `document.body`'s (fixed elements don't participate in flow layout),
       // so it needs its own dedicated observer to catch peek ⇄ expanded
       // transitions (issue #194 AC: "the circle re-fits ... as the sheet
-      // expands and collapses").
+      // expands and collapses"). This is the call that actually attaches it
+      // for the first time — the one inside `measure()` above ran before
+      // `observer` existed, so it no-opped (code review finding: the
+      // previous guard here mistakenly checked the *sheet's* connectedness
+      // instead of whether a sheetObserver had ever been created, so this
+      // call was a guaranteed no-op and the sheet's own resize was never
+      // actually observed until the first phase swap).
       reattachSheetObserver();
     }
     boardMeasureCleanupRef.current = () => {
@@ -321,6 +357,25 @@ export function GrimoireBoard({
       sheetObserver?.disconnect();
     };
   }, []);
+
+  // Re-measures immediately on every `remeasureOn` identity change after the
+  // first — GrimoireSetup passes the current sheet phase, so a night/day
+  // transition re-fits the circle around the new sheet's height right away,
+  // rather than waiting on the sheet-observer's self-healing reattachment to
+  // happen to be exercised by some unrelated resize (issue #195, extending
+  // issue #194's "circle re-fits ... as the sheet expands and collapses" AC
+  // to a phase change too). A direct call into this mount's own `measure`
+  // closure, not a synthetic `window` resize event — a fake global DOM event
+  // would also reach every unrelated `resize` listener in the app, not just
+  // this one (code review finding).
+  const isFirstRemeasureRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRemeasureRender.current) {
+      isFirstRemeasureRender.current = false;
+      return;
+    }
+    measureRef.current?.();
+  }, [remeasureOn]);
 
   // "Script's characters first, then everything in the dataset" (issue #15
   // AC) — the script pool is whatever's already resolvable on this board.

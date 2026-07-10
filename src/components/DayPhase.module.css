@@ -13,21 +13,11 @@
   border-radius: 0.5rem;
 }
 
-/* Deliberately the inverse of .submit/.lockIn (outline, not filled) so this
-   undo control never reads as another forward action — same convention as
-   the night list's own back/undo buttons (NightList.module.css: .back). */
+/* Shared with the night list's own back/undo button (BottomSheet.module.css:
+   .backAction, issue #195 code review finding). */
 .reopenNight {
-  align-self: flex-start;
+  composes: backAction from "./BottomSheet.module.css";
   margin-bottom: 0.5rem;
-  padding: 0.4rem 0.75rem;
-  font: inherit;
-  font-size: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  min-height: 2.25rem;
 }
 
 .form {
@@ -207,18 +197,10 @@
   cursor: pointer;
 }
 
-/* Same filled-accent convention as the night list's own forward actions
-   (NightList.module.css: .startNight/.endNight) — ending the day and
+/* Shared with the night list's own forward actions (BottomSheet.module.css:
+   .forwardAction, issue #195 code review finding) — ending the day and
    starting the next night is the same kind of forward step. */
 .startNight {
+  composes: forwardAction from "./BottomSheet.module.css";
   margin-top: 0.75rem;
-  padding: 0.6rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: var(--background);
-  cursor: pointer;
-  min-height: 2.75rem;
 }

@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import {
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -1118,18 +1117,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const sheetPhase: "night" | "day" =
     game.nightOpen || currentDay(game) < 1 ? "night" : "day";
 
-  // Swapping which component renders the sheet mounts a genuinely different
-  // DOM node (GrimoireBoard.tsx's resize-fit effect self-heals onto it, but
-  // only the next time something else triggers a re-measure). A synthetic
-  // resize nudges that re-measure to happen right away, so the circle
-  // re-fits around the new sheet's height immediately on a night/day
-  // transition rather than waiting on an unrelated resize (issue #195,
-  // extending issue #194's "circle re-fits as the sheet expands/collapses"
-  // AC to a phase change too).
-  useEffect(() => {
-    window.dispatchEvent(new Event("resize"));
-  }, [sheetPhase]);
-
   return (
     <div className={styles.main}>
       {!setupComplete && !draw && (
@@ -1473,6 +1460,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onOpenSetupWalkthrough={
                   firstNightEnded(game) ? undefined : openWalkthrough
                 }
+                // Swapping which of Night list/Day phase renders the sheet
+                // (below) mounts a genuinely different DOM node — this tells
+                // the board to re-fit the circle around it immediately,
+                // rather than waiting on an unrelated resize (issue #195,
+                // extending issue #194's "circle re-fits ... as the sheet
+                // expands and collapses" AC to a phase change too).
+                remeasureOn={sheetPhase}
               />
             </div>
             {/* Renders as a fixed-position bottom sheet (BottomSheet.module.css)

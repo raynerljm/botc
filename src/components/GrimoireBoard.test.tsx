@@ -2551,6 +2551,149 @@ describe("board sizing (issue #78)", () => {
       expect(board.style.width).toBe("504px");
       expect(board.style.height).toBe("504px");
     });
+
+    it("attaches a ResizeObserver to the sheet on initial mount, not only after a phase swap (code review finding)", () => {
+      // jsdom has no real ResizeObserver (every other test in this describe
+      // block drives its assertions through a manual window resize instead,
+      // per the comments above) — stubbed here specifically to catch a
+      // regression where the sheet's own observer was never constructed at
+      // mount at all: an earlier version of reattachSheetObserver's guard
+      // checked the *sheet's* connectedness (always true immediately after
+      // it's freshly queried) instead of whether an observer had ever been
+      // created, so the explicit post-setup call was a guaranteed no-op and
+      // this never fired until the first night/day phase swap happened to
+      // occur.
+      const observeCalls: unknown[] = [];
+      class StubResizeObserver {
+        observe(target: unknown) {
+          observeCalls.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+      const original = globalThis.ResizeObserver;
+      globalThis.ResizeObserver =
+        StubResizeObserver as unknown as typeof ResizeObserver;
+
+      try {
+        stubSheet(200);
+        measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+      } finally {
+        globalThis.ResizeObserver = original;
+      }
+
+      expect(observeCalls).toContain(sheet);
+    });
+  });
+
+  describe("remeasureOn prop (issue #195)", () => {
+    let sheet: HTMLElement | undefined;
+
+    afterEach(() => {
+      sheet?.remove();
+    });
+
+    it("re-fits immediately when remeasureOn changes, without waiting for a resize event", () => {
+      Object.defineProperty(window, "innerHeight", {
+        value: 820,
+        configurable: true,
+      });
+      const { container, rerender } = render(
+        <GrimoireBoard
+          players={[makePlayer()]}
+          characterById={characterById}
+          activeFabled={[]}
+          claimOptions={claimOptions}
+          {...noop}
+          remeasureOn="night"
+        />,
+      );
+      const board = container.querySelector("[data-board]") as HTMLElement;
+      const wrapper = board.parentElement as HTMLElement;
+      Object.defineProperty(wrapper, "clientWidth", {
+        value: 1000,
+        configurable: true,
+      });
+      vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 200,
+        width: 0,
+        height: 0,
+        right: 0,
+        bottom: 0,
+        x: 0,
+        y: 200,
+        toJSON() {},
+      });
+
+      sheet = document.createElement("div");
+      sheet.setAttribute("data-bottom-sheet", "");
+      document.body.appendChild(sheet);
+      let sheetHeightPx = 200;
+      vi.spyOn(sheet, "getBoundingClientRect").mockImplementation(() => ({
+        left: 0,
+        top: 0,
+        width: 0,
+        height: sheetHeightPx,
+        right: 0,
+        bottom: sheetHeightPx,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }));
+
+      // A real resize event establishes the baseline (the initial
+      // ref-callback measurement ran before these mocks existed, same as
+      // every other test in this file).
+      fireEvent(window, new Event("resize"));
+      expect(board.style.width).toBe("404px");
+
+      // The sheet's own rendered height changes (Day phase's content isn't
+      // the same height as the night list's) at the same moment the phase
+      // itself flips — nothing dispatches a resize event this time, only
+      // `remeasureOn` changes, mirroring how GrimoireSetup passes the
+      // current sheet phase.
+      sheetHeightPx = 100;
+      rerender(
+        <GrimoireBoard
+          players={[makePlayer()]}
+          characterById={characterById}
+          activeFabled={[]}
+          claimOptions={claimOptions}
+          {...noop}
+          remeasureOn="day"
+        />,
+      );
+
+      expect(board.style.width).toBe("504px");
+    });
+
+    it("does not force an extra measurement pass on the initial render", () => {
+      const measureSpy = vi.spyOn(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+      );
+      const callsBeforeMount = measureSpy.mock.calls.length;
+
+      render(
+        <GrimoireBoard
+          players={[makePlayer()]}
+          characterById={characterById}
+          activeFabled={[]}
+          claimOptions={claimOptions}
+          {...noop}
+          remeasureOn="night"
+        />,
+      );
+
+      // The ref callback's own synchronous `measure()` call at mount already
+      // reads the board's rect exactly once — asserting only that the count
+      // grew by a small, fixed amount (not e.g. doubled) is enough to catch
+      // a regression where the `remeasureOn` effect fired redundantly on
+      // mount instead of only on later changes.
+      const callsAfterMount = measureSpy.mock.calls.length;
+      expect(callsAfterMount - callsBeforeMount).toBeLessThanOrEqual(2);
+    });
   });
 
   it("keeps measuring the current board after it's unmounted and remounted", async () => {

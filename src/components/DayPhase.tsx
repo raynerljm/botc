@@ -54,6 +54,14 @@ function playerEntries(
 }
 
 export function DayPhase({ game, onChange }: DayPhaseProps) {
+  // An unsubmitted nominator/nominee pick is local, never-recorded state —
+  // it doesn't survive Start Night unmounting this component and a later
+  // Back remounting a fresh one (issue #195 decision: the single bottom
+  // sheet mounts a fresh DayPhase on every return to the day, the same as a
+  // genuine new day already reset these two below). Accepted rather than
+  // lifting this pair to GrimoireSetup to survive the round trip: nothing
+  // about the pick was ever recorded, so redoing two taps costs far less
+  // than the every-render prop-drilling a controlled pair would add here.
   const [nominatorId, setNominatorId] = useState("");
   const [nomineeId, setNomineeId] = useState("");
   const [lastSeenDay, setLastSeenDay] = useState(currentDay(game));
@@ -74,14 +82,21 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   const day = currentDay(game);
   const nightNumber = currentNightNumber(game);
 
-  // DayPhase stays mounted across day transitions (its parent never
-  // remounts it while the phase stays "day"), so an unsubmitted pick left
-  // over from a day the storyteller didn't record a nomination on would
-  // otherwise carry straight into the next day as a misleading pre-filled
-  // pair — the same problem issue #166 removed for the initial render.
-  // Adjusted during render (React's documented pattern for resetting state
-  // on a prop change) rather than in an effect, to avoid an extra cascading
-  // render.
+  // A component-level guarantee, not one that depends on how the current
+  // parent happens to mount this: GrimoireSetup in fact remounts a fresh
+  // DayPhase on every night→day transition (issue #195, since a night is
+  // always interposed between two days), so `lastSeenDay` already matches on
+  // that first render and this branch doesn't fire — its unsubmitted picks
+  // are already gone via the fresh useState default, the same as the reset
+  // below would produce. But nothing about DayPhase's own props promises a
+  // remount on every day change (a future parent could reasonably choose to
+  // keep it mounted, the way this file's own tests still exercise via
+  // `rerender`), so an unsubmitted pick left over from a day the storyteller
+  // didn't record a nomination on must still never carry into the next day
+  // as a misleading pre-filled pair — the same problem issue #166 removed
+  // for the initial render. Adjusted during render (React's documented
+  // pattern for resetting state on a prop change) rather than in an effect,
+  // to avoid an extra cascading render.
   if (day !== lastSeenDay) {
     setLastSeenDay(day);
     setNominatorId("");
