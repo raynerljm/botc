@@ -2072,6 +2072,49 @@ describe("acts-as (issue #17)", () => {
       screen.getByText(`Player 1 — ${philosopher.name} as ${empath.name}`),
     ).toBeInTheDocument();
   });
+
+  it("clears a stale acts-as target when the player is swapped away from an acts-as-capable character (issue #187 code review finding)", async () => {
+    const user = userEvent.setup();
+    const philosopher = getCharacter("philosopher")!;
+    const imp = getCharacter("imp")!;
+    const washerwoman = getCharacter("washerwoman")!;
+    const empath = getCharacter("empath")!;
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, imp, washerwoman, empath],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+    expect(loadGame()!.players[0].actsAs).toBe("empath");
+
+    // Swapping away from Philosopher (an acts-as-capable character) to
+    // Washerwoman (not one) must not leave the old target orphaned — with
+    // the picker now hidden for Washerwoman (issue #187), there would be no
+    // way left to clear it, and the night list would keep waking a player
+    // for an ability their new character doesn't have.
+    await selectOption(
+      user,
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "washerwoman",
+    );
+
+    const reloaded = loadGame()!;
+    expect(reloaded.players[0].actsAs).toBeNull();
+    expect(reloaded.players[0].actsAsSetOnNight).toBeNull();
+  });
 });
 
 describe("night-list bookkeeping stays coherent (issue #128)", () => {
