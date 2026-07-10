@@ -1,7 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 
 import {
   characterPickerPool,
@@ -9,7 +16,7 @@ import {
   SEAT_HOLDING_TEAMS,
   type Character,
 } from "@/lib/characters";
-import { executionNominations } from "@/lib/dayPhase";
+import { currentDay, executionNominations } from "@/lib/dayPhase";
 import {
   ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
@@ -38,7 +45,11 @@ import {
 } from "@/lib/gameDocument";
 import { withUpdatedNotesSection } from "@/lib/gameNotes";
 import { saveGame } from "@/lib/gameStorage";
-import { actsAsEntryId, charEntryId, currentNightNumber } from "@/lib/nightList";
+import {
+  actsAsEntryId,
+  charEntryId,
+  currentNightNumber,
+} from "@/lib/nightList";
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
@@ -53,7 +64,10 @@ import { PlayerNamePicker } from "./PlayerNamePicker";
 import { RadioGroup } from "./RadioGroup";
 import styles from "./GrimoireSetup.module.css";
 import { Select } from "./Select";
-import { SetupWalkthrough, type SetupWalkthroughReminderInput } from "./SetupWalkthrough";
+import {
+  SetupWalkthrough,
+  type SetupWalkthroughReminderInput,
+} from "./SetupWalkthrough";
 import { ShareScriptButton } from "./ShareScriptButton";
 
 export interface GrimoireSetupProps {
@@ -137,8 +151,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   const [tokenFormOpen, setTokenFormOpen] = useState(false);
   const [tokenCharacterId, setTokenCharacterId] = useState("");
   const [tokenSeat, setTokenSeat] = useState(1);
-  const [pendingRemovePlayer, setPendingRemovePlayer] =
-    useState<Player | null>(null);
+  const [pendingRemovePlayer, setPendingRemovePlayer] = useState<Player | null>(
+    null,
+  );
 
   const characterById = useMemo(
     () => new Map(game.characterPool.map((c) => [c.id, c] as const)),
@@ -322,7 +337,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const player = currentGame.players.find((p) => p.id === playerId);
     if (!player) return;
     const trimmed = player.name.trim();
-    const normalized = trimmed === "" ? defaultPlayerName(player.seat) : trimmed;
+    const normalized =
+      trimmed === "" ? defaultPlayerName(player.seat) : trimmed;
     if (normalized === player.name) return;
     renamePlayer(playerId, normalized);
   }
@@ -331,7 +347,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // dropped determines the new clockwise seat order for everyone, not just
   // the moved seat's own position.
   function movePlayer(playerId: string, position: PlayerPosition) {
-    update({ ...game, players: reorderSeatsAfterMove(game.players, playerId, position) });
+    update({
+      ...game,
+      players: reorderSeatsAfterMove(game.players, playerId, position),
+    });
   }
 
   // Every seat's dragged position is cleared, so the next render falls back
@@ -369,7 +388,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     if (!player) return;
     update({
       ...game,
-      players: updatePlayer(playerId, { ghostVoteSpent: !player.ghostVoteSpent }),
+      players: updatePlayer(playerId, {
+        ghostVoteSpent: !player.ghostVoteSpent,
+      }),
     });
   }
 
@@ -452,7 +473,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const restored = anchorStillLive
       ? reminder
       : { ...reminder, anchorPlayerId: null };
-    update({ ...game, reminders: withRestoredReminder(game.reminders, restored) });
+    update({
+      ...game,
+      reminders: withRestoredReminder(game.reminders, restored),
+    });
   }
 
   // The auto-offer is shown once (Start or Skip both count as "handled") —
@@ -527,7 +551,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // vital status changes underneath an entry id that's keyed by player only
   // (nightList.ts), so neither checked nor un-skipped state can survive
   // pointing at a wake the new identity never had (issue #128).
-  function withoutNightListEntries(list: string[], ids: readonly string[]): string[] {
+  function withoutNightListEntries(
+    list: string[],
+    ids: readonly string[],
+  ): string[] {
     return list.filter((id) => !ids.includes(id));
   }
 
@@ -641,10 +668,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     // (code review finding). Resolve it to that live position and detach it,
     // the same way a manual drag detaches a reminder from its anchor.
     const removedPosition = livePlayerPosition(playerId, game.players);
-    const anchoredHere = game.reminders.filter((r) => r.anchorPlayerId === playerId);
+    const anchoredHere = game.reminders.filter(
+      (r) => r.anchorPlayerId === playerId,
+    );
     const reminders = game.reminders.map((r) => {
       if (r.anchorPlayerId !== playerId) return r;
-      const siblingIndex = anchoredHere.findIndex((sibling) => sibling.id === r.id);
+      const siblingIndex = anchoredHere.findIndex(
+        (sibling) => sibling.id === r.id,
+      );
       return {
         ...r,
         anchorPlayerId: null,
@@ -717,7 +748,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   function setClaim(playerId: string, characterId: string | null) {
-    update({ ...game, players: updatePlayer(playerId, { claim: characterId }) });
+    update({
+      ...game,
+      players: updatePlayer(playerId, { claim: characterId }),
+    });
   }
 
   // The night this acts-as takes effect is whichever night is currently
@@ -732,7 +766,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // night list's characterById (in-play only) can never resolve it and the
   // acts-as entry silently never appears.
   function setActsAs(playerId: string, characterId: string | null) {
-    const character = characterId ? scriptCharacterById.get(characterId) : undefined;
+    const character = characterId
+      ? scriptCharacterById.get(characterId)
+      : undefined;
     const entryIds = [actsAsEntryId(playerId)];
     update({
       ...game,
@@ -851,7 +887,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const currentGame = gameRef.current;
     if (!currentGame.drawSession) return;
     const next = nextRevealSession(currentGame);
-    if (next.stage === "choosing") setTokenOrder(shuffleTokens(currentGame.bag));
+    if (next.stage === "choosing")
+      setTokenOrder(shuffleTokens(currentGame.bag));
     update({ ...currentGame, drawSession: next });
   }
 
@@ -875,7 +912,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const currentGame = gameRef.current;
     if (!currentGame.drawSession) return;
     const next = nextRevealSession(currentGame);
-    if (next.stage === "choosing") setTokenOrder(shuffleTokens(currentGame.bag));
+    if (next.stage === "choosing")
+      setTokenOrder(shuffleTokens(currentGame.bag));
     update({
       ...currentGame,
       players: currentGame.players.map((player) =>
@@ -940,7 +978,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   function openTravellerForm() {
-    const preferred = game.travellerBag[0]?.characterId ?? travellerAddOptions[0]?.id ?? "";
+    const preferred =
+      game.travellerBag[0]?.characterId ?? travellerAddOptions[0]?.id ?? "";
     setTravellerCharacterId(preferred);
     setTravellerAlignment("good");
     setTravellerSeat(lastSeat(game.players) + 1);
@@ -955,7 +994,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // the seat without touching the bag (issue #119).
   function addTraveller(event: FormEvent) {
     event.preventDefault();
-    const character = travellerAddOptions.find((c) => c.id === travellerCharacterId);
+    const character = travellerAddOptions.find(
+      (c) => c.id === travellerCharacterId,
+    );
     if (!character) return;
     const matchingToken = game.travellerBag.find(
       (t) => t.characterId === character.id,
@@ -1069,6 +1110,25 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // (issue #21 AC: always reachable) — only the pass-around hand-off itself
   // hides them, so a drawing player can't see them mid-pass.
   const passAroundHidden = draw?.stage === "hidden";
+  // Which content the single bottom sheet shows (issue #195): the night
+  // list whenever a night is open, or before the first night has even
+  // started (day 0 has no day-phase business of its own — CONTEXT.md: a day
+  // begins once night N closes) — Day phase otherwise. Only one of the two
+  // is ever mounted at a time.
+  const sheetPhase: "night" | "day" =
+    game.nightOpen || currentDay(game) < 1 ? "night" : "day";
+
+  // Swapping which component renders the sheet mounts a genuinely different
+  // DOM node (GrimoireBoard.tsx's resize-fit effect self-heals onto it, but
+  // only the next time something else triggers a re-measure). A synthetic
+  // resize nudges that re-measure to happen right away, so the circle
+  // re-fits around the new sheet's height immediately on a night/day
+  // transition rather than waiting on an unrelated resize (issue #195,
+  // extending issue #194's "circle re-fits as the sheet expands/collapses"
+  // AC to a phase change too).
+  useEffect(() => {
+    window.dispatchEvent(new Event("resize"));
+  }, [sheetPhase]);
 
   return (
     <div className={styles.main}>
@@ -1099,8 +1159,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         <p className={styles.bagShortfall} role="alert">
           The bag is short {bagShortfall} token{bagShortfall === 1 ? "" : "s"}{" "}
           for {unassignedSeatCount} unassigned seat
-          {unassignedSeatCount === 1 ? "" : "s"}. Go back to bag-building to
-          add more characters.
+          {unassignedSeatCount === 1 ? "" : "s"}. Go back to bag-building to add
+          more characters.
         </p>
       )}
 
@@ -1110,11 +1170,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </button>
       )}
 
-      {setupComplete && !screenObscured && leftoverBagCharacterNames.length > 0 && (
-        <p className={styles.bagLeftover}>
-          Left in the bag: {leftoverBagCharacterNames.join(", ")}
-        </p>
-      )}
+      {setupComplete &&
+        !screenObscured &&
+        leftoverBagCharacterNames.length > 0 && (
+          <p className={styles.bagLeftover}>
+            Left in the bag: {leftoverBagCharacterNames.join(", ")}
+          </p>
+        )}
 
       {draw && drawingSeat && (
         <div className={styles.drawFlow} role="region" aria-label="Bag draw">
@@ -1131,9 +1193,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               role="dialog"
               aria-label={`${drawingSeat.name}, tap a token to draw`}
             >
-              <p>
-                {drawingSeat.name}, tap a token to draw
-              </p>
+              <p>{drawingSeat.name}, tap a token to draw</p>
               <ul className={styles.tokenGrid}>
                 {tokenOrder.map((token, index) => (
                   <li key={token.id}>
@@ -1337,7 +1397,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                       night" reads as if a night is still ahead rather than
                       past — drop that framing but keep the offer itself
                       actionable (issue #68). */}
-                  {firstNightEnded(game) ? "pending." : "to make before the first night."}
+                  {firstNightEnded(game)
+                    ? "pending."
+                    : "to make before the first night."}
                 </p>
                 <button
                   type="button"
@@ -1369,11 +1431,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <div
             className={styles.circleLayout}
             hidden={showWalkthrough || screenObscured}
-            // Night list moved out of this grid into a fixed bottom sheet
-            // (issue #194) — it no longer shares the side column with Day
-            // phase, so reclaiming width now depends only on Day phase's own
-            // collapsed state (originally issue #168, both panels together).
-            data-side-collapsed={game.dayPhaseCollapsed || undefined}
           >
             <div
               role="region"
@@ -1418,16 +1475,24 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 }
               />
             </div>
-            {/* Renders as a fixed-position bottom sheet (NightList.module.css)
+            {/* Renders as a fixed-position bottom sheet (BottomSheet.module.css)
                 rather than a grid item — it's positioned here in the DOM
-                (issue #58: circle before night list in DOM/tab order still
+                (issue #58: circle before the sheet in DOM/tab order still
                 holds) purely so its own CollapsibleSection/handle markup
-                lives beside the components it's paired with; its box escapes
-                the grid entirely via `position: fixed` (issue #194). */}
-            <NightList game={game} characterById={characterById} onChange={update} />
-            <div className={styles.dayPhaseArea}>
+                lives beside the circle it's paired with; its box escapes the
+                grid entirely via `position: fixed` (issue #194). Only one of
+                Night list/Day phase is ever mounted — whichever the current
+                game phase calls for (issue #195) — since only one physical
+                sheet exists; no side column remains for either. */}
+            {sheetPhase === "night" ? (
+              <NightList
+                game={game}
+                characterById={characterById}
+                onChange={update}
+              />
+            ) : (
               <DayPhase game={game} onChange={update} />
-            </div>
+            )}
           </div>
           {/* Hidden rather than unmounted while the walkthrough is open, same
               reasoning as the circle above — DemonBluffsPanel owns its own

@@ -147,7 +147,10 @@ function fitBoardSizePx(
   rootFontSizePx: number,
 ): number {
   const maxPx = MAX_BOARD_REM * rootFontSizePx;
-  return Math.max(MIN_BOARD_PX, Math.min(availableWidthPx, availableHeightPx, maxPx));
+  return Math.max(
+    MIN_BOARD_PX,
+    Math.min(availableWidthPx, availableHeightPx, maxPx),
+  );
 }
 
 // A real finger drag always moves a few pixels before settling — without a
@@ -171,7 +174,6 @@ interface DragState {
   // (issue #167).
   startPosition: PlayerPosition;
 }
-
 
 export function GrimoireBoard({
   players,
@@ -240,19 +242,38 @@ export function GrimoireBoard({
     // same-value change back into the ResizeObserver below on every tick.
     let lastSize: number | null = null;
 
-    // The night list renders as a fixed-position bottom sheet
-    // (NightList.module.css, issue #194), floating over the board rather
-    // than sharing grid space with it — so, unlike every other panel this
-    // function already accounts for via wrapper/body layout, its footprint
-    // has to be measured directly and subtracted from the board's height
-    // budget, or an expanded sheet would silently cover the bottom seats.
-    // Looked up once (not per-measure) — its identity doesn't change over
-    // this mount's lifetime, same reasoning as `wrapper` and `rootFontSizePx`
-    // above (code review finding: this used to run a fresh document-wide
-    // query on every single resize/observer tick).
-    const sheet = document.querySelector<HTMLElement>("[data-night-sheet]");
+    // The bottom sheet — the night list or Day phase, whichever the current
+    // game phase shows (issue #195); only one is ever mounted at a time —
+    // renders as a fixed-position element (BottomSheet.module.css, issue
+    // #194), floating over the board rather than sharing grid space with it.
+    // So, unlike every other panel this function already accounts for via
+    // wrapper/body layout, its footprint has to be measured directly and
+    // subtracted from the board's height budget, or an expanded sheet would
+    // silently cover the bottom seats.
+    let sheet = document.querySelector<HTMLElement>("[data-bottom-sheet]");
+    let sheetObserver: ResizeObserver | undefined;
+
+    // Re-finds the sheet only when the previously-found one has actually
+    // left the document — cheap on every other call (an `isConnected` read),
+    // so this stays a no-op on the hot path of a plain resize (code review
+    // finding on issue #194: querying document-wide on every tick). Needed
+    // because the mounted sheet is a genuinely different DOM node once the
+    // game phase swaps which component renders it (issue #195) — the board
+    // itself doesn't remount for that, so the node found at this effect's
+    // one-time setup would otherwise go stale and stop being observed the
+    // first time night/day ever changes.
+    function reattachSheetObserver() {
+      if (sheet && sheet.isConnected) return;
+      sheetObserver?.disconnect();
+      sheet = document.querySelector<HTMLElement>("[data-bottom-sheet]");
+      if (sheet && observer) {
+        sheetObserver = new ResizeObserver(measure);
+        sheetObserver.observe(sheet);
+      }
+    }
 
     function measure() {
+      reattachSheetObserver();
       const rect = node!.getBoundingClientRect();
       // A mid-scroll resize (iOS Safari's chrome collapsing, iOS overscroll)
       // can read a negative `rect.top`, which would otherwise overstate how
@@ -261,7 +282,11 @@ export function GrimoireBoard({
       const sheetReservePx = sheet?.getBoundingClientRect().height ?? 0;
       const availableHeightPx =
         window.innerHeight - topPx - BOARD_BOTTOM_RESERVE_PX - sheetReservePx;
-      const size = fitBoardSizePx(wrapper!.clientWidth, availableHeightPx, rootFontSizePx);
+      const size = fitBoardSizePx(
+        wrapper!.clientWidth,
+        availableHeightPx,
+        rootFontSizePx,
+      );
       if (size === lastSize) return;
       lastSize = size;
       node!.style.width = `${size}px`;
@@ -278,21 +303,17 @@ export function GrimoireBoard({
     // column-width-only change that doesn't alter body's own box. Observing
     // both covers each other's blind spot.
     let observer: ResizeObserver | undefined;
-    // The bottom sheet is a `position: fixed` sibling — collapsing or
-    // expanding it changes its own box size without ever touching
-    // `document.body`'s (fixed elements don't participate in flow layout),
-    // so it needs its own dedicated observer to catch peek ⇄ expanded
-    // transitions (issue #194 AC: "the circle re-fits ... as the sheet
-    // expands and collapses").
-    let sheetObserver: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(measure);
       observer.observe(wrapper);
       observer.observe(document.body);
-      if (sheet) {
-        sheetObserver = new ResizeObserver(measure);
-        sheetObserver.observe(sheet);
-      }
+      // The bottom sheet is a `position: fixed` sibling — collapsing or
+      // expanding it changes its own box size without ever touching
+      // `document.body`'s (fixed elements don't participate in flow layout),
+      // so it needs its own dedicated observer to catch peek ⇄ expanded
+      // transitions (issue #194 AC: "the circle re-fits ... as the sheet
+      // expands and collapses").
+      reattachSheetObserver();
     }
     boardMeasureCleanupRef.current = () => {
       window.removeEventListener("resize", measure);
@@ -356,9 +377,10 @@ export function GrimoireBoard({
   // has no built-in notion of "only one of these," so this is the one
   // source of truth every menu's `open` prop is derived from (issue #70:
   // opening one must close any other, and a tap outside must close it too).
-  const [openMenu, setOpenMenu] = useState<{ kind: TokenKind; id: string } | null>(
-    null,
-  );
+  const [openMenu, setOpenMenu] = useState<{
+    kind: TokenKind;
+    id: string;
+  } | null>(null);
   const openMenuElRef = useRef<HTMLDetailsElement | null>(null);
   // Shared by every site that needs to know whether a specific token's menu
   // is the open one — the <details>'s own `open` prop and the wrap's
@@ -380,7 +402,11 @@ export function GrimoireBoard({
       // though the storyteller never left that seat's workflow.
       if (activeOverlay) return;
       const target = event.target as Node | null;
-      if (openMenuElRef.current && target && openMenuElRef.current.contains(target)) {
+      if (
+        openMenuElRef.current &&
+        target &&
+        openMenuElRef.current.contains(target)
+      ) {
         return;
       }
       openMenuElRef.current = null;
@@ -437,7 +463,10 @@ export function GrimoireBoard({
   );
   const total = sorted.length;
   const tokenSize = tokenSizeRem(total);
-  const inPlayCharacterIds = useMemo(() => heldCharacterIds(players), [players]);
+  const inPlayCharacterIds = useMemo(
+    () => heldCharacterIds(players),
+    [players],
+  );
   // Every seat's rendered position, computed once per render and shared by
   // both the player-token loop and anchored-reminder placement below — an
   // anchored reminder needs the exact same live position (including any
@@ -602,13 +631,18 @@ export function GrimoireBoard({
     }
   }
 
-  function handleAddReminder(input: { characterId: string | null; label: string }) {
+  function handleAddReminder(input: {
+    characterId: string | null;
+    label: string;
+  }) {
     const base = reminderPicker?.base ?? null;
     const anchorPlayerId = reminderPicker?.playerId ?? null;
     const position = base
       ? parkBeside(base)
       : nextPadReminderPosition(
-          reminders.filter((r) => r.anchorPlayerId === null).map((r) => r.position),
+          reminders
+            .filter((r) => r.anchorPlayerId === null)
+            .map((r) => r.position),
         );
     onAddReminder({ ...input, position, anchorPlayerId });
     setActiveOverlay(null);
@@ -659,7 +693,9 @@ export function GrimoireBoard({
         text={infoTokenShowing.text}
         characters={infoTokenShowing.characterIds
           .map((id) => characterById.get(id))
-          .filter((character): character is Character => character !== undefined)}
+          .filter(
+            (character): character is Character => character !== undefined,
+          )}
         onClose={() => setInfoTokenShowing(null)}
       />
     );
@@ -713,11 +749,14 @@ export function GrimoireBoard({
             Info tokens
           </button>
         )}
-        {!hidden && !activeOverlay && !placingReminderId && onOpenSetupWalkthrough && (
-          <button type="button" onClick={onOpenSetupWalkthrough}>
-            Setup walkthrough
-          </button>
-        )}
+        {!hidden &&
+          !activeOverlay &&
+          !placingReminderId &&
+          onOpenSetupWalkthrough && (
+            <button type="button" onClick={onOpenSetupWalkthrough}>
+              Setup walkthrough
+            </button>
+          )}
       </div>
 
       {!hidden && placingReminderId && (
@@ -788,7 +827,8 @@ export function GrimoireBoard({
             // data-vside tracked the in-flight position, the menu would
             // flicker between anchors every pointermove instead of staying
             // put until the drag actually settles (code review finding).
-            const restingPosition = player.position ?? circlePosition(index, total);
+            const restingPosition =
+              player.position ?? circlePosition(index, total);
             const official = character ? isOfficialCharacter(character) : false;
             // True only while the player is still wearing the stand-in's
             // identity — once swapped to any other character (including a
@@ -821,7 +861,9 @@ export function GrimoireBoard({
                 <details
                   className={styles.menu}
                   open={menuOpen}
-                  onToggle={(event) => handleMenuToggle("player", player.id, event)}
+                  onToggle={(event) =>
+                    handleMenuToggle("player", player.id, event)
+                  }
                 >
                   <summary
                     className={styles.tokenSummary}
@@ -832,7 +874,9 @@ export function GrimoireBoard({
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                     onPointerCancel={handlePointerCancel}
-                    onClick={(event) => handleSummaryClick(event, "player", player.id)}
+                    onClick={(event) =>
+                      handleSummaryClick(event, "player", player.id)
+                    }
                     // The character art is an <img>, which browsers make
                     // natively draggable — without this, the OS's own
                     // drag-and-drop takes over after the first pointermove
@@ -851,7 +895,9 @@ export function GrimoireBoard({
                       <span className={styles.shroud} aria-hidden="true" />
                     </span>
                     {character && (
-                      <span className={styles.characterName}>{character.name}</span>
+                      <span className={styles.characterName}>
+                        {character.name}
+                      </span>
                     )}
                     <span className={styles.playerName}>
                       {player.name}
@@ -860,7 +906,9 @@ export function GrimoireBoard({
                       )}
                     </span>
                     {isHiddenLunatic && (
-                      <span className={styles.note}>(actually the Lunatic)</span>
+                      <span className={styles.note}>
+                        (actually the Lunatic)
+                      </span>
                     )}
                     {player.isTraveller && (
                       <span className={styles.noteCapitalized}>
@@ -869,12 +917,14 @@ export function GrimoireBoard({
                     )}
                     {player.claim && (
                       <span className={styles.claimBadge}>
-                        Claims {claimById.get(player.claim)?.name ?? player.claim}
+                        Claims{" "}
+                        {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
                     )}
                     {actsAsCapable && player.actsAs && (
                       <span className={styles.claimBadge}>
-                        Acts as {claimById.get(player.actsAs)?.name ?? player.actsAs}
+                        Acts as{" "}
+                        {claimById.get(player.actsAs)?.name ?? player.actsAs}
                       </span>
                     )}
                     {nominatorTodayIds?.has(player.id) && (
@@ -886,7 +936,10 @@ export function GrimoireBoard({
                   </summary>
 
                   <div className={styles.menuBody}>
-                    <label className={styles.field} htmlFor={`token-name-${player.id}`}>
+                    <label
+                      className={styles.field}
+                      htmlFor={`token-name-${player.id}`}
+                    >
                       <span className={styles.srOnly}>Seat {player.seat} </span>
                       Player name
                       <input
@@ -894,7 +947,9 @@ export function GrimoireBoard({
                         className={styles.textInput}
                         type="text"
                         value={player.name}
-                        onChange={(event) => onRename(player.id, event.target.value)}
+                        onChange={(event) =>
+                          onRename(player.id, event.target.value)
+                        }
                         onBlur={() => onRenameCommit(player.id)}
                       />
                     </label>
@@ -961,7 +1016,10 @@ export function GrimoireBoard({
                       </button>
                     )}
 
-                    <label className={styles.field} htmlFor={`token-claim-${player.id}`}>
+                    <label
+                      className={styles.field}
+                      htmlFor={`token-claim-${player.id}`}
+                    >
                       Claim
                       <Select
                         id={`token-claim-${player.id}`}
@@ -998,7 +1056,9 @@ export function GrimoireBoard({
                           id={`token-acts-as-${player.id}`}
                           className={styles.select}
                           value={player.actsAs ?? ""}
-                          onChange={(next) => onSetActsAs(player.id, next || null)}
+                          onChange={(next) =>
+                            onSetActsAs(player.id, next || null)
+                          }
                           entries={[
                             { value: "", label: "Not acting as anyone" },
                             // Same "keep an orphaned value selectable/visible"
@@ -1036,8 +1096,13 @@ export function GrimoireBoard({
                             Official wiki page
                           </a>
                         ) : (
-                          almanacUrl && isHttpUrl(almanacUrl) && (
-                            <a href={almanacUrl} target="_blank" rel="noreferrer">
+                          almanacUrl &&
+                          isHttpUrl(almanacUrl) && (
+                            <a
+                              href={almanacUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
                               Script almanac
                             </a>
                           )
@@ -1082,7 +1147,10 @@ export function GrimoireBoard({
             // be within [4,96] for legacy/hand-edited documents.
             const restingPosition = anchorSeatPosition
               ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
-              : { x: clampPct(reminder.position.x), y: clampPct(reminder.position.y) };
+              : {
+                  x: clampPct(reminder.position.x),
+                  y: clampPct(reminder.position.y),
+                };
             const position =
               liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
                 ? liveDrag.position
@@ -1103,12 +1171,19 @@ export function GrimoireBoard({
                 <details
                   className={styles.menu}
                   open={menuOpen}
-                  onToggle={(event) => handleMenuToggle("reminder", reminder.id, event)}
+                  onToggle={(event) =>
+                    handleMenuToggle("reminder", reminder.id, event)
+                  }
                 >
                   <summary
                     className={styles.tokenSummary}
                     onPointerDown={(event) =>
-                      handlePointerDown(event, "reminder", reminder.id, position)
+                      handlePointerDown(
+                        event,
+                        "reminder",
+                        reminder.id,
+                        position,
+                      )
                     }
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
@@ -1118,7 +1193,10 @@ export function GrimoireBoard({
                     }
                     onDragStart={(event) => event.preventDefault()}
                   >
-                    <ReminderChip character={character} label={reminder.label} />
+                    <ReminderChip
+                      character={character}
+                      label={reminder.label}
+                    />
                   </summary>
 
                   <div className={styles.menuBody}>

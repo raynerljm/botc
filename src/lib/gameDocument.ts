@@ -35,6 +35,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // progress their one and only saved copy (ADR 0001: client-only, single
 // document, no server backup) for no compatibility gain.
 //
+// Not bumped for issue #195 either (GameDocument lost the `dayPhaseCollapsed`
+// field): Day phase now shares the single bottom sheet's collapsed state
+// with the night list (`nightListCollapsed`, reused rather than replaced —
+// same reasoning issue #194 already established for that field), so its own
+// collapsed flag is simply retired, the same harmless-extra-key case as #189.
+//
 // Bumped again for issue #190 (GameDocument gained the required `dayTimer`
 // field), again for issue #191 (Nomination gained the required `lockedIn`
 // field), again for issue #191's `ghostVoteSpenderIds` field (Copilot
@@ -348,12 +354,13 @@ export interface GameDocument {
   // toggle that should stick regardless of night progression.
   demonBluffsCollapsed: boolean;
   endGamePanelCollapsed: boolean | null;
-  // Collapsed/expanded state for the board's side panels (issue #168), same
-  // plain-manual-toggle shape as demonBluffsCollapsed above — defaults
-  // expanded so the tablet/desktop layout is unchanged until the storyteller
-  // deliberately reclaims the circle's width.
+  // Collapsed/expanded (peek/expanded, since issue #194) state for the
+  // board's single bottom sheet (issue #168), same plain-manual-toggle shape
+  // as demonBluffsCollapsed above — defaults expanded so the tablet/desktop
+  // layout is unchanged until the storyteller deliberately reclaims the
+  // circle's width. Shared by both the night list and Day phase (issue #195:
+  // one physical sheet, phase-aware content) rather than a field per phase.
   nightListCollapsed: boolean;
-  dayPhaseCollapsed: boolean;
   // Same plain-manual-toggle shape as the above, for the notes panel (issue
   // #193).
   notesCollapsed: boolean;
@@ -472,7 +479,9 @@ export function anchoredReminderPosition(
   // finding), reproducing the exact bug this function exists to fix.
   const anchorX = clampPct(anchorPosition.x);
   const anchorY = clampPct(anchorPosition.y);
-  const y = clampPct(anchorY + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y);
+  const y = clampPct(
+    anchorY + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y,
+  );
   const verticalClearance = y - anchorY;
   // A seat near the bottom of the circle clamps y before it reaches its full
   // offset, which used to park the chip directly on the token instead of
@@ -591,7 +600,9 @@ function isDrunkStandInReminder(
   reminder: ReminderToken,
   playerId: string,
 ): boolean {
-  return reminder.anchorPlayerId === playerId && reminder.characterId === DRUNK_ID;
+  return (
+    reminder.anchorPlayerId === playerId && reminder.characterId === DRUNK_ID
+  );
 }
 
 export function withoutDrunkStandInReminder(
@@ -851,7 +862,6 @@ export function createGame({
     demonBluffsCollapsed: false,
     endGamePanelCollapsed: null,
     nightListCollapsed: false,
-    dayPhaseCollapsed: false,
     notesCollapsed: false,
     dayTimer: createDayTimer(),
   };
@@ -910,7 +920,9 @@ export function reorderSeatsAfterMove(
   const withAngle = bySeat.map((player, index) => ({
     player,
     angle: clockwiseAngleFromCut(
-      player.id === movedPlayerId ? clampedPosition : liveSeatPosition(player, index),
+      player.id === movedPlayerId
+        ? clampedPosition
+        : liveSeatPosition(player, index),
     ),
   }));
   withAngle.sort((a, b) => {
@@ -926,7 +938,9 @@ export function reorderSeatsAfterMove(
     return a.player.seat - b.player.seat;
   });
 
-  const seatById = new Map(withAngle.map((entry, index) => [entry.player.id, index + 1]));
+  const seatById = new Map(
+    withAngle.map((entry, index) => [entry.player.id, index + 1]),
+  );
   return players.map((player) =>
     player.id === movedPlayerId
       ? { ...player, position: clampedPosition, seat: seatById.get(player.id)! }

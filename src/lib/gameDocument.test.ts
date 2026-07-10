@@ -104,7 +104,9 @@ describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => 
 
 describe("withBackfilledDrunkReminders (issue #186 migration)", () => {
   it("adds a 'Drunk' reminder for a seat that predates automatic placement", () => {
-    const players = [makePlayer({ id: "p1", isDrunk: true, characterId: "washerwoman" })];
+    const players = [
+      makePlayer({ id: "p1", isDrunk: true, characterId: "washerwoman" }),
+    ];
     const reminders = withBackfilledDrunkReminders([], players);
     expect(reminders).toHaveLength(1);
     expect(reminders[0]).toMatchObject({
@@ -201,7 +203,10 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
     // seat 2 (at the right) — still the "first" seat clockwise from the top.
     const result = reorderSeatsAfterMove(players, "p1", { x: 55, y: 8 });
 
-    expect(result.find((p) => p.id === "p1")).toMatchObject({ seat: 1, position: { x: 55, y: 8 } });
+    expect(result.find((p) => p.id === "p1")).toMatchObject({
+      seat: 1,
+      position: { x: 55, y: 8 },
+    });
     expect(result.find((p) => p.id === "p2")!.seat).toBe(2);
     expect(result.find((p) => p.id === "p3")!.seat).toBe(3);
     expect(result.find((p) => p.id === "p4")!.seat).toBe(4);
@@ -235,7 +240,9 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
 
     const result = reorderSeatsAfterMove(players, "p1", between);
 
-    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4,
+    ]);
   });
 
   it("reorders players who are already free-dragged off the standard circle, going by their live position rather than their old seat number", () => {
@@ -254,7 +261,10 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
     expect(result.find((p) => p.id === "p3")!.seat).toBe(3);
     // Untouched players keep their own free-dragged position — only their
     // seat number changes.
-    expect(result.find((p) => p.id === "p2")!.position).toEqual({ x: 95, y: 50 });
+    expect(result.find((p) => p.id === "p2")!.position).toEqual({
+      x: 95,
+      y: 50,
+    });
   });
 
   it("lets any seat become the new seat 1, not just whichever one already sits there untouched (code review finding)", () => {
@@ -268,7 +278,9 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
     // Seat 1 (top, untouched) no longer has an unbeatable claim on being
     // first — it's pushed back by the reorder like any other seat.
     expect(result.find((p) => p.id === "p1")!.seat).not.toBe(1);
-    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4,
+    ]);
   });
 
   it("takes over a seat's exact spot instead of silently no-op'ing when dropped precisely onto it (code review finding)", () => {
@@ -282,7 +294,9 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
     expect(result.find((p) => p.id === "p2")!.seat).toBeLessThan(
       result.find((p) => p.id === "p1")!.seat,
     );
-    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+    expect(result.map((p) => p.seat).sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4,
+    ]);
   });
 
   it("clamps an out-of-range stored position the same way GrimoireBoard's own render loop does, so seat order matches what's actually rendered (issue #167 class bug)", () => {
@@ -311,7 +325,10 @@ describe("reorderSeatsAfterMove (issue #188)", () => {
 
     const result = reorderSeatsAfterMove(players, "p1", { x: 150, y: 8 });
 
-    expect(result.find((p) => p.id === "p1")!.position).toEqual({ x: 96, y: 8 });
+    expect(result.find((p) => p.id === "p1")!.position).toEqual({
+      x: 96,
+      y: 8,
+    });
   });
 });
 
@@ -895,7 +912,7 @@ describe("createGame", () => {
     expect(game.endGamePanelCollapsed).toBeNull();
   });
 
-  it("starts with the Night List and Day Phase side panels expanded (issue #168)", () => {
+  it("starts with the bottom sheet expanded (issue #168)", () => {
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
@@ -906,7 +923,6 @@ describe("createGame", () => {
     });
 
     expect(game.nightListCollapsed).toBe(false);
-    expect(game.dayPhaseCollapsed).toBe(false);
   });
 });
 
@@ -960,13 +976,17 @@ describe("isEndGamePanelCollapsed (issue #79)", () => {
 
   it("honors an explicit manual collapse even after the first night has ended", () => {
     expect(
-      isEndGamePanelCollapsed(gameWith({ night: 2, endGamePanelCollapsed: true })),
+      isEndGamePanelCollapsed(
+        gameWith({ night: 2, endGamePanelCollapsed: true }),
+      ),
     ).toBe(true);
   });
 
   it("honors an explicit manual expand even before the first night has ended", () => {
     expect(
-      isEndGamePanelCollapsed(gameWith({ night: 0, endGamePanelCollapsed: false })),
+      isEndGamePanelCollapsed(
+        gameWith({ night: 0, endGamePanelCollapsed: false }),
+      ),
     ).toBe(false);
   });
 });

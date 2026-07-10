@@ -1,5 +1,7 @@
 import type { Character } from "./characters";
+import { pauseDayTimer } from "./dayTimer";
 import { seatedPlayerCount, type GameDocument } from "./gameDocument";
+import { withNightNotesSection } from "./gameNotes";
 import { normalizeCharacterId } from "./scriptParser";
 
 // CONTEXT.md: Night list — the ordered todo list of ability entries for the
@@ -10,12 +12,48 @@ export function phaseForNight(nightNumber: number): NightPhase {
   return nightNumber <= 1 ? "first" : "other";
 }
 
+// Shared by the night list itself and Day phase's "Reopen" control (issue
+// #195 — the latter labels the just-ended night it would reopen), so the two
+// can never drift out of step on how a given night number reads.
+export function phaseLabel(phase: NightPhase, nightNumber: number): string {
+  return phase === "first" ? "First night" : `Night ${nightNumber}`;
+}
+
 // The night currently open, or the one "Start night" would open next —
 // nights fully completed plus one. The single source of every place that
 // needs "which night is this" (the heading, computeNightList's own one-shot
 // acts-as check, and setting an acts-as target mid-game).
 export function currentNightNumber(game: GameDocument): number {
   return game.night + 1;
+}
+
+// Opens the given night: shared by the night list's own "Start First night"
+// (day 0, before Day phase has any content of its own) and Day phase's
+// "Start Night N" (day >= 1 — issue #195, since that's the only sheet a
+// storyteller ending a day and starting the next night actually sees), so
+// the two can never drift out of step on what "starting a night" does.
+export function withNightStarted(
+  game: GameDocument,
+  nightNumber: number,
+): GameDocument {
+  return {
+    ...game,
+    nightOpen: true,
+    nightChecked: [],
+    nightUnskipped: [],
+    // A still-running discussion countdown would otherwise keep deriving
+    // from wall-clock time all night and read a stale/expired value the
+    // moment day resumes (issue #190 code review finding). Pausing freezes
+    // its remaining time instead — a no-op if it wasn't running.
+    dayTimer: pauseDayTimer(game.dayTimer),
+    // Section titles are always "Night N" (issue #193 AC), distinct from
+    // the checklist heading ("First night" for night 1) — the notes panel
+    // names sections by number regardless of the first-night/other
+    // distinction that only matters for which abilities act. Idempotent: a
+    // Back-then-Start-again round trip must not wipe out notes already
+    // jotted under this night's section.
+    notes: withNightNotesSection(game.notes, nightNumber),
+  };
 }
 
 // The night-list entry id for a player's own character, and for an acts-as
@@ -158,7 +196,9 @@ function metaRank(
   const target = isCharacter ? normalizeCharacterId(key) : key.toLowerCase();
   for (let i = 0; i < order.length; i++) {
     const raw = order[i].trim();
-    const normalized = isCharacter ? normalizeCharacterId(raw) : raw.toLowerCase();
+    const normalized = isCharacter
+      ? normalizeCharacterId(raw)
+      : raw.toLowerCase();
     if (normalized === target) return i;
   }
   return undefined;
@@ -197,7 +237,8 @@ function resolveNightAction(
   firstNightOrder: string[] | null,
   oneShot: boolean,
 ): NightAction {
-  const primaryValue = phase === "first" ? character.firstNight : character.otherNight;
+  const primaryValue =
+    phase === "first" ? character.firstNight : character.otherNight;
   const overrideRankThisPhase = metaRank(order, character.id, true);
   const actsPrimary = primaryValue > 0 || overrideRankThisPhase !== undefined;
 
@@ -220,7 +261,8 @@ function resolveNightAction(
   // the same rank-supremacy path any script-named character already gets,
   // rather than a bare nightValue of 0 sorting it before every real actor.
   const overrideRank =
-    overrideRankThisPhase ?? (oneShotEligible ? firstNightOverrideRank : undefined);
+    overrideRankThisPhase ??
+    (oneShotEligible ? firstNightOverrideRank : undefined);
   const reminderText =
     phase === "first" || oneShotEligible
       ? character.firstNightReminder
@@ -247,8 +289,12 @@ export function computeNightList({
 
   const raw: RawEntry[] = [fixedEntry(FIXED_DUSK, 0, 0)];
   if (includeMinionDemonInfo) {
-    raw.push(fixedEntry(FIXED_MINION_INFO, ACTING_BUCKET, MINION_INFO_NIGHT_VALUE));
-    raw.push(fixedEntry(FIXED_DEMON_INFO, ACTING_BUCKET, DEMON_INFO_NIGHT_VALUE));
+    raw.push(
+      fixedEntry(FIXED_MINION_INFO, ACTING_BUCKET, MINION_INFO_NIGHT_VALUE),
+    );
+    raw.push(
+      fixedEntry(FIXED_DEMON_INFO, ACTING_BUCKET, DEMON_INFO_NIGHT_VALUE),
+    );
   }
 
   for (const player of game.players) {
@@ -291,7 +337,13 @@ export function computeNightList({
     if (!target) continue;
 
     const oneShot = player.actsAsSetOnNight === nightNumber;
-    const action = resolveNightAction(target, phase, order, game.firstNightOrder, oneShot);
+    const action = resolveNightAction(
+      target,
+      phase,
+      order,
+      game.firstNightOrder,
+      oneShot,
+    );
     if (!action.acts && !showAll) continue;
 
     raw.push({
