@@ -40,29 +40,10 @@ function renderDayPhase(
   return render(<DayPhase game={game} onChange={onChange} />);
 }
 
-describe("Day phase: before the first night ends", () => {
-  it("shows a placeholder instead of the panel", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0 });
-    renderDayPhase(game);
-
-    expect(screen.getByText(/Begins once the first night ends/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
-  });
-});
-
-describe("Day phase: while a night is open", () => {
-  it("shows a placeholder instead of the panel, even once a day has started", () => {
-    // Night 2 has been started (nightOpen) but hasn't ended yet — day 1's
-    // business is done until dawn, even though `night` hasn't incremented.
-    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
-    renderDayPhase(game);
-
-    expect(
-      screen.getByText(/Resumes once tonight's night list ends/),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
-  });
-});
+// DayPhase no longer guards on "before the first night ends" or "while a
+// night is open" — GrimoireSetup only ever mounts it once the game phase is
+// genuinely "day" (issue #195), so those states are the night list's
+// business instead (its own "Start/Reopen" content covers them).
 
 describe("Day phase: recording a nomination", () => {
   it("starts with no nominator or nominee selected, and the submit button disabled", () => {
@@ -73,7 +54,9 @@ describe("Day phase: recording a nomination", () => {
     const nomineeSelect = screen.getByLabelText("Nominee");
     expect(nominatorSelect.dataset.value).toBe("");
     expect(nomineeSelect.dataset.value).toBe("");
-    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Record nomination" }),
+    ).toBeDisabled();
   });
 
   it("shows a placeholder preview until both a nominator and a nominee are chosen, then names them", async () => {
@@ -83,20 +66,28 @@ describe("Day phase: recording a nomination", () => {
     const [nominator, nominee] = game.players;
 
     expect(
-      screen.getByText("Choose a nominator and a nominee to start a nomination."),
+      screen.getByText(
+        "Choose a nominator and a nominee to start a nomination.",
+      ),
     ).toBeInTheDocument();
 
     await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
     expect(
-      screen.getByText("Choose a nominator and a nominee to start a nomination."),
+      screen.getByText(
+        "Choose a nominator and a nominee to start a nomination.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Record nomination" }),
+    ).toBeDisabled();
 
     await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     expect(
       screen.getByText(`${nominator.name} will nominate ${nominee.name}`),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Record nomination" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Record nomination" }),
+    ).toBeEnabled();
   });
 
   it("clears the selection back to the placeholder state after recording, so the next nomination (once the first is locked in) is a fresh explicit choice", async () => {
@@ -119,7 +110,9 @@ describe("Day phase: recording a nomination", () => {
 
     expect(screen.getByLabelText("Nominator").dataset.value).toBe("");
     expect(screen.getByLabelText("Nominee").dataset.value).toBe("");
-    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Record nomination" }),
+    ).toBeDisabled();
   });
 
   it("clears an unsubmitted nominator/nominee pick once a new day begins, since it was never recorded (DayPhase stays mounted across day transitions)", async () => {
@@ -134,9 +127,19 @@ describe("Day phase: recording a nomination", () => {
     // trigger and its (conditionally rendered) open listbox share the same
     // aria-label, so a select left open makes a plain getByLabelText
     // ambiguous — the trigger is always the first match in document order.
-    await selectOption(user, screen.getAllByLabelText("Nominator")[0], nominator.id);
-    await selectOption(user, screen.getAllByLabelText("Nominee")[0], nominee.id);
-    expect(screen.getAllByLabelText("Nominator")[0].dataset.value).toBe(nominator.id);
+    await selectOption(
+      user,
+      screen.getAllByLabelText("Nominator")[0],
+      nominator.id,
+    );
+    await selectOption(
+      user,
+      screen.getAllByLabelText("Nominee")[0],
+      nominee.id,
+    );
+    expect(screen.getAllByLabelText("Nominator")[0].dataset.value).toBe(
+      nominator.id,
+    );
 
     // Day 2 begins. DayPhase is never unmounted by its parent (GrimoireSetup
     // renders it unconditionally), so its useState would otherwise carry the
@@ -146,7 +149,9 @@ describe("Day phase: recording a nomination", () => {
 
     expect(screen.getAllByLabelText("Nominator")[0].dataset.value).toBe("");
     expect(screen.getAllByLabelText("Nominee")[0].dataset.value).toBe("");
-    expect(screen.getByRole("button", { name: "Record nomination" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Record nomination" }),
+    ).toBeDisabled();
   });
 
   it("records who nominated whom", async () => {
@@ -177,26 +182,335 @@ describe("Day phase: recording a nomination", () => {
     const withNomination = {
       ...game,
       nominations: [
-        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2, isExile: false, lockedIn: true, ghostVoteSpenderIds: [] },
+        {
+          id: "n1",
+          nominatorId: p1.id,
+          nomineeId: p2.id,
+          votes: [],
+          threshold: 2,
+          isExile: false,
+          lockedIn: true,
+          ghostVoteSpenderIds: [],
+        },
       ],
     };
     renderDayPhase(withNomination);
 
-    const nominatorOptions = await getSelectOptions(user, screen.getByLabelText("Nominator"));
-    const nomineeOptions = await getSelectOptions(user, screen.getByLabelText("Nominee"));
+    const nominatorOptions = await getSelectOptions(
+      user,
+      screen.getByLabelText("Nominator"),
+    );
+    const nomineeOptions = await getSelectOptions(
+      user,
+      screen.getByLabelText("Nominee"),
+    );
+    expect(nominatorOptions.find((o) => o.value === p1.id)?.label).toContain(
+      "already nominated",
+    );
+    expect(nomineeOptions.find((o) => o.value === p2.id)?.label).toContain(
+      "already nominated",
+    );
+  });
+});
+
+// Moved here from NightList (issue #195): a non-null `lastEndedNightSnapshot`
+// always means day >= 1 with no night open — exactly the state where the
+// single bottom sheet shows Day phase's content, not the night list's.
+describe("Day phase: reopening a just-ended night (issue #165)", () => {
+  it("does not offer to reopen when no night has ended", () => {
+    const game = gameWith(["washerwoman", "imp"]);
+    renderDayPhase(game);
+
     expect(
-      nominatorOptions.find((o) => o.value === p1.id)?.label,
-    ).toContain("already nominated");
+      screen.queryByRole("button", { name: /^← Reopen/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers to reopen the just-ended night once one has ended", () => {
+    const game = gameWith(["washerwoman", "imp"], {
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+    });
+    renderDayPhase(game);
+
     expect(
-      nomineeOptions.find((o) => o.value === p2.id)?.label,
-    ).toContain("already nominated");
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    ).toBeInTheDocument();
+  });
+
+  it("undoes End night: restores the night counter, checklist, and the snapshotted nominations", async () => {
+    const user = userEvent.setup();
+    const nomination = {
+      id: "n1",
+      nominatorId: "p1",
+      nomineeId: "p2",
+      votes: ["p3"],
+      threshold: 1,
+      isExile: false,
+      lockedIn: false,
+      ghostVoteSpenderIds: [],
+    };
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      lastEndedNightSnapshot: {
+        nightChecked: ["char:p1"],
+        nightUnskipped: ["char:p2"],
+        nominations: [nomination],
+      },
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    );
+
+    expect(latest.night).toBe(0);
+    expect(latest.nightOpen).toBe(true);
+    expect(latest.nightChecked).toEqual(["char:p1"]);
+    expect(latest.nightUnskipped).toEqual(["char:p2"]);
+    expect(latest.nominations).toEqual([nomination]);
+    expect(latest.lastEndedNightSnapshot).toBeNull();
+  });
+
+  it("does not silently overwrite nominations already recorded since End night (issue #165 AC)", async () => {
+    const user = userEvent.setup();
+    const recordedSinceEnd = {
+      id: "n2",
+      nominatorId: "p4",
+      nomineeId: "p5",
+      votes: [],
+      threshold: 1,
+      isExile: false,
+      lockedIn: false,
+      ghostVoteSpenderIds: [],
+    };
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nominations: [recordedSinceEnd],
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    );
+
+    expect(latest.nominations).toEqual([recordedSinceEnd]);
+  });
+
+  it("removes the Day 1 notes section End night created, if it's still empty, on Reopen (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "day-1", title: "Day 1", text: "" },
+      ],
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    );
+
+    expect(latest.notes.find((s) => s.id === "day-1")).toBeUndefined();
+  });
+
+  it("keeps the Day 1 notes section on Reopen once the storyteller has written something in it (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "day-1", title: "Day 1", text: "Alice nominated Bob." },
+      ],
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    );
+
+    expect(latest.notes).toContainEqual({
+      id: "day-1",
+      title: "Day 1",
+      text: "Alice nominated Bob.",
+    });
+  });
+
+  it("also pauses a running day timer on undoing End night (Copilot review finding on issue #190: this path reopens the night too)", async () => {
+    const user = userEvent.setup();
+    const endAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    const game = gameWith(["washerwoman", "imp"], {
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+      dayTimer: { status: "running", endAt, remainingMs: 5 * 60_000 },
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    );
+
+    expect(latest.dayTimer.status).toBe("paused");
+    expect(latest.dayTimer.endAt).toBeNull();
+    expect(latest.dayTimer.remainingMs).toBeGreaterThan(4.9 * 60_000);
+    expect(latest.dayTimer.remainingMs).toBeLessThanOrEqual(5 * 60_000);
+  });
+
+  it("consumes the reopen offer once used, so it can't be replayed a second time", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+    });
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "← Reopen First night" }),
+    );
+    // The reopened night is genuinely a different phase now (nightOpen),
+    // which GrimoireSetup would stop mounting DayPhase for — but this suite
+    // exercises DayPhase in isolation, so re-render it directly with the
+    // post-reopen document to confirm the offer itself is consumed.
+    rerender(<DayPhase game={latest} onChange={() => {}} />);
+
+    expect(latest.lastEndedNightSnapshot).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^← Reopen/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("labels the reopen control for a later night correctly", () => {
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 2,
+      lastEndedNightSnapshot: {
+        nightChecked: [],
+        nightUnskipped: [],
+        nominations: [],
+      },
+    });
+    renderDayPhase(game);
+
+    expect(
+      screen.getByRole("button", { name: "← Reopen Night 2" }),
+    ).toBeInTheDocument();
+  });
+});
+
+// "Start Night N" moved here from the night list (issue #195): the single
+// bottom sheet only ever shows Day phase's content while a day is in
+// progress, so ending the day has to be one of Day phase's own controls.
+describe("Day phase: starting the next night", () => {
+  it("offers to start the next night, labeled by its number", () => {
+    const game = gameWith(["washerwoman", "imp"], { night: 1 });
+    renderDayPhase(game);
+
+    expect(
+      screen.getByRole("button", { name: "Start Night 2" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the night with every box cleared, even if a stale check-off lingered", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nightChecked: ["stale"],
+      nightUnskipped: ["stale"],
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start Night 2" }));
+
+    expect(latest.nightOpen).toBe(true);
+    expect(latest.nightChecked).toEqual([]);
+    expect(latest.nightUnskipped).toEqual([]);
+  });
+
+  it("pauses a running day timer on Start night, so it can't drift blind while its controls are unreachable (issue #190)", async () => {
+    const user = userEvent.setup();
+    const endAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      dayTimer: { status: "running", endAt, remainingMs: 5 * 60_000 },
+    });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start Night 2" }));
+
+    expect(latest.dayTimer.status).toBe("paused");
+    expect(latest.dayTimer.endAt).toBeNull();
+    expect(latest.dayTimer.remainingMs).toBeGreaterThan(4.9 * 60_000);
+    expect(latest.dayTimer.remainingMs).toBeLessThanOrEqual(5 * 60_000);
+  });
+
+  it("creates a Night 2 notes section when the next night starts (issue #193)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], { night: 1 });
+    let latest = game;
+    renderDayPhase(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: "Start Night 2" }));
+
+    expect(latest.notes).toContainEqual({
+      id: "night-2",
+      title: "Night 2",
+      text: "",
+    });
   });
 });
 
 describe("Day phase: collapsing the panel (issue #168)", () => {
   it("keeps the glanceable block-holder status visible even while collapsed", () => {
     const game = gameWith(["washerwoman", "imp", "recluse", "baron"], {
-      dayPhaseCollapsed: true,
+      nightListCollapsed: true,
     });
     const [nominator, nominee, voter1, voter2] = game.players;
     const withBlock: GameDocument = {
@@ -216,26 +530,21 @@ describe("Day phase: collapsing the panel (issue #168)", () => {
     };
     renderDayPhase(withBlock);
 
-    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
-    expect(screen.getByText(`On the block: ${nominee.name}`)).toBeInTheDocument();
-  });
-
-
-  it("hides the body while collapsed before the first night ends, but keeps the heading reachable", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0, dayPhaseCollapsed: true });
-    renderDayPhase(game);
-
-    expect(screen.queryByText(/Begins once the first night ends/)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Day phase" }),
+      screen.queryByRole("button", { name: "Record nomination" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(`On the block: ${nominee.name}`),
     ).toBeInTheDocument();
   });
 
   it("hides the nomination form and record while collapsed during an active day", () => {
-    const game = gameWith(["washerwoman", "imp"], { dayPhaseCollapsed: true });
+    const game = gameWith(["washerwoman", "imp"], { nightListCollapsed: true });
     renderDayPhase(game);
 
-    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record nomination" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Day 1" })).toBeInTheDocument();
   });
 
@@ -249,7 +558,7 @@ describe("Day phase: collapsing the panel (issue #168)", () => {
 
     await user.click(screen.getByRole("button", { name: "Day 1" }));
 
-    expect(latest).toEqual({ ...game, dayPhaseCollapsed: true });
+    expect(latest).toEqual({ ...game, nightListCollapsed: true });
   });
 });
 
@@ -277,14 +586,21 @@ describe("Day phase: vote tally and threshold", () => {
 
     await user.click(screen.getByRole("checkbox", { name: voter2.name }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    expect(screen.getByText(/2\/2 votes — meets threshold/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/2\/2 votes — meets threshold/),
+    ).toBeInTheDocument();
   });
 
   it("uses the exile threshold (all players, dead included) for a Traveller nominee", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse", "baron"], {
       players: (() => {
-        const base = gameWith(["washerwoman", "imp", "recluse", "baron"]).players;
+        const base = gameWith([
+          "washerwoman",
+          "imp",
+          "recluse",
+          "baron",
+        ]).players;
         return [
           ...base,
           {
@@ -312,7 +628,11 @@ describe("Day phase: vote tally and threshold", () => {
       latest = next;
     });
 
-    await selectOption(user, screen.getByLabelText("Nominator"), game.players[0].id);
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominator"),
+      game.players[0].id,
+    );
     await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
 
@@ -338,11 +658,19 @@ describe("Day phase: distinguishing open vs. locked-in nominations in the record
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     const [firstItem] = screen.getAllByRole("listitem");
-    expect(within(firstItem).getByText("Open — accepting votes")).toBeInTheDocument();
+    expect(
+      within(firstItem).getByText("Open — accepting votes"),
+    ).toBeInTheDocument();
     expect(firstItem.dataset.status).toBe("open");
     // While it's open, starting a second nomination isn't offered.
-    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
-    expect(screen.getByText("A nomination is open. Lock in its votes to start another.")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record nomination" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "A nomination is open. Lock in its votes to start another.",
+      ),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
@@ -359,7 +687,9 @@ describe("Day phase: distinguishing open vs. locked-in nominations in the record
     const [firstAfter, openItem] = screen.getAllByRole("listitem");
     expect(within(firstAfter).getByText("Locked in")).toBeInTheDocument();
     expect(firstAfter.dataset.status).toBe("locked-in");
-    expect(within(openItem).getByText("Open — accepting votes")).toBeInTheDocument();
+    expect(
+      within(openItem).getByText("Open — accepting votes"),
+    ).toBeInTheDocument();
     expect(openItem.dataset.status).toBe("open");
   });
 
@@ -379,15 +709,21 @@ describe("Day phase: distinguishing open vs. locked-in nominations in the record
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    expect(screen.getByRole("button", { name: "Record nomination" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Record nomination" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Reopen" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     const [item] = screen.getAllByRole("listitem");
-    expect(within(item).getByText("Open — accepting votes")).toBeInTheDocument();
+    expect(
+      within(item).getByText("Open — accepting votes"),
+    ).toBeInTheDocument();
     expect(item.dataset.status).toBe("open");
-    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record nomination" }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides Reopen on a locked-in nomination while a different nomination is already open (code review finding: two nominations must never both be open)", async () => {
@@ -416,7 +752,9 @@ describe("Day phase: distinguishing open vs. locked-in nominations in the record
     // The first (locked-in) nomination no longer offers Reopen — clicking it
     // would put two nominations in the open/editable state at once, letting
     // a dead voter's ghost vote be recorded (and locked in) on both.
-    expect(screen.queryByRole("button", { name: "Reopen" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reopen" }),
+    ).not.toBeInTheDocument();
 
     const nominations = latest.nominations;
     expect(nominations[0].lockedIn).toBe(true);
@@ -532,7 +870,9 @@ describe("Day phase: surfacing the block on the nomination that holds it", () =>
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     const [firstItem, secondItem] = screen.getAllByRole("listitem");
-    expect(within(firstItem).queryByText("On the block")).not.toBeInTheDocument();
+    expect(
+      within(firstItem).queryByText("On the block"),
+    ).not.toBeInTheDocument();
     expect(within(secondItem).getByText("On the block")).toBeInTheDocument();
   });
 
@@ -561,9 +901,12 @@ describe("Day phase: surfacing the block on the nomination that holds it", () =>
     // review finding).
     const checkboxes = screen.getAllByRole("checkbox");
     const lastCheckbox = checkboxes[checkboxes.length - 1];
-    const blockBadge = within(screen.getAllByRole("listitem")[0]).getByText("On the block");
+    const blockBadge = within(screen.getAllByRole("listitem")[0]).getByText(
+      "On the block",
+    );
     expect(
-      lastCheckbox.compareDocumentPosition(blockBadge) & Node.DOCUMENT_POSITION_FOLLOWING,
+      lastCheckbox.compareDocumentPosition(blockBadge) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 });
@@ -588,7 +931,9 @@ describe("Day phase: the block", () => {
     await user.click(screen.getByRole("checkbox", { name: voter2.name }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    expect(screen.getByText(`On the block: ${nominee.name}`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`On the block: ${nominee.name}`),
+    ).toBeInTheDocument();
   });
 
   it("renders the block status after the nominations list, never above it, so it can't shift voter checkboxes mid-count (issue #125)", async () => {
@@ -637,19 +982,31 @@ describe("Day phase: the block", () => {
     });
     const players = game.players;
 
-    async function nominateAndVote(nomineeIndex: number, voterIndices: number[]) {
-      await selectOption(user, screen.getByLabelText("Nominator"), players[0].id);
-      await selectOption(user, 
+    async function nominateAndVote(
+      nomineeIndex: number,
+      voterIndices: number[],
+    ) {
+      await selectOption(
+        user,
+        screen.getByLabelText("Nominator"),
+        players[0].id,
+      );
+      await selectOption(
+        user,
         screen.getByLabelText("Nominee"),
         players[nomineeIndex].id,
       );
-      await user.click(screen.getByRole("button", { name: "Record nomination" }));
+      await user.click(
+        screen.getByRole("button", { name: "Record nomination" }),
+      );
       rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
       for (const voterIndex of voterIndices) {
         await user.click(
           screen.getByRole("checkbox", { name: players[voterIndex].name }),
         );
-        rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+        rerender(
+          <DayPhase game={latest} onChange={(next) => (latest = next)} />,
+        );
       }
       // Lock in so the next nomination can be recorded (issue #191: only
       // one nomination is ever open at a time).
@@ -662,7 +1019,9 @@ describe("Day phase: the block", () => {
     // and the third must not retake it — 4 only matches the tied high-water
     // mark, it doesn't beat it.
     await nominateAndVote(1, [0, 1, 2, 3]);
-    expect(screen.getByText(`On the block: ${players[1].name}`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`On the block: ${players[1].name}`),
+    ).toBeInTheDocument();
 
     await nominateAndVote(2, [0, 1, 2, 3]);
     expect(screen.queryByText(/On the block/)).not.toBeInTheDocument();
@@ -778,8 +1137,14 @@ describe("Day phase: exile calls never compete with the execution block (issue #
     // 2. Neither Alex's nomination nor Tessa's exile is "already nominated"
     // — exile calls are unlimited per day and don't spend the execution
     // once-per-day nomination gate.
-    const nominatorOptions = await getSelectOptions(user, screen.getByLabelText("Nominator"));
-    const nomineeOptions = await getSelectOptions(user, screen.getByLabelText("Nominee"));
+    const nominatorOptions = await getSelectOptions(
+      user,
+      screen.getByLabelText("Nominator"),
+    );
+    const nomineeOptions = await getSelectOptions(
+      user,
+      screen.getByLabelText("Nominee"),
+    );
     expect(
       nominatorOptions.find((o) => o.value === alex.id)?.label,
     ).not.toContain("already nominated");
@@ -800,7 +1165,9 @@ describe("Day phase: exile calls never compete with the execution block (issue #
       await user.click(screen.getByRole("checkbox", { name: voter.name }));
       rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     }
-    expect(screen.getByText(`On the block: ${harper.name}`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`On the block: ${harper.name}`),
+    ).toBeInTheDocument();
   });
 });
 
@@ -823,16 +1190,22 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    const ghostCheckbox = screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` });
+    const ghostCheckbox = screen.getByRole("checkbox", {
+      name: `${ghost.name} (ghost vote)`,
+    });
     await user.click(ghostCheckbox);
 
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      false,
+    );
     expect(latest.nominations[0].votes).toContain(ghost.id);
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
 
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      true,
+    );
     expect(latest.nominations[0].lockedIn).toBe(true);
   });
 
@@ -853,20 +1226,28 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
     await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    await user.click(
+      screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
+    );
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      true,
+    );
 
     await user.click(screen.getByRole("button", { name: "Reopen" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      false,
+    );
     expect(latest.nominations[0].lockedIn).toBe(false);
     expect(latest.nominations[0].votes).toContain(ghost.id);
 
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    await user.click(
+      screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
+    );
 
     expect(latest.nominations[0].votes).not.toContain(ghost.id);
   });
@@ -888,18 +1269,24 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
     await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    await user.click(
+      screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
+    );
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      true,
+    );
     expect(latest.nominations[0].ghostVoteSpenderIds).toEqual([ghost.id]);
 
     // The storyteller corrects a mistaken death — the ghost is marked alive
     // again — entirely outside this nomination, before it's ever reopened.
     const revived: GameDocument = {
       ...latest,
-      players: latest.players.map((p) => (p.id === ghost.id ? { ...p, dead: false } : p)),
+      players: latest.players.map((p) =>
+        p.id === ghost.id ? { ...p, dead: false } : p,
+      ),
     };
     rerender(<DayPhase game={revived} onChange={(next) => (latest = next)} />);
 
@@ -908,7 +1295,9 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
     // Restored via the nomination's own snapshotted spender ids, not by
     // recomputing "who's currently dead" — the now-alive ghost's earlier
     // spend is still found and undone.
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      false,
+    );
     expect(latest.nominations[0].lockedIn).toBe(false);
     expect(latest.nominations[0].ghostVoteSpenderIds).toEqual([]);
   });
@@ -948,16 +1337,24 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
       latest = next;
     });
 
-    await selectOption(user, screen.getByLabelText("Nominator"), game.players[0].id);
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominator"),
+      game.players[0].id,
+    );
     await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (vote free)` }));
+    await user.click(
+      screen.getByRole("checkbox", { name: `${ghost.name} (vote free)` }),
+    );
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
 
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      false,
+    );
     expect(latest.nominations[0].votes).toContain(ghost.id);
   });
 
@@ -996,7 +1393,11 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
       latest = next;
     });
 
-    await selectOption(user, screen.getByLabelText("Nominator"), game.players[0].id);
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominator"),
+      game.players[0].id,
+    );
     await selectOption(user, screen.getByLabelText("Nominee"), "traveller-1");
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
@@ -1025,8 +1426,16 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
       latest = next;
     });
 
-    await selectOption(user, screen.getByLabelText("Nominator"), dead.players[0].id);
-    await selectOption(user, screen.getByLabelText("Nominee"), dead.players[1].id);
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominator"),
+      dead.players[0].id,
+    );
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominee"),
+      dead.players[1].id,
+    );
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -1055,22 +1464,42 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
 
     // First nomination: the ghost votes, then it's locked in, spending
     // their one vote for the day.
-    await selectOption(user, screen.getByLabelText("Nominator"), dead.players[0].id);
-    await selectOption(user, screen.getByLabelText("Nominee"), dead.players[1].id);
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominator"),
+      dead.players[0].id,
+    );
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominee"),
+      dead.players[1].id,
+    );
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    await user.click(
+      screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
+    );
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      true,
+    );
 
     // Second nomination opens (the first is now locked in/read-only); the
     // storyteller records — then un-records — the same ghost's vote here.
     // Un-checking must NOT refund the ghost vote, since the first
     // nomination still genuinely holds their one vote for the day.
-    await selectOption(user, screen.getByLabelText("Nominator"), dead.players[3].id);
-    await selectOption(user, screen.getByLabelText("Nominee"), dead.players[4].id);
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominator"),
+      dead.players[3].id,
+    );
+    await selectOption(
+      user,
+      screen.getByLabelText("Nominee"),
+      dead.players[4].id,
+    );
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
@@ -1081,13 +1510,17 @@ describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)",
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     // Now checked, the label drops "already spent" (that note only applies
     // to the not-yet-voted state) — uncheck via the plain label instead.
-    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    await user.click(
+      screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }),
+    );
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     // Locking in the second nomination — which no longer records the
     // ghost's vote — must not touch their already-spent state either.
     await user.click(screen.getByRole("button", { name: "Lock in votes" }));
 
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(
+      true,
+    );
     expect(latest.nominations[0].votes).toContain(ghost.id);
     expect(latest.nominations[1].votes).not.toContain(ghost.id);
   });
@@ -1103,8 +1536,14 @@ describe("Day phase: dead players in the nominator and nominee pickers", () => {
     };
     renderDayPhase(dead);
 
-    const nominatorOptions = await getSelectOptions(user, screen.getByLabelText("Nominator"));
-    const nomineeOptions = await getSelectOptions(user, screen.getByLabelText("Nominee"));
+    const nominatorOptions = await getSelectOptions(
+      user,
+      screen.getByLabelText("Nominator"),
+    );
+    const nomineeOptions = await getSelectOptions(
+      user,
+      screen.getByLabelText("Nominee"),
+    );
     expect(
       nominatorOptions.find((o) => o.value === dead.players[0].id)?.label,
     ).toContain("(dead)");

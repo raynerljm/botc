@@ -4,7 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter } from "@/lib/characters";
 import type { Player, ReminderToken } from "@/lib/gameDocument";
-import { getSelectOptions, openListbox, selectOption } from "@/testUtils/selectOption";
+import {
+  getSelectOptions,
+  openListbox,
+  selectOption,
+} from "@/testUtils/selectOption";
 
 import { GrimoireBoard } from "./GrimoireBoard";
 import styles from "./GrimoireBoard.module.css";
@@ -167,7 +171,12 @@ describe("GrimoireBoard rendering", () => {
     const { container } = render(
       <GrimoireBoard
         players={[
-          makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "washerwoman" }),
+          makePlayer({
+            id: "p1",
+            seat: 1,
+            name: "Alice",
+            characterId: "washerwoman",
+          }),
           makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
         ]}
         characterById={characterById}
@@ -238,7 +247,11 @@ describe("GrimoireBoard rendering", () => {
 
   it("shows a traveller's alignment", () => {
     const { container } = renderBoard([
-      makePlayer({ isTraveller: true, travellerAlignment: "evil", characterId: "imp" }),
+      makePlayer({
+        isTraveller: true,
+        travellerAlignment: "evil",
+        characterId: "imp",
+      }),
     ]);
 
     const summary = container.querySelector(
@@ -260,7 +273,8 @@ describe("GrimoireBoard rendering", () => {
     expect(first.style.left).toMatch(/%$/);
     expect(first.style.top).toMatch(/%$/);
     expect(
-      first.style.left !== second.style.left || first.style.top !== second.style.top,
+      first.style.left !== second.style.left ||
+        first.style.top !== second.style.top,
     ).toBe(true);
   });
 
@@ -269,7 +283,9 @@ describe("GrimoireBoard rendering", () => {
       makePlayer({ id: "p1", seat: 1, position: { x: 12, y: 34 } }),
     ]);
 
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap.style.left).toBe("12%");
     expect(wrap.style.top).toBe("34%");
   });
@@ -287,7 +303,9 @@ describe("GrimoireBoard rendering", () => {
       makePlayer({ id: "p1", seat: 1, position: { x: 150, y: -20 } }),
     ]);
 
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap.style.left).toBe("96%");
     expect(wrap.style.top).toBe("4%");
   });
@@ -297,7 +315,9 @@ describe("GrimoireBoard rendering", () => {
       reminders: [makeReminder({ id: "r1", position: { x: 150, y: -20 } })],
     });
 
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
     expect(wrap.style.left).toBe("96%");
     expect(wrap.style.top).toBe("4%");
   });
@@ -375,18 +395,24 @@ describe("token menu", () => {
 
     expect(screen.getByText(/dead/i)).toBeInTheDocument();
     await user.click(screen.getByText("Alice"));
-    expect(screen.getByRole("button", { name: /mark alive/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /mark alive/i }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the shroud element mounted while alive, so a later death fades it in via CSS rather than popping it in", () => {
     const { container } = renderBoard([makePlayer({ dead: false })]);
 
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     // The shroud is always the last child of its wrapper span — unlike
     // `[aria-hidden="true"]` alone, this doesn't also match a fallback
     // CharacterToken's initials span (also aria-hidden) for a character
     // with no vendored art.
-    const shroud = wrap.querySelector('[aria-hidden="true"]:last-child') as HTMLElement;
+    const shroud = wrap.querySelector(
+      '[aria-hidden="true"]:last-child',
+    ) as HTMLElement;
     // The shroud's visibility keys off this ancestor's data-dead via CSS
     // (`.tokenSummary[data-dead] .shroud`), so that's the state that should
     // be absent while alive, not an attribute on the shroud itself.
@@ -606,7 +632,9 @@ describe("acts-as (issue #17)", () => {
 
   it("keeps an acts-as target visible instead of silently resetting to 'Not acting as anyone' when it isn't in claimOptions (Copilot review finding)", async () => {
     const user = userEvent.setup();
-    renderBoard([makePlayer({ characterId: "philosopher", actsAs: "poisoner" })]);
+    renderBoard([
+      makePlayer({ characterId: "philosopher", actsAs: "poisoner" }),
+    ]);
 
     await user.click(screen.getByText("Alice"));
     const select = screen.getByLabelText(/acts as/i);
@@ -677,7 +705,9 @@ describe("acts-as (issue #17)", () => {
 describe("ghost votes", () => {
   it("shows a spent/unspent ghost vote marker only for dead players, toggleable with one tap", async () => {
     const user = userEvent.setup();
-    const handlers = renderBoard([makePlayer({ dead: true, ghostVoteSpent: false })]);
+    const handlers = renderBoard([
+      makePlayer({ dead: true, ghostVoteSpent: false }),
+    ]);
 
     const marker = screen.getByRole("button", { name: /ghost vote/i });
     expect(marker).toHaveTextContent(/available/i);
@@ -688,7 +718,9 @@ describe("ghost votes", () => {
 
   it("doesn't show a ghost vote marker for a living player", () => {
     renderBoard([makePlayer({ dead: false })]);
-    expect(screen.queryByRole("button", { name: /ghost vote/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /ghost vote/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -699,8 +731,12 @@ describe("seat reordering (issue #188)", () => {
       makePlayer({ id: "p1", seat: 1, name: "Alice" }),
       makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
     ]);
-    const aliceWrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
-    const bobWrap = container.querySelector("[data-player-id='p2']") as HTMLElement;
+    const aliceWrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
+    const bobWrap = container.querySelector(
+      "[data-player-id='p2']",
+    ) as HTMLElement;
 
     await user.click(screen.getByText("Alice"));
     expect(
@@ -728,7 +764,9 @@ describe("re-circle", () => {
 
   it("discards an in-progress drag so it can't override the re-circled layout", async () => {
     const user = userEvent.setup();
-    const { container } = renderBoard([makePlayer({ position: { x: 10, y: 10 } })]);
+    const { container } = renderBoard([
+      makePlayer({ position: { x: 10, y: 10 } }),
+    ]);
     const board = container.querySelector("[data-board]") as HTMLElement;
     vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
       left: 0,
@@ -744,16 +782,27 @@ describe("re-circle", () => {
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
     expect(wrap.style.left).toBe("20%");
 
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     // The stale in-progress drag position must not resurface on the next
     // pointermove for the same (now-abandoned) gesture.
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }),
+    );
 
     expect(wrap.style.left).not.toBe("20%");
   });
@@ -929,10 +978,18 @@ describe("drag", () => {
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
 
     expect(wrap.style.left).toBe("60%");
     expect(wrap.style.top).toBe("25%");
@@ -948,10 +1005,22 @@ describe("drag", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 200 }));
-    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 200 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }),
+    );
 
     expect(onMove).toHaveBeenCalledTimes(1);
     expect(onMove).toHaveBeenCalledWith("p1", { x: 65, y: 30 });
@@ -963,12 +1032,27 @@ describe("drag", () => {
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     const originalLeft = wrap.style.left;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    fireEvent(summary, pointerEvent("pointercancel", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointercancel", {
+        pointerId: 1,
+        clientX: 140,
+        clientY: 180,
+      }),
+    );
 
     expect(onMove).not.toHaveBeenCalled();
     expect(wrap.style.left).toBe(originalLeft);
@@ -981,12 +1065,27 @@ describe("drag", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
     // A second finger rests on the same token while pointer 1 is still down.
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 2, clientX: 105, clientY: 105 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 200 }));
-    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 2, clientX: 105, clientY: 105 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 200 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 200 }),
+    );
 
     expect(onMove).toHaveBeenCalledTimes(1);
     expect(onMove).toHaveBeenCalledWith("p1", { x: 65, y: 30 });
@@ -998,8 +1097,14 @@ describe("drag", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 101, clientY: 101 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 101, clientY: 101 }),
+    );
 
     expect(onMove).not.toHaveBeenCalled();
   });
@@ -1013,9 +1118,18 @@ describe("drag", () => {
       "[data-player-id='p1'] details",
     ) as HTMLDetailsElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
     fireEvent.click(summary);
 
     expect(details.open).toBe(false);
@@ -1036,20 +1150,31 @@ describe("drag", () => {
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
 
     // Token centre is at 30%/40% of the 400px board, i.e. (120, 160). Grab
     // 20px right and 10px down of centre — e.g. the name label below the icon.
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 140, clientY: 170 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 140, clientY: 170 }),
+    );
     // Move the pointer 40px right, 0px down (past the drag threshold).
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 170 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 170 }),
+    );
 
     // The token must move by exactly the pointer's delta (+10% x, +0% y),
     // not jump to the raw pointer position (which would read 45%/42.5%).
     expect(wrap.style.left).toBe("40%");
     expect(wrap.style.top).toBe("40%");
 
-    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 170 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 170 }),
+    );
     expect(onMove).toHaveBeenCalledWith("p1", { x: 40, y: 40 });
   });
 
@@ -1068,17 +1193,28 @@ describe("drag", () => {
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     // Clamped to 96% (384px on the 400px board) per the earlier rendering test.
     expect(wrap.style.left).toBe("96%");
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 384, clientY: 160 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 344, clientY: 160 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 384, clientY: 160 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 344, clientY: 160 }),
+    );
 
     // A 40px (10%) move left from the clamped edge, not a jump elsewhere.
     expect(wrap.style.left).toBe("86%");
 
-    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 344, clientY: 160 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 344, clientY: 160 }),
+    );
     expect(onMove).toHaveBeenCalledWith("p1", { x: 86, y: 40 });
   });
 });
@@ -1092,7 +1228,9 @@ describe("hide grimoire", () => {
 
     const board = container.querySelector("[data-board]") as HTMLElement;
     expect(board).toHaveAttribute("data-hidden", "true");
-    expect(screen.getByRole("button", { name: /show grimoire/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /show grimoire/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Alice")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /show grimoire/i }));
@@ -1119,15 +1257,23 @@ describe("hide grimoire", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
 
     await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
     await user.click(screen.getByRole("button", { name: /show grimoire/i }));
 
     // The abandoned gesture never reached pointerup, so it must never save.
     expect(onMove).not.toHaveBeenCalled();
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap.style.left).not.toBe("35%");
   });
 });
@@ -1135,10 +1281,19 @@ describe("hide grimoire", () => {
 describe("reminders (issue #14)", () => {
   it("renders every reminder on the pad at its stored position, with the source character's art", () => {
     const { container } = renderBoard([makePlayer()], {
-      reminders: [makeReminder({ id: "r1", characterId: "washerwoman", label: "Townsfolk", position: { x: 60, y: 40 } })],
+      reminders: [
+        makeReminder({
+          id: "r1",
+          characterId: "washerwoman",
+          label: "Townsfolk",
+          position: { x: 60, y: 40 },
+        }),
+      ],
     });
 
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
     expect(wrap).toBeInTheDocument();
     expect(wrap.style.left).toBe("60%");
     expect(wrap.style.top).toBe("40%");
@@ -1147,10 +1302,14 @@ describe("reminders (issue #14)", () => {
 
   it("renders a reminder with no source character (custom text) without character art", () => {
     const { container } = renderBoard([makePlayer()], {
-      reminders: [makeReminder({ id: "r1", characterId: null, label: "Custom note" })],
+      reminders: [
+        makeReminder({ id: "r1", characterId: null, label: "Custom note" }),
+      ],
     });
 
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
     expect(within(wrap).queryByRole("img")).not.toBeInTheDocument();
     expect(within(wrap).getByText("Custom note")).toBeInTheDocument();
   });
@@ -1160,7 +1319,9 @@ describe("reminders (issue #14)", () => {
     const { container, onAddReminder } = renderBoard([makePlayer()]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Add reminder" }),
+    );
     const dialog = screen.getByRole("dialog", { name: "Add reminder" });
     const group = within(dialog).getByRole("group", { name: "Washerwoman" });
     await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
@@ -1180,8 +1341,12 @@ describe("reminders (issue #14)", () => {
     ]);
 
     await user.click(screen.getByText("Alice"));
-    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
-    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const wrap = screen
+      .getByText("Alice")
+      .closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(
+      within(wrap).getByRole("button", { name: "Add reminder" }),
+    );
 
     const dialog = screen.getByRole("dialog", { name: "Add reminder" });
     const group = within(dialog).getByRole("group", { name: "Washerwoman" });
@@ -1203,14 +1368,25 @@ describe("reminders (issue #14)", () => {
     const summary = container.querySelector(
       "[data-reminder-id='r1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
     expect(wrap.style.left).toBe("70%");
     expect(onMoveReminder).not.toHaveBeenCalled();
 
-    fireEvent(summary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
     expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 70, y: 60 });
     expect(onMove).not.toHaveBeenCalled();
   });
@@ -1218,11 +1394,18 @@ describe("reminders (issue #14)", () => {
   it("removes a reminder in one tap, offering an undo that restores it", async () => {
     const user = userEvent.setup();
     const reminder = makeReminder({ id: "r1" });
-    const { container, onRemoveReminder, onRestoreReminder } = renderBoard([makePlayer()], {
-      reminders: [reminder],
-    });
+    const { container, onRemoveReminder, onRestoreReminder } = renderBoard(
+      [makePlayer()],
+      {
+        reminders: [reminder],
+      },
+    );
 
-    await user.click(within(container.querySelector("[data-reminder-id='r1']") as HTMLElement).getByText("Townsfolk"));
+    await user.click(
+      within(
+        container.querySelector("[data-reminder-id='r1']") as HTMLElement,
+      ).getByText("Townsfolk"),
+    );
     await user.click(screen.getByRole("button", { name: "Remove reminder" }));
 
     expect(onRemoveReminder).toHaveBeenCalledWith("r1");
@@ -1233,14 +1416,22 @@ describe("reminders (issue #14)", () => {
   it("hides the undo banner along with the rest of the board when the grimoire is hidden", async () => {
     const user = userEvent.setup();
     const reminder = makeReminder({ id: "r1" });
-    const { container } = renderBoard([makePlayer()], { reminders: [reminder] });
+    const { container } = renderBoard([makePlayer()], {
+      reminders: [reminder],
+    });
 
-    await user.click(within(container.querySelector("[data-reminder-id='r1']") as HTMLElement).getByText("Townsfolk"));
+    await user.click(
+      within(
+        container.querySelector("[data-reminder-id='r1']") as HTMLElement,
+      ).getByText("Townsfolk"),
+    );
     await user.click(screen.getByRole("button", { name: "Remove reminder" }));
     expect(screen.getByRole("button", { name: /undo/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
-    expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /undo/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("doesn't let a second 'Add reminder' tap silently discard an already-open picker's context", async () => {
@@ -1250,10 +1441,16 @@ describe("reminders (issue #14)", () => {
     ]);
 
     await user.click(screen.getByText("Alice"));
-    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
-    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
+    const wrap = screen
+      .getByText("Alice")
+      .closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(
+      within(wrap).getByRole("button", { name: "Add reminder" }),
+    );
 
-    const padControls = container.querySelector("[data-controls]") as HTMLElement;
+    const padControls = container.querySelector(
+      "[data-controls]",
+    ) as HTMLElement;
     expect(
       within(padControls).queryByRole("button", { name: "Add reminder" }),
     ).not.toBeInTheDocument();
@@ -1263,12 +1460,20 @@ describe("reminders (issue #14)", () => {
     const user = userEvent.setup();
     const { container } = renderBoard([makePlayer()]);
 
-    const padControls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(padControls).getByRole("button", { name: "Add reminder" }));
-    expect(screen.getByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
+    const padControls = container.querySelector(
+      "[data-controls]",
+    ) as HTMLElement;
+    await user.click(
+      within(padControls).getByRole("button", { name: "Add reminder" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Add reminder" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /hide grimoire/i }));
-    expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
     expect(
       within(padControls).queryByRole("button", { name: "Add reminder" }),
     ).not.toBeInTheDocument();
@@ -1279,12 +1484,20 @@ describe("reminders (issue #14)", () => {
     renderBoard([makePlayer({ id: "p1", position: { x: 30, y: 40 } })]);
 
     await user.click(screen.getByText("Alice"));
-    const wrap = screen.getByText("Alice").closest("[data-player-id='p1']") as HTMLElement;
-    await user.click(within(wrap).getByRole("button", { name: "Add reminder" }));
-    expect(screen.getByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
+    const wrap = screen
+      .getByText("Alice")
+      .closest("[data-player-id='p1']") as HTMLElement;
+    await user.click(
+      within(wrap).getByRole("button", { name: "Add reminder" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Add reminder" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
-    expect(screen.queryByRole("dialog", { name: "Add reminder" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Add reminder" }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -1301,7 +1514,9 @@ describe("reminder placement (issue #71)", () => {
     });
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Add reminder" }),
+    );
     const dialog = screen.getByRole("dialog", { name: "Add reminder" });
     const group = within(dialog).getByRole("group", { name: "Washerwoman" });
     await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
@@ -1325,24 +1540,36 @@ describe("reminder placement (issue #71)", () => {
       { reminders: [reminder] },
     );
 
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
     expect(wrap.style.left).toBe("30%");
     expect(parseFloat(wrap.style.top)).toBeGreaterThan(40);
   });
 
   it("stacks a second reminder anchored to the same seat further down, not on top of the first", () => {
-    const first = makeReminder({ id: "r1", anchorPlayerId: "p1", label: "First" });
-    const second = makeReminder({ id: "r2", anchorPlayerId: "p1", label: "Second" });
+    const first = makeReminder({
+      id: "r1",
+      anchorPlayerId: "p1",
+      label: "First",
+    });
+    const second = makeReminder({
+      id: "r2",
+      anchorPlayerId: "p1",
+      label: "Second",
+    });
     const { container } = renderBoard(
       [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
       { reminders: [first, second] },
     );
 
     const firstTop = parseFloat(
-      (container.querySelector("[data-reminder-id='r1']") as HTMLElement).style.top,
+      (container.querySelector("[data-reminder-id='r1']") as HTMLElement).style
+        .top,
     );
     const secondTop = parseFloat(
-      (container.querySelector("[data-reminder-id='r2']") as HTMLElement).style.top,
+      (container.querySelector("[data-reminder-id='r2']") as HTMLElement).style
+        .top,
     );
     expect(secondTop).toBeGreaterThan(firstTop);
   });
@@ -1358,10 +1585,18 @@ describe("reminder placement (issue #71)", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
 
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }),
+    );
 
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
     expect(parseFloat(wrap.style.left)).toBeCloseTo(50);
   });
 
@@ -1385,7 +1620,9 @@ describe("reminder placement (issue #71)", () => {
     const reminderSummary = container.querySelector(
       "[data-reminder-id='r1'] summary",
     ) as HTMLElement;
-    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
     // Displayed anchored position: same x as the seat (30%), offset below
     // it in y (30%/52% per anchoredReminderPosition, i.e. (120, 208) on the
     // 400px board) — not the seat's own centre and not the stored (1, 1).
@@ -1423,9 +1660,9 @@ describe("reminder placement (issue #71)", () => {
     );
 
     await user.click(
-      within(container.querySelector("[data-reminder-id='r1']") as HTMLElement).getByText(
-        "Townsfolk",
-      ),
+      within(
+        container.querySelector("[data-reminder-id='r1']") as HTMLElement,
+      ).getByText("Townsfolk"),
     );
     await user.click(screen.getByRole("button", { name: "Attach to seat" }));
     expect(screen.getByText(/tap a seat/i)).toBeInTheDocument();
@@ -1451,14 +1688,18 @@ describe("reminder placement (issue #71)", () => {
   it("cancels an in-progress attach without calling onAttachReminder", async () => {
     const user = userEvent.setup();
     const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
-    const { onAttachReminder } = renderBoard([makePlayer({ id: "p1", name: "Alice" })], {
-      reminders: [reminder],
-    });
+    const { onAttachReminder } = renderBoard(
+      [makePlayer({ id: "p1", name: "Alice" })],
+      {
+        reminders: [reminder],
+      },
+    );
 
     await user.click(
-      screen.getByText("Townsfolk").closest("[data-reminder-id='r1']")!.querySelector(
-        "summary",
-      )!,
+      screen
+        .getByText("Townsfolk")
+        .closest("[data-reminder-id='r1']")!
+        .querySelector("summary")!,
     );
     await user.click(screen.getByRole("button", { name: "Attach to seat" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
@@ -1471,14 +1712,18 @@ describe("reminder placement (issue #71)", () => {
   it("hides the pad-level 'Add reminder'/'Info tokens' buttons while placing a reminder", async () => {
     const user = userEvent.setup();
     const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
-    const { container } = renderBoard([makePlayer({ id: "p1", name: "Alice" })], {
-      reminders: [reminder],
-    });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", name: "Alice" })],
+      {
+        reminders: [reminder],
+      },
+    );
 
     await user.click(
-      screen.getByText("Townsfolk").closest("[data-reminder-id='r1']")!.querySelector(
-        "summary",
-      )!,
+      screen
+        .getByText("Townsfolk")
+        .closest("[data-reminder-id='r1']")!
+        .querySelector("summary")!,
     );
     await user.click(screen.getByRole("button", { name: "Attach to seat" }));
 
@@ -1500,9 +1745,9 @@ describe("reminder placement (issue #71)", () => {
     mockBoardRect(container);
 
     fireEvent.click(
-      (container.querySelector("[data-reminder-id='r1']") as HTMLElement).querySelector(
-        "summary",
-      )!,
+      (
+        container.querySelector("[data-reminder-id='r1']") as HTMLElement
+      ).querySelector("summary")!,
     );
     fireEvent.click(screen.getByRole("button", { name: "Attach to seat" }));
 
@@ -1513,9 +1758,18 @@ describe("reminder placement (issue #71)", () => {
     const seatSummary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    fireEvent(seatSummary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(seatSummary, pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }));
-    fireEvent(seatSummary, pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 180 }));
+    fireEvent(
+      seatSummary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      seatSummary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 180 }),
+    );
+    fireEvent(
+      seatSummary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 180, clientY: 180 }),
+    );
     fireEvent.click(seatSummary);
 
     expect(onMove).not.toHaveBeenCalled();
@@ -1532,22 +1786,29 @@ describe("reminder placement (issue #71)", () => {
     );
 
     await user.click(
-      screen.getByText("Townsfolk").closest("[data-reminder-id='r1']")!.querySelector(
-        "summary",
-      )!,
+      screen
+        .getByText("Townsfolk")
+        .closest("[data-reminder-id='r1']")!
+        .querySelector("summary")!,
     );
     await user.click(screen.getByRole("button", { name: "Attach to seat" }));
     await user.click(screen.getByRole("button", { name: "Remove reminder" }));
 
     expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
-    const seatSummary = screen.getByText("Alice").closest("[data-player-id='p1']")!
+    const seatSummary = screen
+      .getByText("Alice")
+      .closest("[data-player-id='p1']")!
       .querySelector("summary")!;
     fireEvent.click(seatSummary);
     expect(onAttachReminder).not.toHaveBeenCalled();
   });
 
   it("clears the armed placement state when the reminder currently being placed is dragged instead (code review finding)", () => {
-    const reminder = makeReminder({ id: "r1", anchorPlayerId: null, position: { x: 60, y: 40 } });
+    const reminder = makeReminder({
+      id: "r1",
+      anchorPlayerId: null,
+      position: { x: 60, y: 40 },
+    });
     const { container, onAttachReminder } = renderBoard(
       [makePlayer({ id: "p1", name: "Alice" })],
       { reminders: [reminder] },
@@ -1560,9 +1821,18 @@ describe("reminder placement (issue #71)", () => {
     fireEvent.click(reminderSummary);
     fireEvent.click(screen.getByRole("button", { name: "Attach to seat" }));
 
-    fireEvent(reminderSummary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(reminderSummary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
-    fireEvent(reminderSummary, pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
 
     expect(screen.queryByText(/tap a seat/i)).not.toBeInTheDocument();
     const seatSummary = container.querySelector(
@@ -1606,7 +1876,9 @@ describe("setup walkthrough reopen button (issue #26)", () => {
     });
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Add reminder" }),
+    );
 
     expect(
       screen.queryByRole("button", { name: "Setup walkthrough" }),
@@ -1620,9 +1892,13 @@ describe("info tokens (issue #19)", () => {
     const { container } = renderBoard([makePlayer()]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
 
-    expect(screen.getByRole("dialog", { name: "Info tokens" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Info tokens" }),
+    ).toBeInTheDocument();
   });
 
   it("walks picking a standard card, attaching a token, and showing it full-screen", async () => {
@@ -1630,7 +1906,9 @@ describe("info tokens (issue #19)", () => {
     const { container } = renderBoard([makePlayer({ characterId: "imp" })]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
     // Scoped to the Info tokens dialog — the board's own "Swap character"
     // <select> also has a Demons <optgroup> (an implicit role="group" too),
@@ -1640,17 +1918,23 @@ describe("info tokens (issue #19)", () => {
     await user.click(within(group).getByRole("button", { name: "Imp" }));
     await user.click(screen.getByRole("button", { name: "Show" }));
 
-    expect(screen.queryByRole("dialog", { name: "Info tokens" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Info tokens" }),
+    ).not.toBeInTheDocument();
     const showMode = screen.getByRole("dialog", { name: "This is the Demon" });
     expect(within(showMode).getByText("Imp")).toBeInTheDocument();
   });
 
   it("never leaks the board behind it — no player name or control renders while showing", async () => {
     const user = userEvent.setup();
-    const { container } = renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+    const { container } = renderBoard([
+      makePlayer({ name: "Alice", characterId: "imp" }),
+    ]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
     await user.click(screen.getByRole("button", { name: "Show" }));
 
@@ -1665,8 +1949,12 @@ describe("info tokens (issue #19)", () => {
     const { container } = renderBoard([makePlayer()]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
-    await user.click(screen.getByRole("button", { name: "Did you nominate today?" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Did you nominate today?" }),
+    );
     await user.click(screen.getByRole("button", { name: "Show" }));
     await user.click(screen.getByRole("button", { name: "Done" }));
 
@@ -1686,12 +1974,22 @@ describe("info tokens (issue #19)", () => {
     // A drag is left mid-gesture (pointerdown + move, no pointerup) — e.g. a
     // second finger opens and completes the info token flow while the first
     // is still holding a token.
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+    );
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
-    await user.click(screen.getByRole("button", { name: "Did you nominate today?" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Did you nominate today?" }),
+    );
     await user.click(screen.getByRole("button", { name: "Show" }));
     await user.click(screen.getByRole("button", { name: "Done" }));
 
@@ -1705,9 +2003,18 @@ describe("info tokens (issue #19)", () => {
     const summaryAfter = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
-    fireEvent(summaryAfter, pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }));
-    fireEvent(summaryAfter, pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }));
-    fireEvent(summaryAfter, pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }));
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }),
+    );
     expect(onMove).toHaveBeenCalledWith("p1", { x: 60, y: 25 });
   });
 
@@ -1716,13 +2023,17 @@ describe("info tokens (issue #19)", () => {
     const { container } = renderBoard([makePlayer()]);
     const controls = container.querySelector("[data-controls]") as HTMLElement;
 
-    await user.click(within(controls).getByRole("button", { name: "Add reminder" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Add reminder" }),
+    );
     expect(
       within(controls).queryByRole("button", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
     expect(
       within(controls).queryByRole("button", { name: "Add reminder" }),
     ).not.toBeInTheDocument();
@@ -1770,7 +2081,10 @@ describe("swap character", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const listbox = await openListbox(
+      user,
+      screen.getByLabelText(/swap character/i),
+    );
     const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Angel")).toBe(false);
@@ -1781,7 +2095,10 @@ describe("swap character", () => {
     renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const listbox = await openListbox(
+      user,
+      screen.getByLabelText(/swap character/i),
+    );
     const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Scapegoat")).toBe(false);
@@ -1812,7 +2129,10 @@ describe("swap character", () => {
     renderBoard([makePlayer()]);
 
     await user.click(screen.getByText("Alice"));
-    const listbox = await openListbox(user, screen.getByLabelText(/swap character/i));
+    const listbox = await openListbox(
+      user,
+      screen.getByLabelText(/swap character/i),
+    );
     const options = within(listbox).getAllByRole("option");
 
     expect(options.some((o) => o.textContent === "Beggar")).toBe(false);
@@ -1889,8 +2209,12 @@ describe("token menu exclusivity and dismissal (issue #70)", () => {
     await user.click(screen.getByText("Alice"));
     expect(details.open).toBe(true);
 
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
-    await user.click(within(wrap).getByRole("button", { name: /add reminder/i }));
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
+    await user.click(
+      within(wrap).getByRole("button", { name: /add reminder/i }),
+    );
 
     // Interacting inside the resulting picker overlay (which renders outside
     // Alice's own <details>) must not read as an "outside tap" that closes
@@ -1968,7 +2292,9 @@ describe("token menu viewport clamping (issue #124)", () => {
     const { container } = renderBoard([
       makePlayer({ id: "p1", position: { x: 92, y: 50 } }),
     ]);
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap).toHaveAttribute("data-side", "right");
     expect(wrap).not.toHaveAttribute("data-vside");
   });
@@ -1977,7 +2303,9 @@ describe("token menu viewport clamping (issue #124)", () => {
     const { container } = renderBoard([
       makePlayer({ id: "p1", position: { x: 8, y: 50 } }),
     ]);
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap).toHaveAttribute("data-side", "left");
   });
 
@@ -1985,7 +2313,9 @@ describe("token menu viewport clamping (issue #124)", () => {
     const { container } = renderBoard([
       makePlayer({ id: "p1", position: { x: 50, y: 90 } }),
     ]);
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap).toHaveAttribute("data-vside", "bottom");
     expect(wrap).not.toHaveAttribute("data-side");
   });
@@ -1994,7 +2324,9 @@ describe("token menu viewport clamping (issue #124)", () => {
     const { container } = renderBoard([
       makePlayer({ id: "p1", position: { x: 50, y: 50 } }),
     ]);
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     expect(wrap).not.toHaveAttribute("data-side");
     expect(wrap).not.toHaveAttribute("data-vside");
   });
@@ -2040,7 +2372,9 @@ describe("token menu viewport clamping (issue #124)", () => {
       makePlayer({ id: "p1", position: { x: 90, y: 50 } }),
     ]);
     mockBoardRect(container);
-    const wrap = container.querySelector("[data-player-id='p1']") as HTMLElement;
+    const wrap = container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
     const summary = container.querySelector(
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
@@ -2051,8 +2385,14 @@ describe("token menu viewport clamping (issue #124)", () => {
     // Drag the same (now open-menu'd) token toward the board's centre —
     // the live position (and thus the token's on-screen left/top) follows
     // the drag, but the menu's anchor must not chase it.
-    fireEvent(summary, pointerEvent("pointerdown", { pointerId: 1, clientX: 360, clientY: 200 }));
-    fireEvent(summary, pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }));
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 360, clientY: 200 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 200, clientY: 200 }),
+    );
 
     expect(wrap.style.left).toBe("50%");
     expect(wrap).toHaveAttribute("data-side", "right");
@@ -2113,7 +2453,9 @@ describe("Drunk reveal", () => {
       "[data-player-id='p1'] summary",
     ) as HTMLElement;
     expect(within(summary).getByText("Drunk")).toBeInTheDocument();
-    expect(within(summary).queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
+    expect(
+      within(summary).queryByText(/actually the Drunk/i),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByText("Alice"));
     expect(
       screen.queryByRole("button", { name: /reveal drunk/i }),
@@ -2236,39 +2578,53 @@ describe("board sizing (issue #78)", () => {
   it("fits the shorter of the available width and available height", () => {
     // Landscape iPad (1180x820): plenty of width, but only 604px of height
     // remains below the board's top offset once the reserve is subtracted.
-    const board = measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+    const board = measureWith({
+      innerHeight: 820,
+      wrapperWidth: 1000,
+      boardTop: 200,
+    });
 
     expect(board.style.width).toBe("604px");
     expect(board.style.height).toBe("604px");
   });
 
   it("never shrinks the circle below the legibility floor", () => {
-    const board = measureWith({ innerHeight: 300, wrapperWidth: 200, boardTop: 250 });
+    const board = measureWith({
+      innerHeight: 300,
+      wrapperWidth: 200,
+      boardTop: 250,
+    });
 
     expect(board.style.width).toBe("320px");
     expect(board.style.height).toBe("320px");
   });
 
   it("caps the circle at 40rem once nothing is bottlenecking it", () => {
-    const board = measureWith({ innerHeight: 2000, wrapperWidth: 2000, boardTop: 0 });
+    const board = measureWith({
+      innerHeight: 2000,
+      wrapperWidth: 2000,
+      boardTop: 0,
+    });
 
     expect(board.style.width).toBe("640px");
     expect(board.style.height).toBe("640px");
   });
 
-  describe("reserving space for the night list's bottom sheet (issue #194)", () => {
+  describe("reserving space for the phase-aware bottom sheet (issue #194, #195)", () => {
     let sheet: HTMLElement;
 
     afterEach(() => {
       sheet?.remove();
     });
 
-    // A `[data-night-sheet]` element elsewhere in the document — standing in
-    // for NightList's own fixed-position root, which this suite doesn't
-    // render (renderBoard mounts GrimoireBoard in isolation).
+    // A `[data-bottom-sheet]` element elsewhere in the document — standing in
+    // for BottomSheet's own fixed-position root (rendered by whichever of
+    // NightList/DayPhase the current game phase mounts, issue #195), which
+    // this suite doesn't render (renderBoard mounts GrimoireBoard in
+    // isolation).
     function stubSheet(heightPx: number) {
       sheet = document.createElement("div");
-      sheet.setAttribute("data-night-sheet", "");
+      sheet.setAttribute("data-bottom-sheet", "");
       document.body.appendChild(sheet);
       vi.spyOn(sheet, "getBoundingClientRect").mockReturnValue({
         left: 0,
@@ -2287,7 +2643,11 @@ describe("board sizing (issue #78)", () => {
       stubSheet(200);
       // Same geometry as "fits the shorter of the available width and
       // available height" above (604px unreserved) minus the sheet's 200px.
-      const board = measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+      const board = measureWith({
+        innerHeight: 820,
+        wrapperWidth: 1000,
+        boardTop: 200,
+      });
 
       expect(board.style.width).toBe("404px");
       expect(board.style.height).toBe("404px");
@@ -2295,7 +2655,11 @@ describe("board sizing (issue #78)", () => {
 
     it("never shrinks below the legibility floor even when the sheet alone would demand more room", () => {
       stubSheet(500);
-      const board = measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+      const board = measureWith({
+        innerHeight: 820,
+        wrapperWidth: 1000,
+        boardTop: 200,
+      });
 
       expect(board.style.width).toBe("320px");
       expect(board.style.height).toBe("320px");
@@ -2328,6 +2692,186 @@ describe("board sizing (issue #78)", () => {
       expect(board.style.width).toBe("544px");
       expect(board.style.height).toBe("544px");
     });
+
+    it("re-attaches to a new sheet element that replaces the old one, e.g. a night/day phase swap (issue #195)", () => {
+      stubSheet(200);
+      measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+      const board = document.querySelector("[data-board]") as HTMLElement;
+      expect(board.style.width).toBe("404px");
+
+      // The mounted sheet is swapped for a physically different element with
+      // the same marker — the night list unmounting and Day phase mounting
+      // (or vice versa), rather than the same component's box merely
+      // resizing. The old node is detached first, exactly as React would on
+      // an unmount.
+      sheet.remove();
+      const replacement = document.createElement("div");
+      replacement.setAttribute("data-bottom-sheet", "");
+      document.body.appendChild(replacement);
+      vi.spyOn(replacement, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 100,
+        right: 0,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      });
+      sheet = replacement;
+
+      fireEvent(window, new Event("resize"));
+
+      // 604px unreserved minus the new sheet's 100px, not the old sheet's
+      // now-stale 200px — proof the observer re-found the new node instead
+      // of silently measuring a detached one forever after.
+      expect(board.style.width).toBe("504px");
+      expect(board.style.height).toBe("504px");
+    });
+
+    it("attaches a ResizeObserver to the sheet on initial mount, not only after a phase swap (code review finding)", () => {
+      // jsdom has no real ResizeObserver (every other test in this describe
+      // block drives its assertions through a manual window resize instead,
+      // per the comments above) — stubbed here specifically to catch a
+      // regression where the sheet's own observer was never constructed at
+      // mount at all: an earlier version of reattachSheetObserver's guard
+      // checked the *sheet's* connectedness (always true immediately after
+      // it's freshly queried) instead of whether an observer had ever been
+      // created, so the explicit post-setup call was a guaranteed no-op and
+      // this never fired until the first night/day phase swap happened to
+      // occur.
+      const observeCalls: unknown[] = [];
+      class StubResizeObserver {
+        observe(target: unknown) {
+          observeCalls.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+      const original = globalThis.ResizeObserver;
+      globalThis.ResizeObserver =
+        StubResizeObserver as unknown as typeof ResizeObserver;
+
+      try {
+        stubSheet(200);
+        measureWith({ innerHeight: 820, wrapperWidth: 1000, boardTop: 200 });
+      } finally {
+        globalThis.ResizeObserver = original;
+      }
+
+      expect(observeCalls).toContain(sheet);
+    });
+  });
+
+  describe("remeasureOn prop (issue #195)", () => {
+    let sheet: HTMLElement | undefined;
+
+    afterEach(() => {
+      sheet?.remove();
+    });
+
+    it("re-fits immediately when remeasureOn changes, without waiting for a resize event", () => {
+      Object.defineProperty(window, "innerHeight", {
+        value: 820,
+        configurable: true,
+      });
+      const { container, rerender } = render(
+        <GrimoireBoard
+          players={[makePlayer()]}
+          characterById={characterById}
+          activeFabled={[]}
+          claimOptions={claimOptions}
+          {...noop}
+          remeasureOn="night"
+        />,
+      );
+      const board = container.querySelector("[data-board]") as HTMLElement;
+      const wrapper = board.parentElement as HTMLElement;
+      Object.defineProperty(wrapper, "clientWidth", {
+        value: 1000,
+        configurable: true,
+      });
+      vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 200,
+        width: 0,
+        height: 0,
+        right: 0,
+        bottom: 0,
+        x: 0,
+        y: 200,
+        toJSON() {},
+      });
+
+      sheet = document.createElement("div");
+      sheet.setAttribute("data-bottom-sheet", "");
+      document.body.appendChild(sheet);
+      let sheetHeightPx = 200;
+      vi.spyOn(sheet, "getBoundingClientRect").mockImplementation(() => ({
+        left: 0,
+        top: 0,
+        width: 0,
+        height: sheetHeightPx,
+        right: 0,
+        bottom: sheetHeightPx,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }));
+
+      // A real resize event establishes the baseline (the initial
+      // ref-callback measurement ran before these mocks existed, same as
+      // every other test in this file).
+      fireEvent(window, new Event("resize"));
+      expect(board.style.width).toBe("404px");
+
+      // The sheet's own rendered height changes (Day phase's content isn't
+      // the same height as the night list's) at the same moment the phase
+      // itself flips — nothing dispatches a resize event this time, only
+      // `remeasureOn` changes, mirroring how GrimoireSetup passes the
+      // current sheet phase.
+      sheetHeightPx = 100;
+      rerender(
+        <GrimoireBoard
+          players={[makePlayer()]}
+          characterById={characterById}
+          activeFabled={[]}
+          claimOptions={claimOptions}
+          {...noop}
+          remeasureOn="day"
+        />,
+      );
+
+      expect(board.style.width).toBe("504px");
+    });
+
+    it("does not force an extra measurement pass on the initial render", () => {
+      const measureSpy = vi.spyOn(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+      );
+      const callsBeforeMount = measureSpy.mock.calls.length;
+
+      render(
+        <GrimoireBoard
+          players={[makePlayer()]}
+          characterById={characterById}
+          activeFabled={[]}
+          claimOptions={claimOptions}
+          {...noop}
+          remeasureOn="night"
+        />,
+      );
+
+      // The ref callback's own synchronous `measure()` call at mount already
+      // reads the board's rect exactly once — asserting only that the count
+      // grew by a small, fixed amount (not e.g. doubled) is enough to catch
+      // a regression where the `remeasureOn` effect fired redundantly on
+      // mount instead of only on later changes.
+      const callsAfterMount = measureSpy.mock.calls.length;
+      expect(callsAfterMount - callsBeforeMount).toBeLessThanOrEqual(2);
+    });
   });
 
   it("keeps measuring the current board after it's unmounted and remounted", async () => {
@@ -2341,7 +2885,9 @@ describe("board sizing (issue #78)", () => {
     const { container } = renderBoard([makePlayer({ characterId: "imp" })]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    await user.click(within(controls).getByRole("button", { name: "Info tokens" }));
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
     const dialog = screen.getByRole("dialog", { name: "Info tokens" });
     const group = within(dialog).getByRole("group", { name: "Demons" });
@@ -2351,8 +2897,14 @@ describe("board sizing (issue #78)", () => {
 
     const board = container.querySelector("[data-board]") as HTMLElement;
     const wrapper = board.parentElement as HTMLElement;
-    Object.defineProperty(window, "innerHeight", { value: 820, configurable: true });
-    Object.defineProperty(wrapper, "clientWidth", { value: 1000, configurable: true });
+    Object.defineProperty(window, "innerHeight", {
+      value: 820,
+      configurable: true,
+    });
+    Object.defineProperty(wrapper, "clientWidth", {
+      value: 1000,
+      configurable: true,
+    });
     vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
       left: 0,
       top: 200,

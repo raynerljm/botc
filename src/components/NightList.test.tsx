@@ -18,7 +18,10 @@ function characters(...ids: string[]): Character[] {
   return ids.map((id) => getCharacter(id)!);
 }
 
-function gameWith(selectedIds: string[], overrides: Partial<GameDocument> = {}): GameDocument {
+function gameWith(
+  selectedIds: string[],
+  overrides: Partial<GameDocument> = {},
+): GameDocument {
   const game = createGame({
     scriptId: "tb",
     scriptName: "Trouble Brewing",
@@ -43,7 +46,10 @@ function characterById(game: GameDocument): Map<string, Character> {
 // jsdom has no real PointerEvent constructor, so a plain MouseEvent stands in
 // with pointerId grafted on — same convention as GrimoireBoard.test.tsx's
 // own pointer-drag tests.
-function pointerEvent(type: string, init: { pointerId: number; clientY: number }) {
+function pointerEvent(
+  type: string,
+  init: { pointerId: number; clientY: number },
+) {
   const event = new MouseEvent(type, { bubbles: true, clientY: init.clientY });
   Object.defineProperty(event, "pointerId", { value: init.pointerId });
   return event;
@@ -54,7 +60,11 @@ function renderNightList(
   onChange: (next: GameDocument) => void = () => {},
 ) {
   return render(
-    <NightList game={game} characterById={characterById(game)} onChange={onChange} />,
+    <NightList
+      game={game}
+      characterById={characterById(game)}
+      onChange={onChange}
+    />,
   );
 }
 
@@ -127,7 +137,10 @@ describe("Night list: starting and ending a night", () => {
 
   it("increments the night counter and closes the night when ended", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     let latest = game;
     const { rerender } = renderNightList(game, (next) => {
       latest = next;
@@ -139,7 +152,11 @@ describe("Night list: starting and ending a night", () => {
     expect(latest.nightOpen).toBe(false);
 
     rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={() => {}}
+      />,
     );
     expect(
       screen.getByRole("button", { name: "Start Night 2" }),
@@ -152,7 +169,16 @@ describe("Night list: starting and ending a night", () => {
       night: 0,
       nightOpen: true,
       nominations: [
-        { id: "n1", nominatorId: "p1", nomineeId: "p2", votes: [], threshold: 1, isExile: false, lockedIn: false, ghostVoteSpenderIds: [] },
+        {
+          id: "n1",
+          nominatorId: "p1",
+          nomineeId: "p2",
+          votes: [],
+          threshold: 1,
+          isExile: false,
+          lockedIn: false,
+          ghostVoteSpenderIds: [],
+        },
       ],
     });
     let latest = game;
@@ -175,12 +201,19 @@ describe("Night list: starting and ending a night", () => {
 
     await user.click(screen.getByRole("button", { name: "Start First night" }));
 
-    expect(latest.notes).toContainEqual({ id: "night-1", title: "Night 1", text: "" });
+    expect(latest.notes).toContainEqual({
+      id: "night-1",
+      title: "Night 1",
+      text: "",
+    });
   });
 
   it("creates a Day 1 notes section when the first night ends (issue #193)", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     let latest = game;
     renderNightList(game, (next) => {
       latest = next;
@@ -188,7 +221,11 @@ describe("Night list: starting and ending a night", () => {
 
     await user.click(screen.getByRole("button", { name: /End First night/ }));
 
-    expect(latest.notes).toContainEqual({ id: "day-1", title: "Day 1", text: "" });
+    expect(latest.notes).toContainEqual({
+      id: "day-1",
+      title: "Day 1",
+      text: "",
+    });
   });
 
   it("does not wipe an already-jotted night section when Start night runs again after Back (issue #193)", async () => {
@@ -220,20 +257,30 @@ describe("Night list: undoing a transition (issue #165)", () => {
     const game = gameWith(["washerwoman", "imp"]);
     renderNightList(game);
 
-    expect(screen.queryByRole("button", { name: /^← /i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^← /i }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers a back control while a night is open, distinct from End night", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     renderNightList(game);
 
     expect(screen.getByRole("button", { name: "← Back" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /End First night/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /End First night/ }),
+    ).toBeInTheDocument();
   });
 
   it("undoes Start night: closes the night without advancing the counter", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     let latest = game;
     renderNightList(game, (next) => {
       latest = next;
@@ -268,18 +315,29 @@ describe("Night list: undoing a transition (issue #165)", () => {
 
   it("removes the Night 1 notes section Start night created, if it's still empty, on Back (issue #193)", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: false });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: false,
+    });
     let latest = game;
     const { rerender } = renderNightList(game, (next) => {
       latest = next;
     });
 
     await user.click(screen.getByRole("button", { name: "Start First night" }));
-    expect(latest.notes).toContainEqual({ id: "night-1", title: "Night 1", text: "" });
+    expect(latest.notes).toContainEqual({
+      id: "night-1",
+      title: "Night 1",
+      text: "",
+    });
     rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={(next) => {
-        latest = next;
-      }} />,
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={(next) => {
+          latest = next;
+        }}
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: "← Back" }));
@@ -311,217 +369,27 @@ describe("Night list: undoing a transition (issue #165)", () => {
     });
   });
 
-  it("does not offer to reopen a night that hasn't ended yet", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: false });
-    renderNightList(game);
-
-    expect(screen.queryByRole("button", { name: /^← Reopen/ })).not.toBeInTheDocument();
-  });
-
-  it("offers to reopen the just-ended night once one has ended", async () => {
-    const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
-    let latest = game;
-    const { rerender } = renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: /End First night/ }));
-    rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "← Reopen First night" }),
-    ).toBeInTheDocument();
-  });
-
-  it("undoes End night: restores the night counter, checklist, and today's nominations", async () => {
-    const user = userEvent.setup();
-    const nomination = {
-      id: "n1",
-      nominatorId: "p1",
-      nomineeId: "p2",
-      votes: ["p3"],
-      threshold: 1,
-      isExile: false,
-      lockedIn: false,
-      ghostVoteSpenderIds: [],
-    };
-    const game = gameWith(["washerwoman", "imp"], {
-      night: 0,
-      nightOpen: true,
-      nightChecked: ["char:p1"],
-      nightUnskipped: ["char:p2"],
-      nominations: [nomination],
-    });
-    let latest = game;
-    const { rerender } = renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: /End First night/ }));
-    rerender(
-      <NightList
-        game={latest}
-        characterById={characterById(latest)}
-        onChange={(next) => {
-          latest = next;
-        }}
-      />,
-    );
-    // Ending the night cleared these, exactly as the existing "starting and
-    // ending a night" tests already cover.
-    expect(latest.nominations).toEqual([]);
-
-    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
-
-    expect(latest.night).toBe(0);
-    expect(latest.nightOpen).toBe(true);
-    expect(latest.nightChecked).toEqual(["char:p1"]);
-    expect(latest.nightUnskipped).toEqual(["char:p2"]);
-    expect(latest.nominations).toEqual([nomination]);
-  });
-
-  it("removes the Day 1 notes section End night created, if it's still empty, on Reopen (issue #193)", async () => {
-    const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
-    let latest = game;
-    const { rerender } = renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: /End First night/ }));
-    expect(latest.notes).toContainEqual({ id: "day-1", title: "Day 1", text: "" });
-    rerender(
-      <NightList
-        game={latest}
-        characterById={characterById(latest)}
-        onChange={(next) => {
-          latest = next;
-        }}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
-
-    expect(latest.notes.find((s) => s.id === "day-1")).toBeUndefined();
-  });
-
-  it("keeps the Day 1 notes section on Reopen once the storyteller has written something in it (issue #193)", async () => {
-    const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], {
-      night: 1,
-      nightOpen: false,
-      lastEndedNightSnapshot: { nightChecked: [], nightUnskipped: [], nominations: [] },
-      notes: [
-        { id: "general", title: "General", text: "" },
-        { id: "day-1", title: "Day 1", text: "Alice nominated Bob." },
-      ],
-    });
-    let latest = game;
-    renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
-
-    expect(latest.notes).toContainEqual({
-      id: "day-1",
-      title: "Day 1",
-      text: "Alice nominated Bob.",
-    });
-  });
-
-  it("also pauses a running day timer on undoing End night (Copilot review finding on issue #190: this path reopens the night too)", async () => {
-    const user = userEvent.setup();
-    const endAt = new Date(Date.now() + 5 * 60_000).toISOString();
-    const game = gameWith(["washerwoman", "imp"], {
-      night: 0,
-      nightOpen: true,
-      dayTimer: { status: "running", endAt, remainingMs: 5 * 60_000 },
-    });
-    let latest = game;
-    const { rerender } = renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: /End First night/ }));
-    rerender(
-      <NightList
-        game={latest}
-        characterById={characterById(latest)}
-        onChange={(next) => {
-          latest = next;
-        }}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
-
-    expect(latest.dayTimer.status).toBe("paused");
-    expect(latest.dayTimer.endAt).toBeNull();
-    expect(latest.dayTimer.remainingMs).toBeGreaterThan(4.9 * 60_000);
-    expect(latest.dayTimer.remainingMs).toBeLessThanOrEqual(5 * 60_000);
-  });
-
-  it("consumes the reopen offer once used, so it can't be replayed a second time", async () => {
-    const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
-    let latest = game;
-    const { rerender } = renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: /End First night/ }));
-    rerender(
-      <NightList
-        game={latest}
-        characterById={characterById(latest)}
-        onChange={(next) => {
-          latest = next;
-        }}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
-    rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
-    );
-
-    expect(latest.lastEndedNightSnapshot).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /^← Reopen/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("labels the reopen control for a later night correctly", async () => {
-    const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
-    let latest = game;
-    const { rerender } = renderNightList(game, (next) => {
-      latest = next;
-    });
-
-    await user.click(screen.getByRole("button", { name: /End Night 2/ }));
-    rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "← Reopen Night 2" }),
-    ).toBeInTheDocument();
-  });
+  // "Reopen [ended night]" moved to DayPhase (issue #195): a non-null
+  // `lastEndedNightSnapshot` always means day >= 1 with no night open —
+  // exactly the state where the single bottom sheet shows Day phase instead
+  // of the night list. See DayPhase.test.tsx's own "reopening a just-ended
+  // night" describe block for its coverage.
 });
 
 describe("Night list: entries", () => {
   it("shows each entry's token, holding player, reminder text, and a checkbox", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     renderNightList(game);
 
     const washerwoman = getCharacter("washerwoman")!;
     expect(screen.getByText(washerwoman.name)).toBeInTheDocument();
     expect(screen.getByText(/Seat 1/)).toBeInTheDocument();
-    expect(screen.getByText(washerwoman.firstNightReminder)).toBeInTheDocument();
+    expect(
+      screen.getByText(washerwoman.firstNightReminder),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", { name: `${washerwoman.name} — Seat 1` }),
     ).toBeInTheDocument();
@@ -529,7 +397,10 @@ describe("Night list: entries", () => {
 
   it("renders a long player name in full, without truncating the text content (issue #58)", () => {
     const longName = "Bartholomew Winterbourne-Featherstonhaugh the Third";
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     const withLongName: GameDocument = {
       ...game,
       players: [{ ...game.players[0], name: longName }, game.players[1]],
@@ -545,7 +416,10 @@ describe("Night list: entries", () => {
 
   it("checking an entry persists into the game document, and shows a progress count", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     let latest = game;
     renderNightList(game, (next) => {
       latest = next;
@@ -561,7 +435,10 @@ describe("Night list: entries", () => {
 
   it("marks a checked-off entry with data-checked, for its CSS transition to key off", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     let latest = game;
     const { rerender } = renderNightList(game, (next) => {
       latest = next;
@@ -575,7 +452,11 @@ describe("Night list: entries", () => {
 
     await user.click(checkbox);
     rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={() => {}}
+      />,
     );
 
     expect(
@@ -586,7 +467,10 @@ describe("Night list: entries", () => {
   });
 
   it("flags a disguised Drunk's entry so the storyteller doesn't run it as a real wake", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     const disguised: GameDocument = {
       ...game,
       players: [{ ...game.players[0], isDrunk: true }, game.players[1]],
@@ -598,7 +482,10 @@ describe("Night list: entries", () => {
 
   it("flags a disguised Lunatic's entry so the storyteller runs the fake ritual, not a real Demon action (issue #163)", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["imp", "washerwoman"], { night: 0, nightOpen: true });
+    const game = gameWith(["imp", "washerwoman"], {
+      night: 0,
+      nightOpen: true,
+    });
     const disguised: GameDocument = {
       ...game,
       players: [{ ...game.players[0], isLunatic: true }, game.players[1]],
@@ -614,7 +501,10 @@ describe("Night list: entries", () => {
 
 describe("Night list: dead players", () => {
   it("dims and auto-skips a dead player's entry, but keeps it visible", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nightOpen: true,
+    });
     const dead: GameDocument = {
       ...game,
       players: game.players.map((p) =>
@@ -635,7 +525,10 @@ describe("Night list: dead players", () => {
 
   it("re-enables the checkbox once a skipped entry is un-skipped", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nightOpen: true,
+    });
     const dead: GameDocument = {
       ...game,
       players: game.players.map((p) =>
@@ -650,7 +543,11 @@ describe("Night list: dead players", () => {
     const imp = getCharacter("imp")!;
     await user.click(screen.getByRole("button", { name: "Un-skip" }));
     rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={() => {}}
+      />,
     );
 
     expect(
@@ -660,7 +557,10 @@ describe("Night list: dead players", () => {
 
   it("un-skips a dead player's entry on request", async () => {
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 1, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 1,
+      nightOpen: true,
+    });
     const dead: GameDocument = {
       ...game,
       players: game.players.map((p) =>
@@ -685,7 +585,9 @@ describe("Night list: acts-as (issue #17)", () => {
       night: 0,
       nightOpen: true,
     });
-    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const philosopher = game.players.find(
+      (p) => p.characterId === "philosopher",
+    )!;
     const withActsAs: GameDocument = {
       ...game,
       // Empath isn't held by any seated player here, so its reminder text
@@ -693,7 +595,9 @@ describe("Night list: acts-as (issue #17)", () => {
       // would render the same reminder text twice for their own entry.
       characterPool: [...game.characterPool, getCharacter("empath")!],
       players: game.players.map((p) =>
-        p.id === philosopher.id ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 } : p,
+        p.id === philosopher.id
+          ? { ...p, actsAs: "empath", actsAsSetOnNight: 1 }
+          : p,
       ),
     };
     renderNightList(withActsAs);
@@ -711,7 +615,9 @@ describe("Night list: acts-as (issue #17)", () => {
     // The Philosopher's own generic entry is suppressed once acting as
     // another character.
     expect(
-      screen.queryByRole("checkbox", { name: `Philosopher — ${philosopher.name}` }),
+      screen.queryByRole("checkbox", {
+        name: `Philosopher — ${philosopher.name}`,
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -720,7 +626,9 @@ describe("Night list: acts-as (issue #17)", () => {
       night: 2,
       nightOpen: true,
     });
-    const philosopher = game.players.find((p) => p.characterId === "philosopher")!;
+    const philosopher = game.players.find(
+      (p) => p.characterId === "philosopher",
+    )!;
     const withActsAs: GameDocument = {
       ...game,
       players: game.players.map((p) =>
@@ -733,7 +641,9 @@ describe("Night list: acts-as (issue #17)", () => {
 
     const washerwoman = getCharacter("washerwoman")!;
     expect(
-      screen.getByText(`${philosopher.name} — Philosopher as ${washerwoman.name}`),
+      screen.getByText(
+        `${philosopher.name} — Philosopher as ${washerwoman.name}`,
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -775,7 +685,9 @@ describe("Night list: collapsing the panel (issue #168)", () => {
     });
     renderNightList(game);
 
-    expect(screen.queryByRole("checkbox", { name: "Show all" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: "Show all" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "First night" }),
     ).toBeInTheDocument();
@@ -812,7 +724,10 @@ describe("Night list: bottom sheet peek state (issue #194)", () => {
     // 0) — so with show-all off the checkable steps are exactly Dusk,
     // Washerwoman, Dawn, in that order.
     const user = userEvent.setup();
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     let latest = game;
     const { rerender } = renderNightList(game, (next) => {
       latest = next;
@@ -822,14 +737,21 @@ describe("Night list: bottom sheet peek state (issue #194)", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Dusk" }));
     rerender(
-      <NightList game={latest} characterById={characterById(latest)} onChange={() => {}} />,
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={() => {}}
+      />,
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(/^1\/3 · Washerwoman/);
   });
 
   it("shows 'done' once every entry is checked off, with no current entry left", () => {
-    const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
     const allChecked: GameDocument = {
       ...game,
       nightChecked: ["fixed:dusk", `char:${game.players[0].id}`, "fixed:dawn"],
@@ -847,23 +769,40 @@ describe("Night list: bottom sheet peek state (issue #194)", () => {
     });
     const handle = container.querySelector("[data-handle]") as HTMLElement;
 
-    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }));
-    fireEvent(handle, pointerEvent("pointerup", { pointerId: 1, clientY: 100 }));
+    fireEvent(
+      handle,
+      pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointerup", { pointerId: 1, clientY: 100 }),
+    );
 
     expect(latest).toEqual({ ...game, nightListCollapsed: true });
   });
 
   it("dragging the handle down collapses an expanded sheet", () => {
-    const game = gameWith(["washerwoman", "imp"], { nightListCollapsed: false });
+    const game = gameWith(["washerwoman", "imp"], {
+      nightListCollapsed: false,
+    });
     let latest = game;
     const { container } = renderNightList(game, (next) => {
       latest = next;
     });
     const handle = container.querySelector("[data-handle]") as HTMLElement;
 
-    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }));
-    fireEvent(handle, pointerEvent("pointermove", { pointerId: 1, clientY: 140 }));
-    fireEvent(handle, pointerEvent("pointerup", { pointerId: 1, clientY: 140 }));
+    fireEvent(
+      handle,
+      pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointermove", { pointerId: 1, clientY: 140 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointerup", { pointerId: 1, clientY: 140 }),
+    );
 
     expect(latest.nightListCollapsed).toBe(true);
   });
@@ -876,9 +815,18 @@ describe("Night list: bottom sheet peek state (issue #194)", () => {
     });
     const handle = container.querySelector("[data-handle]") as HTMLElement;
 
-    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 140 }));
-    fireEvent(handle, pointerEvent("pointermove", { pointerId: 1, clientY: 100 }));
-    fireEvent(handle, pointerEvent("pointerup", { pointerId: 1, clientY: 100 }));
+    fireEvent(
+      handle,
+      pointerEvent("pointerdown", { pointerId: 1, clientY: 140 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointermove", { pointerId: 1, clientY: 100 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointerup", { pointerId: 1, clientY: 100 }),
+    );
 
     expect(latest.nightListCollapsed).toBe(false);
   });
@@ -889,9 +837,18 @@ describe("Night list: bottom sheet peek state (issue #194)", () => {
     const { container } = renderNightList(game, onChange);
     const handle = container.querySelector("[data-handle]") as HTMLElement;
 
-    fireEvent(handle, pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }));
-    fireEvent(handle, pointerEvent("pointermove", { pointerId: 1, clientY: 140 }));
-    fireEvent(handle, pointerEvent("pointercancel", { pointerId: 1, clientY: 140 }));
+    fireEvent(
+      handle,
+      pointerEvent("pointerdown", { pointerId: 1, clientY: 100 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointermove", { pointerId: 1, clientY: 140 }),
+    );
+    fireEvent(
+      handle,
+      pointerEvent("pointercancel", { pointerId: 1, clientY: 140 }),
+    );
 
     expect(onChange).not.toHaveBeenCalled();
   });

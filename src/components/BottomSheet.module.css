@@ -1,0 +1,81 @@
+/* A fixed bottom sheet, not a side panel (issue #194) — the grimoire circle
+   above it (GrimoireSetup.module.css) is full width on every viewport size,
+   so the sheet floats over its bottom edge instead of sharing a grid column.
+   Shared chrome for both the night list and Day phase (issue #195: only one
+   is ever mounted at a time, swapped by game phase). Collapsed (peek: just
+   the handle, heading, and below-content) vs. expanded (the full body) is
+   driven by CollapsibleSection hiding its children, exactly as it already
+   did when this was a collapsible side panel (issue #168) — reused here as
+   the sheet's peek/expanded state. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Below a token/reminder's open-menu z-index (GrimoireBoard.module.css:
+     .tokenWrap[data-menu-open], 20) on purpose — that rule exists precisely
+     so an open menu wins against exactly this kind of overlay (issue #117:
+     "the sticky Day/Night panels beside the board"), and this sheet is the
+     same kind of overlay. A menu opened on a seat the sheet visually covers
+     must still render on top of it; only ordinary, un-menu'd board content
+     needs to sit under the sheet. */
+  z-index: 15;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0.5rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 0.75rem 0.75rem 0 0;
+  box-shadow: 0 -0.25rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.handle {
+  align-self: center;
+  width: 3rem;
+  height: 0.3rem;
+  margin: 0.4rem 0 0.1rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Shared "forward action" convention (Start/End night, Start the next
+   night) — filled accent, composed by NightList.module.css and
+   DayPhase.module.css rather than redefined in each, so the two sheets'
+   forward buttons can't visually drift apart (code review finding: they'd
+   been redefined identically in both files). */
+.forwardAction {
+  padding: 0.6rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--background);
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+/* Shared "back/undo" convention (← Back, ← Reopen) — deliberately the
+   inverse of .forwardAction (outline, not filled) so an undo control never
+   reads as another forward action (issue #165 AC: "can't be confused with
+   the forward Start / End actions"). Composed the same way as
+   .forwardAction above.*/
+.backAction {
+  align-self: flex-start;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  min-height: 2.25rem;
+}
