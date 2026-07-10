@@ -4,6 +4,7 @@ import {
   canRecordVote,
   computeBlock,
   currentDay,
+  ghostVoteSpendersOnLockIn,
   hasNominatedToday,
   hasSpentGhostVoteElsewhereToday,
   livingPlayerCount,
@@ -42,6 +43,7 @@ function makeNomination(overrides: Partial<Nomination> = {}): Nomination {
     votes: [],
     threshold: 3,
     isExile: false,
+    lockedIn: false,
     ...overrides,
   };
 }
@@ -382,22 +384,57 @@ describe("canRecordVote", () => {
   });
 });
 
+describe("ghostVoteSpendersOnLockIn", () => {
+  const players = [
+    makePlayer({ id: "p1", dead: false }),
+    makePlayer({ id: "ghost1", dead: true }),
+    makePlayer({ id: "ghost2", dead: true }),
+  ];
+
+  it("returns the dead voters on an execution nomination", () => {
+    const nomination = makeNomination({ votes: ["p1", "ghost1", "ghost2"] });
+
+    expect(ghostVoteSpendersOnLockIn(nomination, players)).toEqual(["ghost1", "ghost2"]);
+  });
+
+  it("returns none for an exile call, even with dead voters", () => {
+    const nomination = makeNomination({ votes: ["ghost1"], isExile: true });
+
+    expect(ghostVoteSpendersOnLockIn(nomination, players)).toEqual([]);
+  });
+
+  it("returns none when no dead player voted", () => {
+    const nomination = makeNomination({ votes: ["p1"] });
+
+    expect(ghostVoteSpendersOnLockIn(nomination, players)).toEqual([]);
+  });
+});
+
 describe("hasSpentGhostVoteElsewhereToday", () => {
-  it("is false when the player has no other recorded execution vote today", () => {
+  it("is false when the player has no other locked-in execution vote today", () => {
     const nominations = [
-      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"] }),
+      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"], lockedIn: true }),
     ];
 
     expect(hasSpentGhostVoteElsewhereToday(nominations, "ghost", "n1")).toBe(false);
   });
 
-  it("is true when a different, earlier execution nomination already recorded their vote", () => {
+  it("is true when a different, locked-in nomination already recorded their vote", () => {
     const nominations = [
-      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"] }),
+      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"], lockedIn: true }),
       makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
     ];
 
     expect(hasSpentGhostVoteElsewhereToday(nominations, "ghost", "n2")).toBe(true);
+  });
+
+  it("is false when the other nomination recorded their vote but was never locked in — an open tally hasn't spent anything yet", () => {
+    const nominations = [
+      makeNomination({ id: "n1", nomineeId: "execution-nominee", votes: ["ghost"], lockedIn: false }),
+      makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
+    ];
+
+    expect(hasSpentGhostVoteElsewhereToday(nominations, "ghost", "n2")).toBe(false);
   });
 
   it("ignores an exile nomination — voting on an exile never spends the ghost vote", () => {
@@ -407,6 +444,7 @@ describe("hasSpentGhostVoteElsewhereToday", () => {
         nomineeId: "traveller",
         votes: ["ghost"],
         isExile: true,
+        lockedIn: true,
       }),
       makeNomination({ id: "n2", nomineeId: "execution-nominee", votes: [] }),
     ];

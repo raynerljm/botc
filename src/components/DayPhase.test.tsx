@@ -99,7 +99,7 @@ describe("Day phase: recording a nomination", () => {
     expect(screen.getByRole("button", { name: "Record nomination" })).toBeEnabled();
   });
 
-  it("clears the selection back to the placeholder state after recording, so the next nomination is a fresh explicit choice", async () => {
+  it("clears the selection back to the placeholder state after recording, so the next nomination (once the first is locked in) is a fresh explicit choice", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse"]);
     let latest = game;
@@ -111,6 +111,10 @@ describe("Day phase: recording a nomination", () => {
     await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
     await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    // The form is hidden while this nomination is open (issue #191) — lock
+    // it in to bring it back and check the pickers reset underneath it.
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     expect(screen.getByLabelText("Nominator").dataset.value).toBe("");
@@ -173,7 +177,7 @@ describe("Day phase: recording a nomination", () => {
     const withNomination = {
       ...game,
       nominations: [
-        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2, isExile: false },
+        { id: "n1", nominatorId: p1.id, nomineeId: p2.id, votes: [], threshold: 2, isExile: false, lockedIn: true },
       ],
     };
     renderDayPhase(withNomination);
@@ -205,6 +209,7 @@ describe("Day phase: collapsing the panel (issue #168)", () => {
           votes: [voter1.id, voter2.id],
           threshold: 2,
           isExile: false,
+          lockedIn: false,
         },
       ],
     };
@@ -316,8 +321,8 @@ describe("Day phase: vote tally and threshold", () => {
   });
 });
 
-describe("Day phase: distinguishing open vs. resolved nominations in the record", () => {
-  it("labels the open nomination as accepting votes, and a superseded one as resolved once a second is recorded", async () => {
+describe("Day phase: distinguishing open vs. locked-in nominations in the record (issue #191)", () => {
+  it("labels the open nomination as accepting votes, and locks it in once votes are locked in, before a second can be recorded", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
     let latest = game;
@@ -334,17 +339,54 @@ describe("Day phase: distinguishing open vs. resolved nominations in the record"
     const [firstItem] = screen.getAllByRole("listitem");
     expect(within(firstItem).getByText("Open — accepting votes")).toBeInTheDocument();
     expect(firstItem.dataset.status).toBe("open");
+    // While it's open, starting a second nomination isn't offered.
+    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
+    expect(screen.getByText("A nomination is open. Lock in its votes to start another.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [lockedItem] = screen.getAllByRole("listitem");
+    expect(within(lockedItem).getByText("Locked in")).toBeInTheDocument();
+    expect(lockedItem.dataset.status).toBe("locked-in");
 
     await selectOption(user, screen.getByLabelText("Nominator"), b.id);
     await selectOption(user, screen.getByLabelText("Nominee"), c.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
-    const [resolvedItem, openItem] = screen.getAllByRole("listitem");
-    expect(within(resolvedItem).getByText("Resolved")).toBeInTheDocument();
-    expect(resolvedItem.dataset.status).toBe("resolved");
+    const [firstAfter, openItem] = screen.getAllByRole("listitem");
+    expect(within(firstAfter).getByText("Locked in")).toBeInTheDocument();
+    expect(firstAfter.dataset.status).toBe("locked-in");
     expect(within(openItem).getByText("Open — accepting votes")).toBeInTheDocument();
     expect(openItem.dataset.status).toBe("open");
+  });
+
+  it("reopens a locked-in nomination, making it read-only-editable again and hiding the record-nomination form", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [a, b] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), a.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), b.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    expect(screen.getByRole("button", { name: "Record nomination" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reopen" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const [item] = screen.getAllByRole("listitem");
+    expect(within(item).getByText("Open — accepting votes")).toBeInTheDocument();
+    expect(item.dataset.status).toBe("open");
+    expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
   });
 });
 
@@ -382,6 +424,8 @@ describe("Day phase: distinguishing executions from exiles in the record", () =>
     await selectOption(user, screen.getByLabelText("Nominator"), a.id);
     await selectOption(user, screen.getByLabelText("Nominee"), b.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     await selectOption(user, screen.getByLabelText("Nominator"), b.id);
@@ -431,14 +475,16 @@ describe("Day phase: surfacing the block on the nomination that holds it", () =>
     const [a, b, c] = game.players;
 
     // First nomination of B falls short of the threshold (2) and is
-    // superseded once a second nomination is recorded — it never held the
-    // block. wasNominatedToday only advisory-labels a repeat nominee; it
-    // doesn't block re-nominating B.
+    // locked in without meeting it — it never held the block.
+    // wasNominatedToday only advisory-labels a repeat nominee; it doesn't
+    // block re-nominating B.
     await selectOption(user, screen.getByLabelText("Nominator"), a.id);
     await selectOption(user, screen.getByLabelText("Nominee"), b.id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("checkbox", { name: a.name }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     // Second nomination, also of B, meets the threshold and takes the block.
@@ -571,6 +617,10 @@ describe("Day phase: the block", () => {
         );
         rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
       }
+      // Lock in so the next nomination can be recorded (issue #191: only
+      // one nomination is ever open at a time).
+      await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+      rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     }
 
     // 7 living -> threshold 4. Three nominations in a row each get exactly
@@ -688,6 +738,9 @@ describe("Day phase: exile calls never compete with the execution block (issue #
     expect(screen.getByText("5/5 votes — meets threshold")).toBeInTheDocument();
     expect(screen.queryByText(/On the block/)).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
     // 2. Neither Alex's nomination nor Tessa's exile is "already nominated"
     // — exile calls are unlimited per day and don't spend the execution
     // once-per-day nomination gate.
@@ -717,8 +770,8 @@ describe("Day phase: exile calls never compete with the execution block (issue #
   });
 });
 
-describe("Day phase: ghost votes", () => {
-  it("auto-spends a dead player's ghost vote when recording their vote, and un-checking restores it", async () => {
+describe("Day phase: ghost votes (issue #191: spent at lock-in, not on toggle)", () => {
+  it("doesn't spend a dead player's ghost vote while a nomination is merely open, only once it's locked in", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
     const dead: GameDocument = {
@@ -739,17 +792,52 @@ describe("Day phase: ghost votes", () => {
     const ghostCheckbox = screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` });
     await user.click(ghostCheckbox);
 
-    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
     expect(latest.nominations[0].votes).toContain(ghost.id);
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+    expect(latest.nominations[0].lockedIn).toBe(true);
+  });
+
+  it("reopening a locked-in nomination restores a ghost vote it spent, and it can be un-recorded again", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    const dead: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => (i === 2 ? { ...p, dead: true } : p)),
+    };
+    let latest = dead;
+    const { rerender } = renderDayPhase(dead, (next) => {
+      latest = next;
+    });
+    const [nominator, nominee, ghost] = dead.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), nominator.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), nominee.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Reopen" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
+    expect(latest.nominations[0].lockedIn).toBe(false);
+    expect(latest.nominations[0].votes).toContain(ghost.id);
+
+    await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+
     expect(latest.nominations[0].votes).not.toContain(ghost.id);
   });
 
-  it("never spends a ghost vote on an exile (Traveller) nomination", async () => {
+  it("never spends a ghost vote on an exile (Traveller) nomination, even once locked in", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse"], {
       players: (() => {
@@ -790,6 +878,8 @@ describe("Day phase: ghost votes", () => {
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
 
     await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (vote free)` }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(false);
     expect(latest.nominations[0].votes).toContain(ghost.id);
@@ -874,7 +964,7 @@ describe("Day phase: ghost votes", () => {
     expect(latest.nominations[0].votes).toContain(ghost.id);
   });
 
-  it("doesn't wrongly refund a ghost vote still held by a different, earlier nomination today", async () => {
+  it("doesn't wrongly refund a ghost vote still held by a different, locked-in nomination today", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp", "recluse", "baron", "monk"]);
     const dead: GameDocument = {
@@ -887,16 +977,19 @@ describe("Day phase: ghost votes", () => {
     });
     const ghost = dead.players[2];
 
-    // First nomination: the ghost votes, spending their one vote for the day.
+    // First nomination: the ghost votes, then it's locked in, spending
+    // their one vote for the day.
     await selectOption(user, screen.getByLabelText("Nominator"), dead.players[0].id);
     await selectOption(user, screen.getByLabelText("Nominee"), dead.players[1].id);
     await user.click(screen.getByRole("button", { name: "Record nomination" }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
     rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
 
-    // Second nomination opens (the first is now closed/read-only); the
+    // Second nomination opens (the first is now locked in/read-only); the
     // storyteller records — then un-records — the same ghost's vote here.
     // Un-checking must NOT refund the ghost vote, since the first
     // nomination still genuinely holds their one vote for the day.
@@ -913,6 +1006,10 @@ describe("Day phase: ghost votes", () => {
     // Now checked, the label drops "already spent" (that note only applies
     // to the not-yet-voted state) — uncheck via the plain label instead.
     await user.click(screen.getByRole("checkbox", { name: `${ghost.name} (ghost vote)` }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    // Locking in the second nomination — which no longer records the
+    // ghost's vote — must not touch their already-spent state either.
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
 
     expect(latest.players.find((p) => p.id === ghost.id)?.ghostVoteSpent).toBe(true);
     expect(latest.nominations[0].votes).toContain(ghost.id);

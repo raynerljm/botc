@@ -1729,6 +1729,7 @@ describe("mid-game token management (issue #15)", () => {
           votes: [game.players[0].id, game.players[1].id],
           threshold: 1,
           isExile: false,
+          lockedIn: false,
         },
       ],
     };
@@ -1767,6 +1768,7 @@ describe("mid-game token management (issue #15)", () => {
           votes: [],
           threshold: 1,
           isExile: true,
+          lockedIn: false,
         },
       ],
     };

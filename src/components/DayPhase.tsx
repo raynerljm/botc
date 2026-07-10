@@ -7,6 +7,7 @@ import {
   computeBlock,
   computeBlockNominationId,
   currentDay,
+  ghostVoteSpendersOnLockIn,
   hasNominatedToday,
   hasSpentGhostVoteElsewhereToday,
   nominationThreshold,
@@ -91,9 +92,12 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     );
   }
 
-  // The most recently recorded nomination is the one still open for voting
-  // — earlier ones in the day are already resolved and shown read-only.
-  const openNomination = game.nominations[game.nominations.length - 1] ?? null;
+  // A nomination is open for voting until the storyteller locks it in
+  // (issue #191) — at most one is ever open at a time, since starting a new
+  // one is only offered once the previous is locked in. Not necessarily the
+  // last nomination recorded: reopening an earlier, already-locked one to
+  // fix a mistake makes it the open one again, wherever it sits in the day.
+  const openNomination = game.nominations.find((n) => !n.lockedIn) ?? null;
   const blockNomineeId = computeBlock(game.nominations, game.players);
   const blockNominationId = computeBlockNominationId(game.nominations, game.players);
   const blockHolder = playerById.get(blockNomineeId ?? "");
@@ -112,6 +116,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       votes: [],
       threshold: nominationThreshold(selectedNominee, game.players),
       isExile: selectedNominee.isTraveller,
+      lockedIn: false,
     };
     onChange({ ...game, nominations: [...game.nominations, nomination] });
     // Reset to the empty placeholder state — starting the next nomination is
@@ -120,6 +125,9 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     setNomineeId("");
   }
 
+  // Votes are just a live tally while a nomination is open — ghost votes
+  // aren't spent until lock-in (issue #191), so toggling one here never
+  // touches player state.
   function toggleVote(nomination: Nomination, player: Player) {
     const alreadyVoted = nomination.votes.includes(player.id);
     const votes = alreadyVoted
@@ -128,30 +136,44 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
     const nominations = game.nominations.map((n) =>
       n.id === nomination.id ? { ...n, votes } : n,
     );
-    const isExecution = !nomination.isExile;
-
-    // Recording a dead player's vote on an execution spends their ghost
-    // vote; un-recording it restores the vote, but only when no *other*
-    // nomination recorded today still holds their one vote (otherwise
-    // they're genuinely still spent, and this would wrongly refund them).
-    // An exile never touches the ghost vote either way (CONTEXT.md: Exile).
-    // Never blocked (ADR 0003) — a storyteller can always record or remove
-    // a vote regardless of the advisory "already spent" state.
-    if (player.dead && isExecution) {
-      const ghostVoteSpent = !alreadyVoted
-        ? true
-        : hasSpentGhostVoteElsewhereToday(game.nominations, player.id, nomination.id);
-      onChange({
-        ...game,
-        nominations,
-        players: game.players.map((p) =>
-          p.id === player.id ? { ...p, ghostVoteSpent } : p,
-        ),
-      });
-      return;
-    }
-
     onChange({ ...game, nominations });
+  }
+
+  // Finalizes the tally: spends the ghost vote of every dead voter on an
+  // execution (never on an exile) and makes the nomination read-only.
+  function lockInNomination(nomination: Nomination) {
+    const spenders = new Set(ghostVoteSpendersOnLockIn(nomination, game.players));
+    onChange({
+      ...game,
+      nominations: game.nominations.map((n) =>
+        n.id === nomination.id ? { ...n, lockedIn: true } : n,
+      ),
+      players: game.players.map((p) =>
+        spenders.has(p.id) ? { ...p, ghostVoteSpent: true } : p,
+      ),
+    });
+  }
+
+  // Reopens a locked nomination to correct a mistake, restoring each ghost
+  // vote it spent — unless that same player's vote is still genuinely held
+  // by a different, still-locked nomination recorded today.
+  function reopenNomination(nomination: Nomination) {
+    const spenders = new Set(ghostVoteSpendersOnLockIn(nomination, game.players));
+    onChange({
+      ...game,
+      nominations: game.nominations.map((n) =>
+        n.id === nomination.id ? { ...n, lockedIn: false } : n,
+      ),
+      players: game.players.map((p) => {
+        if (!spenders.has(p.id)) return p;
+        const stillSpentElsewhere = hasSpentGhostVoteElsewhereToday(
+          game.nominations,
+          p.id,
+          nomination.id,
+        );
+        return stillSpentElsewhere ? p : { ...p, ghostVoteSpent: false };
+      }),
+    });
   }
 
   return (
@@ -167,40 +189,49 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
         collapsed={game.dayPhaseCollapsed}
         onToggleCollapsed={toggleCollapsed}
       >
-        <form className={styles.form} onSubmit={recordNomination}>
-          <label className={styles.field}>
-            Nominator
-            <Select
-              className={styles.select}
-              aria-label="Nominator"
-              value={nominatorId}
-              onChange={setNominatorId}
-              entries={playerEntries(game.players, "Choose who's nominating…", (id) =>
-                hasNominatedToday(game.nominations, id),
-              )}
-            />
-          </label>
-          <label className={styles.field}>
-            Nominee
-            <Select
-              className={styles.select}
-              aria-label="Nominee"
-              value={nomineeId}
-              onChange={setNomineeId}
-              entries={playerEntries(game.players, "Choose who's nominated…", (id) =>
-                wasNominatedToday(game.nominations, id),
-              )}
-            />
-          </label>
-          <p className={styles.preview} aria-live="polite">
-            {selectedNominator && selectedNominee
-              ? `${selectedNominator.name} will nominate ${selectedNominee.name}`
-              : "Choose a nominator and a nominee to start a nomination."}
+        {/* While a nomination is open, recording a new one is not offered —
+            the screen focuses on ticking who voted for the one already in
+            play (issue #191). */}
+        {openNomination ? (
+          <p className={styles.muted}>
+            A nomination is open. Lock in its votes to start another.
           </p>
-          <button type="submit" className={styles.submit} disabled={!canSubmit}>
-            Record nomination
-          </button>
-        </form>
+        ) : (
+          <form className={styles.form} onSubmit={recordNomination}>
+            <label className={styles.field}>
+              Nominator
+              <Select
+                className={styles.select}
+                aria-label="Nominator"
+                value={nominatorId}
+                onChange={setNominatorId}
+                entries={playerEntries(game.players, "Choose who's nominating…", (id) =>
+                  hasNominatedToday(game.nominations, id),
+                )}
+              />
+            </label>
+            <label className={styles.field}>
+              Nominee
+              <Select
+                className={styles.select}
+                aria-label="Nominee"
+                value={nomineeId}
+                onChange={setNomineeId}
+                entries={playerEntries(game.players, "Choose who's nominated…", (id) =>
+                  wasNominatedToday(game.nominations, id),
+                )}
+              />
+            </label>
+            <p className={styles.preview} aria-live="polite">
+              {selectedNominator && selectedNominee
+                ? `${selectedNominator.name} will nominate ${selectedNominee.name}`
+                : "Choose a nominator and a nominee to start a nomination."}
+            </p>
+            <button type="submit" className={styles.submit} disabled={!canSubmit}>
+              Record nomination
+            </button>
+          </form>
+        )}
 
         <ul className={styles.nominations}>
           {game.nominations.map((nomination) => {
@@ -211,14 +242,14 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
             const threshold = nomination.threshold;
             const tally = nomination.votes.length;
             const meetsThreshold = tally >= threshold;
-            const isOpen = nomination.id === openNomination?.id;
+            const isOpen = !nomination.lockedIn;
             const isOnBlock = nomination.id === blockNominationId;
 
             return (
               <li
                 key={nomination.id}
                 className={styles.nomination}
-                data-status={isOpen ? "open" : "resolved"}
+                data-status={isOpen ? "open" : "locked-in"}
               >
                 <div className={styles.nominationHeader}>
                   <p className={styles.nominationHeading}>
@@ -233,7 +264,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                 </div>
                 <p className={styles.statusLine}>
                   <span className={styles.statusBadge} data-open={isOpen || undefined}>
-                    {isOpen ? "Open — accepting votes" : "Resolved"}
+                    {isOpen ? "Open — accepting votes" : "Locked in"}
                   </span>
                 </p>
                 <p
@@ -277,6 +308,24 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                       );
                     })}
                   </fieldset>
+                )}
+
+                {isOpen ? (
+                  <button
+                    type="button"
+                    className={styles.lockIn}
+                    onClick={() => lockInNomination(nomination)}
+                  >
+                    Lock in votes
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.reopen}
+                    onClick={() => reopenNomination(nomination)}
+                  >
+                    Reopen
+                  </button>
                 )}
 
                 {/* Kept after the voter fieldset, never before it — same
