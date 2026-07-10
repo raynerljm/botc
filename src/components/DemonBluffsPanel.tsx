@@ -21,6 +21,11 @@ export interface DemonBluffsPanelProps {
   // (the other consumer of this props type, for the setup walkthrough) has
   // no root element of its own to hide, so it just ignores the field.
   hidden?: boolean;
+  // Only DemonBluffsFields uses this — the setup walkthrough passes false to
+  // suppress "Show to Demon", since bluffs are revealed to the Demon during
+  // the first night's night order, not during pre-game setup (issue #211).
+  // Defaults to true so the board panel keeps its reveal button unchanged.
+  showToDemonButton?: boolean;
 }
 
 const GOOD_TEAMS = new Set<Character["team"]>(["townsfolk", "outsider"]);
@@ -46,7 +51,11 @@ export function DemonBluffsPanel({ game, onChange, hidden }: DemonBluffsPanelPro
 // mount the exact same behavior — reading and writing the same
 // game.demonBluffs — instead of a second, divergence-prone copy. This board
 // panel is one caller; SetupWalkthrough.tsx's StepPanel is the other.
-export function DemonBluffsFields({ game, onChange }: DemonBluffsPanelProps) {
+export function DemonBluffsFields({
+  game,
+  onChange,
+  showToDemonButton = true,
+}: DemonBluffsPanelProps) {
   // showingToDemon resetting on its own when this panel collapses (so
   // re-expanding never silently re-shows the Demon's identity, issue #122
   // Copilot finding) relies on CollapsibleSection actually unmounting its
@@ -154,14 +163,16 @@ export function DemonBluffsFields({ game, onChange }: DemonBluffsPanelProps) {
         })}
       </ul>
 
-      <button
-        type="button"
-        className={styles.showButton}
-        disabled={!anyBluffSet}
-        onClick={() => setShowingToDemon(true)}
-      >
-        Show to Demon
-      </button>
+      {showToDemonButton && (
+        <button
+          type="button"
+          className={styles.showButton}
+          disabled={!anyBluffSet}
+          onClick={() => setShowingToDemon(true)}
+        >
+          Show to Demon
+        </button>
+      )}
 
       {showingToDemon && (
         <ShowToDemonOverlay
