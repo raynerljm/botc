@@ -11,6 +11,7 @@ import {
 } from "@/lib/characters";
 import { executionNominations } from "@/lib/dayPhase";
 import {
+  ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
   defaultPlayerName,
   DRUNK_ID,
@@ -562,16 +563,29 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     { endDisguise = true }: { endDisguise?: boolean } = {},
   ) {
     const character = getCharacter(characterId);
-    const wasDrunk = game.players.find((p) => p.id === playerId)?.isDrunk;
-    const entryIds = [charEntryId(playerId)];
+    const player = game.players.find((p) => p.id === playerId);
+    const wasDrunk = player?.isDrunk;
+    // A swap away from an acts-as-capable character (Philosopher/Alchemist/
+    // Boffin) must clear any acts-as target — the picker that sets it is
+    // only offered to those three characters (issue #187), so a stale value
+    // left behind would be unclearable from the UI while still driving a
+    // real night-list wake for an ability the new character doesn't have.
+    const clearsActsAs =
+      Boolean(player?.actsAs) && !ACTS_AS_CAPABLE_IDS.has(characterId);
+    // Pruned on every swap, not only one that clears actsAs — even a swap
+    // between two eligible characters (e.g. Philosopher -> Alchemist) keeps
+    // the same actsAs target but wakes a different physical token, so a
+    // pre-existing checked/un-skipped state for it is just as stale as
+    // charEntryId's below (Copilot review finding). Harmless when no
+    // acts-as entry exists.
+    const entryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
     update({
       ...game,
-      players: updatePlayer(
-        playerId,
-        endDisguise
-          ? { characterId, isDrunk: false, isLunatic: false }
-          : { characterId },
-      ),
+      players: updatePlayer(playerId, {
+        characterId,
+        ...(endDisguise ? { isDrunk: false, isLunatic: false } : {}),
+        ...(clearsActsAs ? { actsAs: null, actsAsSetOnNight: null } : {}),
+      }),
       // The auto-placed "Drunk" reminder (issue #186) is only meaningful
       // while the seat is still disguised — once the disguise ends (a
       // reveal, or a storyteller correction to some other character), it's

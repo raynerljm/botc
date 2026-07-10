@@ -2031,7 +2031,9 @@ describe("mid-game token management (issue #15)", () => {
 describe("acts-as (issue #17)", () => {
   it("resolves an acts-as target that isn't currently in play, adding it to the character pool so the night list can find it", async () => {
     const user = userEvent.setup();
-    const washerwoman = getCharacter("washerwoman")!;
+    // Philosopher is one of the three characters eligible for the "Acts as"
+    // picker (issue #187: Philosopher, Alchemist, Boffin).
+    const philosopher = getCharacter("philosopher")!;
     const imp = getCharacter("imp")!;
     const empath = getCharacter("empath")!;
     // Empath is on the script but nobody drew it — the "Acts as" picker
@@ -2040,15 +2042,15 @@ describe("acts-as (issue #17)", () => {
     // which is a different, wider universe than characterPool.
     const game = makeGame({
       playerCount: 2,
-      selectedCharacters: [washerwoman, imp],
-      scriptCharacters: [washerwoman, imp, empath],
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, imp, empath],
     });
     const seated: GameDocument = {
       ...game,
       players: game.players.map((p, i) => ({
         ...p,
-        characterId: [washerwoman.id, imp.id][i],
-        startingCharacterId: [washerwoman.id, imp.id][i],
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
       })),
     };
     render(<GrimoireSetup game={seated} />);
@@ -2067,31 +2069,72 @@ describe("acts-as (issue #17)", () => {
     // resolve it, so the acts-as entry silently never appeared.
     await user.click(screen.getByRole("button", { name: "Start First night" }));
     expect(
-      screen.getByText(`Player 1 — ${washerwoman.name} as ${empath.name}`),
+      screen.getByText(`Player 1 — ${philosopher.name} as ${empath.name}`),
     ).toBeInTheDocument();
   });
-});
 
-describe("night-list bookkeeping stays coherent (issue #128)", () => {
-  it("delivers a retargeted acts-as entry unchecked, pruning the stale checkmark", async () => {
+  it("clears a stale acts-as target when the player is swapped away from an acts-as-capable character (issue #187 code review finding)", async () => {
     const user = userEvent.setup();
-    const washerwoman = getCharacter("washerwoman")!;
+    const philosopher = getCharacter("philosopher")!;
     const imp = getCharacter("imp")!;
+    const washerwoman = getCharacter("washerwoman")!;
     const empath = getCharacter("empath")!;
-    const fortuneTeller = getCharacter("fortuneteller")!;
-    // Empath and Fortune Teller both act on the first night, so the acts-as
-    // entry stays visible across the retarget without needing "Show all".
     const game = makeGame({
       playerCount: 2,
-      selectedCharacters: [washerwoman, imp],
-      scriptCharacters: [washerwoman, imp, empath, fortuneTeller],
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, imp, washerwoman, empath],
     });
     const seated: GameDocument = {
       ...game,
       players: game.players.map((p, i) => ({
         ...p,
-        characterId: [washerwoman.id, imp.id][i],
-        startingCharacterId: [washerwoman.id, imp.id][i],
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+    expect(loadGame()!.players[0].actsAs).toBe("empath");
+
+    // Swapping away from Philosopher (an acts-as-capable character) to
+    // Washerwoman (not one) must not leave the old target orphaned — with
+    // the picker now hidden for Washerwoman (issue #187), there would be no
+    // way left to clear it, and the night list would keep waking a player
+    // for an ability their new character doesn't have.
+    await selectOption(
+      user,
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "washerwoman",
+    );
+
+    const reloaded = loadGame()!;
+    expect(reloaded.players[0].actsAs).toBeNull();
+    expect(reloaded.players[0].actsAsSetOnNight).toBeNull();
+  });
+
+  it("resets a checked acts-as entry's state on a swap between two eligible characters, since it now means a different wake (Copilot review finding)", async () => {
+    const user = userEvent.setup();
+    const philosopher = getCharacter("philosopher")!;
+    const alchemist = getCharacter("alchemist")!;
+    const imp = getCharacter("imp")!;
+    const empath = getCharacter("empath")!;
+    // Empath acts on the first night for both Philosopher and Alchemist, so
+    // the acts-as entry stays visible across the swap without "Show all".
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, alchemist, imp, empath],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
       })),
     };
     render(<GrimoireSetup game={seated} />);
@@ -2104,7 +2147,66 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     await user.click(screen.getByRole("button", { name: "Start First night" }));
     await user.click(
       screen.getByRole("checkbox", {
-        name: `Player 1 — ${washerwoman.name} as ${empath.name}`,
+        name: `Player 1 — ${philosopher.name} as ${empath.name}`,
+      }),
+    );
+    const playerId = seated.players[0].id;
+    expect(loadGame()!.nightChecked).toContain(`actsas:${playerId}`);
+
+    // Swap Philosopher -> Alchemist: both stay eligible so actsAs itself is
+    // kept, but the wake this drives is a different physical token to run
+    // (Alchemist, not Philosopher), so the stale checkmark must not carry
+    // over — the same reasoning charEntryId pruning already applies to a
+    // player's own character entry.
+    await selectOption(
+      user,
+      within(seat1Wrap).getByLabelText(/swap character/i),
+      "alchemist",
+    );
+
+    expect(loadGame()!.players[0].actsAs).toBe("empath");
+    expect(loadGame()!.nightChecked).not.toContain(`actsas:${playerId}`);
+    expect(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${alchemist.name} as ${empath.name}`,
+      }),
+    ).not.toBeChecked();
+  });
+});
+
+describe("night-list bookkeeping stays coherent (issue #128)", () => {
+  it("delivers a retargeted acts-as entry unchecked, pruning the stale checkmark", async () => {
+    const user = userEvent.setup();
+    const philosopher = getCharacter("philosopher")!;
+    const imp = getCharacter("imp")!;
+    const empath = getCharacter("empath")!;
+    const fortuneTeller = getCharacter("fortuneteller")!;
+    // Empath and Fortune Teller both act on the first night, so the acts-as
+    // entry stays visible across the retarget without needing "Show all".
+    const game = makeGame({
+      playerCount: 2,
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, imp, empath, fortuneTeller],
+    });
+    const seated: GameDocument = {
+      ...game,
+      players: game.players.map((p, i) => ({
+        ...p,
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
+      })),
+    };
+    render(<GrimoireSetup game={seated} />);
+
+    const circle = screen.getByRole("region", { name: "Grimoire circle" });
+    const seat1Wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+    await user.click(within(seat1Wrap).getByText("Player 1"));
+    await selectOption(user, within(seat1Wrap).getByLabelText(/acts as/i), "empath");
+
+    await user.click(screen.getByRole("button", { name: "Start First night" }));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: `Player 1 — ${philosopher.name} as ${empath.name}`,
       }),
     );
     const playerId = seated.players[0].id;
@@ -2112,7 +2214,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
 
     // Retarget mid-night — the new target's entry must not inherit the
     // Empath entry's checkmark; the wake for Fortune Teller was never done.
-    await selectOption(user, 
+    await selectOption(user,
       within(seat1Wrap).getByLabelText(/acts as/i),
       "fortuneteller",
     );
@@ -2120,7 +2222,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     expect(loadGame()!.nightChecked).not.toContain(`actsas:${playerId}`);
     expect(
       screen.getByRole("checkbox", {
-        name: `Player 1 — ${washerwoman.name} as ${fortuneTeller.name}`,
+        name: `Player 1 — ${philosopher.name} as ${fortuneTeller.name}`,
       }),
     ).not.toBeChecked();
   });
@@ -2205,21 +2307,21 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
 
   it("prunes a stale un-skip alongside an acts-as retarget (code review finding)", async () => {
     const user = userEvent.setup();
-    const washerwoman = getCharacter("washerwoman")!;
+    const philosopher = getCharacter("philosopher")!;
     const imp = getCharacter("imp")!;
     const empath = getCharacter("empath")!;
     const fortuneTeller = getCharacter("fortuneteller")!;
     const game = makeGame({
       playerCount: 2,
-      selectedCharacters: [washerwoman, imp],
-      scriptCharacters: [washerwoman, imp, empath, fortuneTeller],
+      selectedCharacters: [philosopher, imp],
+      scriptCharacters: [philosopher, imp, empath, fortuneTeller],
     });
     const seated: GameDocument = {
       ...game,
       players: game.players.map((p, i) => ({
         ...p,
-        characterId: [washerwoman.id, imp.id][i],
-        startingCharacterId: [washerwoman.id, imp.id][i],
+        characterId: [philosopher.id, imp.id][i],
+        startingCharacterId: [philosopher.id, imp.id][i],
       })),
     };
     render(<GrimoireSetup game={seated} />);
@@ -2236,7 +2338,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     const playerId = seated.players[0].id;
     expect(loadGame()!.nightUnskipped).toContain(`actsas:${playerId}`);
 
-    await selectOption(user, 
+    await selectOption(user,
       within(seat1Wrap).getByLabelText(/acts as/i),
       "fortuneteller",
     );
@@ -2244,7 +2346,7 @@ describe("night-list bookkeeping stays coherent (issue #128)", () => {
     expect(loadGame()!.nightUnskipped).not.toContain(`actsas:${playerId}`);
     expect(
       screen.getByRole("checkbox", {
-        name: `Player 1 — ${washerwoman.name} as ${fortuneTeller.name}`,
+        name: `Player 1 — ${philosopher.name} as ${fortuneTeller.name}`,
       }),
     ).toBeDisabled();
   });
