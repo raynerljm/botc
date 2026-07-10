@@ -53,7 +53,7 @@ export function DayTimer({ game, onChange }: DayTimerProps) {
   }
 
   return (
-    <div className={styles.widget} aria-label="Discussion timer">
+    <div className={styles.widget} role="group" aria-label="Discussion timer">
       <div className={styles.presets}>
         {DAY_TIMER_PRESETS_MINUTES.map((minutes) => (
           <button

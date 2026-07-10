@@ -106,6 +106,10 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       // (issue #165 AC: "does not silently lose the day-phase state").
       nominations: game.nominations.length === 0 ? snapshot.nominations : game.nominations,
       lastEndedNightSnapshot: null,
+      // Every path that reopens the night must pause a running day timer,
+      // the same reasoning as startNight() above (Copilot review finding on
+      // issue #190: this path was missed the first time).
+      dayTimer: pauseDayTimer(game.dayTimer),
     });
   }
 

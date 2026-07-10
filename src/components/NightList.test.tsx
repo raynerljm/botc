@@ -278,6 +278,38 @@ describe("Night list: undoing a transition (issue #165)", () => {
     expect(latest.nominations).toEqual([nomination]);
   });
 
+  it("also pauses a running day timer on undoing End night (Copilot review finding on issue #190: this path reopens the night too)", async () => {
+    const user = userEvent.setup();
+    const endAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+      dayTimer: { status: "running", endAt, remainingMs: 5 * 60_000 },
+    });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    await user.click(screen.getByRole("button", { name: /End First night/ }));
+    rerender(
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={(next) => {
+          latest = next;
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "← Reopen First night" }));
+
+    expect(latest.dayTimer.status).toBe("paused");
+    expect(latest.dayTimer.endAt).toBeNull();
+    expect(latest.dayTimer.remainingMs).toBeGreaterThan(4.9 * 60_000);
+    expect(latest.dayTimer.remainingMs).toBeLessThanOrEqual(5 * 60_000);
+  });
+
   it("consumes the reopen offer once used, so it can't be replayed a second time", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp"], { night: 0, nightOpen: true });
