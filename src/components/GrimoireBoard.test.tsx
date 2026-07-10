@@ -2783,6 +2783,7 @@ describe("board sizing (issue #78)", () => {
           activeFabled={[]}
           claimOptions={claimOptions}
           {...noop}
+          rotation={0}
           remeasureOn="night"
         />,
       );
@@ -2839,6 +2840,7 @@ describe("board sizing (issue #78)", () => {
           activeFabled={[]}
           claimOptions={claimOptions}
           {...noop}
+          rotation={0}
           remeasureOn="day"
         />,
       );
@@ -2860,6 +2862,7 @@ describe("board sizing (issue #78)", () => {
           activeFabled={[]}
           claimOptions={claimOptions}
           {...noop}
+          rotation={0}
           remeasureOn="night"
         />,
       );
