@@ -32,6 +32,9 @@ The pass-the-device ritual: shuffled face-down tokens on screen, each player tap
 **Night list**:
 The ordered todo list of ability entries for the current night (first night and other nights differ), derived from official night-order numbers, filtered to in-play characters, with check-off state persisted in the game document.
 
+**Notes**:
+Freeform storyteller notes attached to the game document, organized into sections: a persistent "General" plus one auto-created per phase ("Night 1", "Day 1", "Night 2", …) as that phase begins. Editable throughout play, not only once the game has ended.
+
 **Acts as**:
 A marker on a player's token that they resolve another character's ability (Philosopher, Alchemist, Boffin). Inserts a night-list entry at the target character's position, attributed to that player; a first-night-only target on a later night is inserted for that night only.
 

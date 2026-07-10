@@ -734,7 +734,7 @@ describe("createGame", () => {
     expect(game.players.every((p) => p.isLunatic === false)).toBe(true);
   });
 
-  it("starts unfinished: no winner, no end time, empty notes", () => {
+  it("starts unfinished: no winner, no end time, only an empty General notes section", () => {
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
@@ -747,7 +747,7 @@ describe("createGame", () => {
 
     expect(game.winner).toBeNull();
     expect(game.endedAt).toBeNull();
-    expect(game.notes).toBe("");
+    expect(game.notes).toEqual([{ id: "general", title: "General", text: "" }]);
   });
 
   it("starts with no reminder tokens on the pad", () => {

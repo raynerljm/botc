@@ -1,4 +1,5 @@
 import type { Character } from "./characters";
+import { createInitialNotes, type NotesSection } from "./gameNotes";
 import { normalizeCharacterId } from "./scriptParser";
 
 // Bumped for issue #14 (GameDocument gained the required `reminders` field),
@@ -36,9 +37,14 @@ import { normalizeCharacterId } from "./scriptParser";
 //
 // Bumped again for issue #190 (GameDocument gained the required `dayTimer`
 // field), again for issue #191 (Nomination gained the required `lockedIn`
-// field), and again for issue #191's `ghostVoteSpenderIds` field (Copilot
-// review finding, same issue).
-export const GAME_SCHEMA_VERSION = 20;
+// field), again for issue #191's `ghostVoteSpenderIds` field (Copilot
+// review finding, same issue), and again for issue #193 (GameDocument's
+// `notes` changed shape from a single string to sectioned notes, and
+// gained the required `notesCollapsed` field) — unlike every prior bump, a
+// v20 game's `notes` is upgraded in place by gameStorage rather than
+// dropped, since it may carry text the storyteller already wrote (issue
+// #193 AC: "without data loss").
+export const GAME_SCHEMA_VERSION = 21;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -303,10 +309,14 @@ export interface GameDocument {
   createdAt: string;
   // End-game state (issue #21). Null winner / null endedAt means the game is
   // still in progress; both are set together when the storyteller declares a
-  // result. Notes is free text the storyteller can add at any time.
+  // result.
   winner: Alignment | null;
   endedAt: string | null;
-  notes: string;
+  // Sectioned storyteller notes (CONTEXT.md: Notes; issue #193) — a
+  // persistent General section plus one auto-created per phase (Night 1,
+  // Day 1, ...) as it begins, editable throughout play rather than only from
+  // the end-game panel.
+  notes: NotesSection[];
   // Nights fully completed (0 before the first night ever starts). While
   // `nightOpen` is true, the storyteller is currently walking night
   // `night + 1`'s checklist.
@@ -344,6 +354,9 @@ export interface GameDocument {
   // deliberately reclaims the circle's width.
   nightListCollapsed: boolean;
   dayPhaseCollapsed: boolean;
+  // Same plain-manual-toggle shape as the above, for the notes panel (issue
+  // #193).
+  notesCollapsed: boolean;
   // The daytime discussion countdown (issue #190), persisted so a reload or
   // device sleep mid-count restores the correct remaining time rather than
   // losing or drifting it.
@@ -828,7 +841,7 @@ export function createGame({
     createdAt,
     winner: null,
     endedAt: null,
-    notes: "",
+    notes: createInitialNotes(),
     night: 0,
     nightOpen: false,
     nightChecked: [],
@@ -839,6 +852,7 @@ export function createGame({
     endGamePanelCollapsed: null,
     nightListCollapsed: false,
     dayPhaseCollapsed: false,
+    notesCollapsed: false,
     dayTimer: createDayTimer(),
   };
 }

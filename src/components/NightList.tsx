@@ -6,6 +6,13 @@ import type { Character } from "@/lib/characters";
 import { pauseDayTimer } from "@/lib/dayTimer";
 import type { GameDocument } from "@/lib/gameDocument";
 import {
+  dayNotesSectionId,
+  nightNotesSectionId,
+  withDayNotesSection,
+  withNightNotesSection,
+  withoutEmptyNotesSection,
+} from "@/lib/gameNotes";
+import {
   computeNightList,
   currentNightNumber,
   phaseForNight,
@@ -54,14 +61,22 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       nightChecked: [],
       nightUnskipped: [],
       dayTimer: pauseDayTimer(game.dayTimer),
+      // Section titles are always "Night N" (issue #193 AC), distinct from
+      // the checklist heading above ("First night" for night 1) — the notes
+      // panel names sections by number regardless of the first-night/other
+      // distinction that only matters for which abilities act. Idempotent: a
+      // Back-then-Start-again round trip must not wipe out notes already
+      // jotted under this night's section.
+      notes: withNightNotesSection(game.notes, nightNumber),
     });
   }
 
   function endNight() {
+    const newNightNumber = game.night + 1;
     onChange({
       ...game,
       nightOpen: false,
-      night: game.night + 1,
+      night: newNightNumber,
       nightChecked: [],
       nightUnskipped: [],
       // Ending a night starts the next day, and nomination eligibility
@@ -75,6 +90,9 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
         nightUnskipped: game.nightUnskipped,
         nominations: game.nominations,
       },
+      // A day begins once night N closes (issue #193 AC), idempotent for
+      // the same reason as Start night above.
+      notes: withDayNotesSection(game.notes, newNightNumber),
     });
   }
 
@@ -84,7 +102,17 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
   // close the night again — including discarding any check-offs made
   // before backing out (issue #165 AC).
   function undoStartNight() {
-    onChange({ ...game, nightOpen: false, nightChecked: [], nightUnskipped: [] });
+    onChange({
+      ...game,
+      nightOpen: false,
+      nightChecked: [],
+      nightUnskipped: [],
+      // A mis-tap (Start night immediately followed by Back) shouldn't leave
+      // a permanent, empty "Night N" section cluttering the notes panel
+      // (issue #193 code review finding) — but never touches a section the
+      // storyteller already wrote something in.
+      notes: withoutEmptyNotesSection(game.notes, nightNotesSectionId(nightNumber)),
+    });
   }
 
   // Undoes "End night": reopens the just-ended night with its checklist and
@@ -110,6 +138,10 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
       // the same reasoning as startNight() above (Copilot review finding on
       // issue #190: this path was missed the first time).
       dayTimer: pauseDayTimer(game.dayTimer),
+      // Same "don't leave mis-tap clutter" reasoning as undoStartNight above
+      // (issue #193 code review finding): the day section End night just
+      // created is only removed if it's still empty.
+      notes: withoutEmptyNotesSection(game.notes, dayNotesSectionId(game.night)),
     });
   }
 

@@ -58,10 +58,15 @@ describe("active game", () => {
   it("saving an existing game updates it in place rather than duplicating", () => {
     const game = makeGame();
     saveGame(game);
-    saveGame({ ...game, notes: "changed" });
+    saveGame({
+      ...game,
+      notes: [{ id: "general", title: "General", text: "changed" }],
+    });
 
     expect(listGames()).toHaveLength(1);
-    expect(loadGame()?.notes).toBe("changed");
+    expect(loadGame()?.notes).toEqual([
+      { id: "general", title: "General", text: "changed" },
+    ]);
   });
 
   it("makes the most recently saved game the active one", () => {
@@ -156,7 +161,7 @@ describe("legacy migration (pre-#21 single-game key)", () => {
     expect(game.id).toBeTruthy();
     expect(game.winner).toBeNull();
     expect(game.endedAt).toBeNull();
-    expect(game.notes).toBe("");
+    expect(game.notes).toEqual([{ id: "general", title: "General", text: "" }]);
   });
 
   it("removes the legacy key once migrated", () => {
@@ -194,6 +199,59 @@ describe("legacy migration (pre-#21 single-game key)", () => {
 
     expect(loadGame()?.scriptName).toBe("Current Game");
     expect(listGames()).toHaveLength(1);
+  });
+});
+
+describe("notes migration (issue #193: schemaVersion 18 -> 19)", () => {
+  // A v18 game as it existed on disk before issue #193: `notes` was a plain
+  // string, one schema version behind current.
+  function v18GameWithNotes(notes: string): GameDocument {
+    return {
+      ...makeGame("Pre-#193 Game"),
+      schemaVersion: 18,
+      notes,
+    } as unknown as GameDocument;
+  }
+
+  it("upgrades a v18 game's freeform notes into the General section without losing the text", () => {
+    const legacy = v18GameWithNotes("Slayer shot the Imp on day 3.");
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: legacy.id, games: [legacy] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.schemaVersion).toBe(19);
+    expect(game.notes).toEqual([
+      { id: "general", title: "General", text: "Slayer shot the Imp on day 3." },
+    ]);
+  });
+
+  it("still drops a game from any other outdated schema version", () => {
+    const ancient = { ...v18GameWithNotes("x"), schemaVersion: 5 };
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: ancient.id, games: [ancient] }),
+    );
+
+    expect(loadGame()).toBeNull();
+    expect(listGames()).toHaveLength(0);
+  });
+
+  it("backfills the new notesCollapsed field a real v18 document never had, rather than leaving it undefined", () => {
+    // A real pre-#193 v18 document never had `notesCollapsed` at all — that
+    // field was introduced by the same bump that sectioned `notes`. Strip it
+    // to reproduce the actual on-disk shape rather than a fixture that
+    // already carries every current-schema field.
+    const legacy = v18GameWithNotes("x") as unknown as Record<string, unknown>;
+    delete legacy.notesCollapsed;
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: legacy.id, games: [legacy] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.notesCollapsed).toBe(false);
   });
 });
 
