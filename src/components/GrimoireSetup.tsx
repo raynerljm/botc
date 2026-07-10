@@ -39,7 +39,6 @@ import { actsAsEntryId, charEntryId, currentNightNumber } from "@/lib/nightList"
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { CharacterToken } from "./CharacterToken";
-import { ClaimsList } from "./ClaimsList";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DayPhase } from "./DayPhase";
 import { DemonBluffsPanel } from "./DemonBluffsPanel";
@@ -1438,13 +1437,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               above. */}
           <div hidden={showWalkthrough || screenObscured}>
             <DemonBluffsPanel game={game} onChange={update} />
-            <ClaimsList
-              players={game.players}
-              claimOptions={game.scriptCharacters}
-              collapsed={game.claimsCollapsed}
-              onToggleCollapsed={(collapsed) => update({ ...game, claimsCollapsed: collapsed })}
-              onSetClaim={setClaim}
-            />
           </div>
           {showWalkthrough && (
             <SetupWalkthrough

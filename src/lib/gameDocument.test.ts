@@ -746,7 +746,7 @@ describe("createGame", () => {
     expect(game.scriptCharacters).toEqual(selected);
   });
 
-  it("starts with Demon bluffs and Claims expanded, and the end-game panel's collapse left unset (issue #79)", () => {
+  it("starts with Demon bluffs expanded, and the end-game panel's collapse left unset (issue #79)", () => {
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
@@ -757,7 +757,6 @@ describe("createGame", () => {
     });
 
     expect(game.demonBluffsCollapsed).toBe(false);
-    expect(game.claimsCollapsed).toBe(false);
     expect(game.endGamePanelCollapsed).toBeNull();
   });
 

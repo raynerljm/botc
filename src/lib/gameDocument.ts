@@ -19,11 +19,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // field), again for issue #168 (GameDocument gained the required
 // `nightListCollapsed`/`dayPhaseCollapsed` fields), again for issue #165
 // (GameDocument gained the required `lastEndedNightSnapshot` field), and
-// again for issue #163 (Player gained the required `isLunatic` field) — a
-// document saved under an older shape must be rejected by gameStorage's
-// version check rather than loaded with any of these fields silently
-// undefined.
-export const GAME_SCHEMA_VERSION = 17;
+// again for issue #163 (Player gained the required `isLunatic` field), and
+// again for issue #189 (GameDocument lost the `claimsCollapsed` field, the
+// bottom Claims panel it toggled having been removed) — a document saved
+// under an older shape must be rejected by gameStorage's version check
+// rather than loaded with any of these fields silently undefined.
+export const GAME_SCHEMA_VERSION = 18;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -280,18 +281,17 @@ export interface GameDocument {
   // Collapsed/expanded state for the board's secondary panels, persisted so
   // it survives a reload (issue #79: a 15-player game's always-expanded
   // panels push mid-game controls several screen-heights below the board).
-  // Demon bluffs and Claims are plain manual toggles, defaulting expanded to
-  // match pre-#79 behavior. The end-game panel's default instead comes from
+  // Demon bluffs is a plain manual toggle, defaulting expanded to match
+  // pre-#79 behavior. The end-game panel's default instead comes from
   // `isEndGamePanelCollapsed` below — null here means "follow that computed
   // default," with an explicit true/false recording a deliberate manual
   // toggle that should stick regardless of night progression.
   demonBluffsCollapsed: boolean;
-  claimsCollapsed: boolean;
   endGamePanelCollapsed: boolean | null;
   // Collapsed/expanded state for the board's side panels (issue #168), same
-  // plain-manual-toggle shape as demonBluffsCollapsed/claimsCollapsed above —
-  // defaults expanded so the tablet/desktop layout is unchanged until the
-  // storyteller deliberately reclaims the circle's width.
+  // plain-manual-toggle shape as demonBluffsCollapsed above — defaults
+  // expanded so the tablet/desktop layout is unchanged until the storyteller
+  // deliberately reclaims the circle's width.
   nightListCollapsed: boolean;
   dayPhaseCollapsed: boolean;
 }
@@ -773,7 +773,6 @@ export function createGame({
     nominations: [],
     lastEndedNightSnapshot: null,
     demonBluffsCollapsed: false,
-    claimsCollapsed: false,
     endGamePanelCollapsed: null,
     nightListCollapsed: false,
     dayPhaseCollapsed: false,
