@@ -70,6 +70,17 @@ describe("base editions", () => {
     ]);
   });
 
+  it("covers exactly the characters the vendored dataset tags with each edition — no id silently dropped, duplicated, or invented if the dataset is ever refreshed", () => {
+    for (const edition of baseEditions) {
+      const fromDataset = allCharacters
+        .filter((c) => c.edition === edition.id)
+        .map((c) => c.id);
+      const fromOrderTable = getEditionCharacters(edition.id).map((c) => c.id);
+      expect(new Set(fromOrderTable)).toEqual(new Set(fromDataset));
+      expect(fromOrderTable).toHaveLength(fromDataset.length);
+    }
+  });
+
   it("orders Bad Moon Rising's and Sects & Violets's characters as their official script sheets do (issue #209)", () => {
     expect(getEditionCharacters("bmr").map((c) => c.id)).toEqual([
       "grandmother", "sailor", "chambermaid", "exorcist", "innkeeper",
