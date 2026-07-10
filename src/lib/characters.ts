@@ -56,7 +56,8 @@ export function getCharacter(id: string): Character | undefined {
 // no official ordering of its own. Base editions have no script-tool JSON of
 // their own to derive order from (unlike uploaded/library scripts — see
 // parseScript), so their canonical script-sheet order is hand-transcribed
-// here, per team, matching the official character sheets.
+// here: one flat array per edition, laid out team by team in the same
+// sequence as the official character sheets.
 const BASE_EDITION_ORDER: Record<BaseEditionId, string[]> = {
   tb: [
     "washerwoman", "librarian", "investigator", "chef", "empath",
@@ -88,9 +89,15 @@ const BASE_EDITION_ORDER: Record<BaseEditionId, string[]> = {
 };
 
 export function getEditionCharacters(editionId: BaseEditionId): Character[] {
-  return BASE_EDITION_ORDER[editionId]
-    .map((id) => getCharacter(id))
-    .filter((c): c is Character => c !== undefined);
+  return BASE_EDITION_ORDER[editionId].map((id) => {
+    const character = getCharacter(id);
+    if (!character) {
+      throw new Error(
+        `BASE_EDITION_ORDER["${editionId}"] references unknown character id "${id}"`,
+      );
+    }
+    return character;
+  });
 }
 
 // Value equality against the vendored dataset, not object identity — a game
