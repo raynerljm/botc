@@ -193,15 +193,9 @@
 }
 
 .lockIn {
-  min-height: 2.75rem;
+  composes: submit;
   margin-top: 0.5rem;
   padding: 0.5rem 1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .reopen {

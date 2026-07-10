@@ -156,8 +156,16 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
 
   // Reopens a locked nomination to correct a mistake, restoring each ghost
   // vote it spent — unless that same player's vote is still genuinely held
-  // by a different, still-locked nomination recorded today.
+  // by a different, still-locked nomination recorded today. Refuses to open
+  // a second nomination alongside one that's already open (code review
+  // finding): the rest of this file's bookkeeping — the create-form's
+  // gating, hasSpentGhostVoteElsewhereToday's "locked-in nominations only"
+  // rule — all assume at most one nomination is ever open at a time, and
+  // the "Reopen" button is the only path that could otherwise break that
+  // (the JSX below hides it for the same reason, this is the data-layer
+  // backstop).
   function reopenNomination(nomination: Nomination) {
+    if (openNomination && openNomination.id !== nomination.id) return;
     const spenders = new Set(ghostVoteSpendersOnLockIn(nomination, game.players));
     onChange({
       ...game,
@@ -319,13 +327,20 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                     Lock in votes
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className={styles.reopen}
-                    onClick={() => reopenNomination(nomination)}
-                  >
-                    Reopen
-                  </button>
+                  // Hidden (not just disabled) while a different nomination
+                  // is open — reopening this one at the same time would
+                  // break the "at most one open nomination" invariant the
+                  // rest of the file relies on (code review finding); see
+                  // reopenNomination's own guard for the data-layer backstop.
+                  !openNomination && (
+                    <button
+                      type="button"
+                      className={styles.reopen}
+                      onClick={() => reopenNomination(nomination)}
+                    >
+                      Reopen
+                    </button>
+                  )
                 )}
 
                 {/* Kept after the voter fieldset, never before it — same

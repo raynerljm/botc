@@ -388,6 +388,39 @@ describe("Day phase: distinguishing open vs. locked-in nominations in the record
     expect(item.dataset.status).toBe("open");
     expect(screen.queryByRole("button", { name: "Record nomination" })).not.toBeInTheDocument();
   });
+
+  it("hides Reopen on a locked-in nomination while a different nomination is already open (code review finding: two nominations must never both be open)", async () => {
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [a, b, c] = game.players;
+
+    // First nomination: locked in.
+    await selectOption(user, screen.getByLabelText("Nominator"), a.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), b.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+    await user.click(screen.getByRole("button", { name: "Lock in votes" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    // Second nomination: left open.
+    await selectOption(user, screen.getByLabelText("Nominator"), b.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), c.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    // The first (locked-in) nomination no longer offers Reopen — clicking it
+    // would put two nominations in the open/editable state at once, letting
+    // a dead voter's ghost vote be recorded (and locked in) on both.
+    expect(screen.queryByRole("button", { name: "Reopen" })).not.toBeInTheDocument();
+
+    const nominations = latest.nominations;
+    expect(nominations[0].lockedIn).toBe(true);
+    expect(nominations[1].lockedIn).toBe(false);
+  });
 });
 
 describe("Day phase: distinguishing executions from exiles in the record", () => {
