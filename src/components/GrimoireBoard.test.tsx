@@ -794,6 +794,26 @@ describe("rotate the grimoire (issue #192)", () => {
     expect(parseFloat(wrap.style.top)).toBeCloseTo(50);
   });
 
+  it("does not re-distort a free-standing reminder's out-of-range canonical position before rotating it for display (Copilot review finding)", () => {
+    // Simulates the canonical position a rotated corner-drag can legitimately
+    // produce for a free-standing reminder — out of the usual [4, 96] range,
+    // but only because it hasn't been rotated back into display space yet.
+    const { container } = renderBoard([makePlayer()], {
+      rotation: 45,
+      reminders: [
+        makeReminder({ id: "r1", position: { x: 115.05382386916239, y: 50 } }),
+      ],
+    });
+
+    const wrap = container.querySelector("[data-reminder-id='r1']") as HTMLElement;
+    // Rotating the raw canonical value once and clamping only the result
+    // lands it back at the pad's corner (96, 96) — pre-clamping the
+    // canonical value before rotating (the bug) would instead distort it to
+    // (~82.5, ~82.5), well short of the corner.
+    expect(parseFloat(wrap.style.left)).toBeCloseTo(96);
+    expect(parseFloat(wrap.style.top)).toBeCloseTo(96);
+  });
+
   it("keeps a token's own label and art upright regardless of rotation", () => {
     const { container } = renderBoard([makePlayer({ id: "p1" })], {
       rotation: 90,

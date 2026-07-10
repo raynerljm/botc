@@ -1092,19 +1092,22 @@ export function GrimoireBoard({
               ? positionByPlayerId.get(reminder.anchorPlayerId)
               : undefined;
             const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
-            // Clamped for the same reason as positionByPlayerId above — a
-            // free-standing reminder's stored position isn't guaranteed to
-            // be within [4,96] for legacy/hand-edited documents. anchorSeatPosition
-            // already carries the rotation (from positionByPlayerId), so an
-            // anchored reminder's offset rotates along with its seat for
-            // free; a free-standing one needs the same rotation applied
-            // directly to its own stored position (issue #192).
+            // anchorSeatPosition already carries the rotation (from
+            // positionByPlayerId), so an anchored reminder's offset rotates
+            // along with its seat for free; a free-standing one needs the
+            // same rotation applied directly to its own stored position
+            // (issue #192). rotatePosition already clamps its own output
+            // (the same [4,96] guarantee a free-standing reminder's stored
+            // position isn't guaranteed to have for legacy/hand-edited
+            // documents), so pre-clamping the un-rotated input here as well
+            // would just distort a legitimately-out-of-range *canonical*
+            // value — one a rotated drag can produce even from an in-bounds
+            // drop, since un-rotating doesn't commute with a per-axis clamp
+            // except at multiples of 90 degrees — before it ever gets
+            // rotated back into display space (Copilot review finding).
             const restingPosition = anchorSeatPosition
               ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
-              : rotatePosition(
-                  { x: clampPct(reminder.position.x), y: clampPct(reminder.position.y) },
-                  rotation,
-                );
+              : rotatePosition(reminder.position, rotation);
             const position =
               liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
                 ? liveDrag.position
