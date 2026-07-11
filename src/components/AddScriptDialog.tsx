@@ -7,6 +7,7 @@ import { saveCustomScript } from "@/lib/customScripts";
 import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
 
 import styles from "./AddScriptDialog.module.css";
+import { Button } from "./Button";
 import { FilePickerButton } from "./FilePickerButton";
 
 function readFileAsText(file: File): Promise<string> {
@@ -88,9 +89,9 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
             ))}
           </ul>
         )}
-        <button type="submit" className={styles.submit}>
+        <Button type="submit" variant="primary" className={styles.submit}>
           Add script
-        </button>
+        </Button>
       </form>
     </details>
   );

@@ -32,6 +32,7 @@ import {
   type TeamCounts,
 } from "@/lib/bagBuilder";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./BagBuilder.module.css";
@@ -635,21 +636,17 @@ export function BagBuilder({
             }
           />
         </div>
-        <button
-          type="button"
-          className={styles.randomize}
-          onClick={handleRandomize}
-        >
+        <Button className={styles.randomize} onClick={handleRandomize}>
           Randomize
-        </button>
+        </Button>
         {scriptId && scriptName && (
-          <button
-            type="button"
+          <Button
+            variant="primary"
             className={styles.continue}
             onClick={handleContinue}
           >
             Continue to seating →
-          </button>
+          </Button>
         )}
       </div>
 

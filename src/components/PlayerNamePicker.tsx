@@ -4,6 +4,7 @@ import { useState, type KeyboardEvent } from "react";
 
 import { REGULAR_PLAYERS } from "@/lib/players";
 
+import { Button } from "./Button";
 import { PickerGroup } from "./PickerGroup";
 import styles from "./PlayerNamePicker.module.css";
 
@@ -72,13 +73,9 @@ export function PlayerNamePicker({ onSelect, excludeNames = [] }: PlayerNamePick
         items={matches.map((name) => ({ label: name, onClick: () => select(name) }))}
       />
       {canNameYourself && (
-        <button
-          type="button"
-          className={styles.useName}
-          onClick={() => select(trimmedQuery)}
-        >
+        <Button className={styles.useName} onClick={() => select(trimmedQuery)}>
           Name yourself &quot;{trimmedQuery}&quot;
-        </button>
+        </Button>
       )}
     </div>
   );

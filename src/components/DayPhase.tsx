@@ -24,6 +24,8 @@ import {
 } from "@/lib/nightList";
 
 import { BottomSheet } from "./BottomSheet";
+import bottomSheetStyles from "./BottomSheet.module.css";
+import { Button } from "./Button";
 import { Checkbox } from "./Checkbox";
 import { DayTimer } from "./DayTimer";
 import styles from "./DayPhase.module.css";
@@ -290,13 +292,15 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
           Reuses the same "Reopen {phase}" label the night list itself used
           before this control moved here (issue #165). */}
       {game.lastEndedNightSnapshot && (
-        <button
-          type="button"
-          className={styles.reopenNight}
+        <Button
+          variant="ghost"
+          className={[bottomSheetStyles.backAlign, styles.reopenNight].join(
+            " ",
+          )}
           onClick={undoEndNight}
         >
           ← Reopen {phaseLabel(phaseForNight(game.night), game.night)}
-        </button>
+        </Button>
       )}
 
       {/* While a nomination is open, recording a new one is not offered —
@@ -341,9 +345,14 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               ? `${selectedNominator.name} will nominate ${selectedNominee.name}`
               : "Choose a nominator and a nominee to start a nomination."}
           </p>
-          <button type="submit" className={styles.submit} disabled={!canSubmit}>
+          <Button
+            type="submit"
+            variant="primary"
+            className={styles.submit}
+            disabled={!canSubmit}
+          >
             Record nomination
-          </button>
+          </Button>
         </form>
       )}
 
@@ -430,13 +439,13 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               )}
 
               {isOpen ? (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   className={styles.lockIn}
                   onClick={() => lockInNomination(nomination)}
                 >
                   Lock in votes
-                </button>
+                </Button>
               ) : (
                 // Hidden (not just disabled) while a different nomination
                 // is open — reopening this one at the same time would
@@ -444,13 +453,12 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
                 // rest of the file relies on (code review finding); see
                 // reopenNomination's own guard for the data-layer backstop.
                 !openNomination && (
-                  <button
-                    type="button"
+                  <Button
                     className={styles.reopen}
                     onClick={() => reopenNomination(nomination)}
                   >
                     Reopen
-                  </button>
+                  </Button>
                 )
               )}
 
@@ -467,9 +475,13 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       {/* Ends the day and opens the next night — the single bottom sheet
           only ever shows Day phase's content while a day is in progress
           (issue #195), so this is the only place that control can live. */}
-      <button type="button" className={styles.startNight} onClick={startNight}>
+      <Button
+        variant="primary"
+        className={styles.startNight}
+        onClick={startNight}
+      >
         Start {phaseLabel(phaseForNight(nightNumber), nightNumber)}
-      </button>
+      </Button>
     </BottomSheet>
   );
 }

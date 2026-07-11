@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { visibleInfoTokens } from "@/lib/infoTokens";
 
+import { Button } from "./Button";
 import { DialogOverlay } from "./DialogOverlay";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
 import { PickerGroup } from "./PickerGroup";
@@ -71,14 +72,13 @@ export function InfoTokenLibrary({
       >
         {chosenText === null ? (
           <>
-            <button
-              type="button"
+            <Button
               ref={cancelButtonRef}
               className={styles.cancelButton}
               onClick={onCancel}
             >
               Cancel
-            </button>
+            </Button>
 
             <div className={styles.standardCards}>
               {standardTokens.map((template) => (
@@ -115,20 +115,20 @@ export function InfoTokenLibrary({
             ))}
 
             <div className={styles.attachActions}>
-              <button type="button" onClick={() => setChosenText(null)}>
+              <Button variant="ghost" onClick={() => setChosenText(null)}>
                 Back
-              </button>
-              <button type="button" ref={cancelButtonRef} onClick={onCancel}>
+              </Button>
+              <Button ref={cancelButtonRef} onClick={onCancel}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() =>
                   onShow({ text: chosenText, characterIds: selectedCharacterIds })
                 }
               >
                 Show
-              </button>
+              </Button>
             </div>
           </>
         )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { Button } from "./Button";
 import styles from "./ConfirmDialog.module.css";
 import { useDialogDismiss } from "./useDialogDismiss";
 
@@ -91,20 +92,15 @@ export function ConfirmDialog({
         {message && <p className={styles.message}>{message}</p>}
         {children}
         <div className={styles.actions}>
-          <button
-            type="button"
-            ref={cancelButtonRef}
-            onClick={() => respond(onCancel)}
-          >
+          <Button ref={cancelButtonRef} onClick={() => respond(onCancel)}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className={destructive ? styles.destructive : styles.confirm}
+          </Button>
+          <Button
+            variant={destructive ? "destructive" : "primary"}
             onClick={() => respond(onConfirm)}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

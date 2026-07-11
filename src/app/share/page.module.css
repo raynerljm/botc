@@ -38,9 +38,4 @@
 
 .save {
   margin-bottom: 1.5rem;
-  padding: 0.5rem 1.25rem;
-  background: var(--accent);
-  color: var(--background);
-  border-radius: 0.5rem;
-  font-weight: 500;
 }

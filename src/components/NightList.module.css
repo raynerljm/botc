@@ -8,18 +8,6 @@
   color: var(--muted);
 }
 
-/* Shared with Day phase's own forward/back buttons (BottomSheet.module.css:
-   .forwardAction/.backAction, issue #195 code review finding — these two
-   rules used to be redefined identically in both sheets' CSS modules). */
-.startNight,
-.endNight {
-  composes: forwardAction from "./BottomSheet.module.css";
-}
-
-.back {
-  composes: backAction from "./BottomSheet.module.css";
-}
-
 .showAll {
   display: flex;
   align-items: center;
@@ -49,8 +37,8 @@
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   transition:
-    opacity 200ms ease,
-    background-color 200ms ease;
+    opacity var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .entry[data-dead] {
@@ -136,12 +124,8 @@
 }
 
 .unskip {
+  min-height: unset;
   padding: 0.3rem 0.6rem;
   font-size: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  cursor: pointer;
   flex-shrink: 0;
 }

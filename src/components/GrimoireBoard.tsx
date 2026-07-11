@@ -38,6 +38,7 @@ import {
 } from "@/lib/gameDocument";
 import { isHttpUrl } from "@/lib/scriptParser";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { InfoTokenLibrary } from "./InfoTokenLibrary";
 import { InfoTokenShowMode } from "./InfoTokenShowMode";
@@ -788,8 +789,7 @@ export function GrimoireBoard({
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls} data-controls>
-        <button
-          type="button"
+        <Button
           onClick={() => {
             cancelActiveDrag();
             // An overlay already open holds a player's position captured at
@@ -801,16 +801,15 @@ export function GrimoireBoard({
           }}
         >
           Re-circle
-        </button>
-        <button type="button" onClick={() => onRotate(stepRotation(rotation, -1))}>
+        </Button>
+        <Button onClick={() => onRotate(stepRotation(rotation, -1))}>
           Rotate left
-        </button>
-        <button type="button" onClick={() => onRotate(stepRotation(rotation, 1))}>
+        </Button>
+        <Button onClick={() => onRotate(stepRotation(rotation, 1))}>
           Rotate right
-        </button>
+        </Button>
         {!hidden && (
-          <button
-            type="button"
+          <Button
             onClick={() => {
               cancelActiveDrag();
               setActiveOverlay(null);
@@ -819,42 +818,36 @@ export function GrimoireBoard({
             }}
           >
             Hide grimoire
-          </button>
+          </Button>
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
-          <button
-            type="button"
+          <Button
             onClick={() =>
               setActiveOverlay({ type: "reminder", base: null, playerId: null })
             }
           >
             Add reminder
-          </button>
+          </Button>
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
-          <button
-            type="button"
-            onClick={() => setActiveOverlay({ type: "infoTokens" })}
-          >
+          <Button onClick={() => setActiveOverlay({ type: "infoTokens" })}>
             Info tokens
-          </button>
+          </Button>
         )}
         {!hidden &&
           !activeOverlay &&
           !placingReminderId &&
           onOpenSetupWalkthrough && (
-            <button type="button" onClick={onOpenSetupWalkthrough}>
-              Setup walkthrough
-            </button>
+            <Button onClick={onOpenSetupWalkthrough}>Setup walkthrough</Button>
           )}
       </div>
 
       {!hidden && placingReminderId && (
         <div className={styles.placingBanner} role="status">
           <span>Tap a seat to attach this reminder</span>
-          <button type="button" onClick={() => setPlacingReminderId(null)}>
+          <Button variant="primary" onClick={() => setPlacingReminderId(null)}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
 
@@ -889,9 +882,9 @@ export function GrimoireBoard({
       {!hidden && removedReminder && (
         <div className={styles.undoBanner}>
           <span>Removed &ldquo;{removedReminder.label}&rdquo;</span>
-          <button type="button" onClick={handleUndoRemove}>
+          <Button variant="primary" onClick={handleUndoRemove}>
             Undo
-          </button>
+          </Button>
         </div>
       )}
 
@@ -1043,13 +1036,12 @@ export function GrimoireBoard({
                       />
                     </label>
 
-                    <button
-                      type="button"
+                    <Button
                       className={styles.markDead}
                       onClick={() => onToggleDead(player.id)}
                     >
                       {player.dead ? "Mark alive" : "Mark dead"}
-                    </button>
+                    </Button>
 
                     <label
                       className={styles.field}
@@ -1072,26 +1064,23 @@ export function GrimoireBoard({
                     </label>
 
                     {isHiddenDrunk && (
-                      <button
-                        type="button"
+                      <Button
                         className={styles.menuButton}
                         onClick={() => onRevealDrunk(player.id)}
                       >
                         Reveal Drunk
-                      </button>
+                      </Button>
                     )}
 
-                    <button
-                      type="button"
+                    <Button
                       className={styles.menuButton}
                       onClick={() => onRemovePlayer(player.id)}
                     >
                       Remove player
-                    </button>
+                    </Button>
 
                     {!activeOverlay && !placingReminderId && (
-                      <button
-                        type="button"
+                      <Button
                         className={styles.menuButton}
                         onClick={() =>
                           setActiveOverlay({
@@ -1108,7 +1097,7 @@ export function GrimoireBoard({
                         }
                       >
                         Add reminder
-                      </button>
+                      </Button>
                     )}
 
                     <label
@@ -1208,14 +1197,13 @@ export function GrimoireBoard({
                 </details>
 
                 {player.dead && (
-                  <button
-                    type="button"
+                  <Button
                     className={styles.ghostVote}
                     aria-pressed={player.ghostVoteSpent}
                     onClick={() => onToggleGhostVote(player.id)}
                   >
                     Ghost vote: {player.ghostVoteSpent ? "spent" : "available"}
-                  </button>
+                  </Button>
                 )}
               </div>
             );
@@ -1303,8 +1291,7 @@ export function GrimoireBoard({
 
                   <div className={styles.menuBody}>
                     {!placingReminderId && (
-                      <button
-                        type="button"
+                      <Button
                         onClick={() => {
                           cancelActiveDrag();
                           setActiveOverlay(null);
@@ -1312,14 +1299,11 @@ export function GrimoireBoard({
                         }}
                       >
                         Attach to seat
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveReminder(reminder)}
-                    >
+                    <Button onClick={() => handleRemoveReminder(reminder)}>
                       Remove reminder
-                    </button>
+                    </Button>
                   </div>
                 </details>
               </div>
@@ -1328,9 +1312,9 @@ export function GrimoireBoard({
 
         {hidden && (
           <div className={styles.hiddenOverlay}>
-            <button type="button" onClick={() => setHidden(false)}>
+            <Button variant="primary" onClick={() => setHidden(false)}>
               Show grimoire
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -1348,9 +1332,9 @@ export function GrimoireBoard({
               <div key={id} className={styles.fabledToken}>
                 <CharacterToken character={character} />
                 <span>{character.name}</span>
-                <button type="button" onClick={() => onRemoveFabled(id)}>
+                <Button variant="ghost" onClick={() => onRemoveFabled(id)}>
                   Remove {character.name}
-                </button>
+                </Button>
               </div>
             );
           })}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/scriptShare";
 import type { ScriptMeta } from "@/lib/scriptParser";
 
+import { Button } from "./Button";
 import styles from "./ShareScriptButton.module.css";
 import { useDialogDismiss } from "./useDialogDismiss";
 
@@ -25,13 +26,7 @@ export function ShareScriptButton({ meta, characters }: ShareScriptButtonProps) 
 
   return (
     <>
-      <button
-        type="button"
-        className={styles.trigger}
-        onClick={() => setOpen(true)}
-      >
-        Share via QR
-      </button>
+      <Button onClick={() => setOpen(true)}>Share via QR</Button>
       {open && (
         <ShareScriptModal
           meta={meta}
@@ -93,15 +88,15 @@ function ShareScriptModal({
         className={styles.dialog}
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
+        <Button
+          variant="icon"
           ref={closeButtonRef}
           className={styles.close}
           onClick={onClose}
           aria-label="Close"
         >
           ×
-        </button>
+        </Button>
         {tooLargeForQr ? (
           <p role="alert" className={styles.warning}>
             This script is too large to encode as a QR code. Use Copy link
@@ -116,9 +111,9 @@ function ShareScriptModal({
             Copy link if scanning fails.
           </p>
         )}
-        <button type="button" className={styles.copy} onClick={copyUrl}>
+        <Button variant="primary" className={styles.copy} onClick={copyUrl}>
           {copied ? "Copied!" : "Copy link"}
-        </button>
+        </Button>
         {copyFailed && (
           <>
             <p className={styles.warning}>

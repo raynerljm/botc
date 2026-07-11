@@ -51,6 +51,7 @@ import {
 } from "@/lib/nightList";
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DayPhase } from "./DayPhase";
@@ -1121,13 +1122,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         // resuming them). Hidden for the whole draw ritual (any stage, not
         // just the "hidden" privacy-guard one) so a mid-draw tap can't
         // discard an in-flight choice or reveal.
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={styles.back}
           onClick={() => router.back()}
         >
           ← {game.scriptName}
-        </button>
+        </Button>
       )}
       <h1 className={styles.title}>{game.scriptName}</h1>
 
@@ -1145,9 +1146,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {!draw && nextUnassignedSeat && !bagEmpty && (
-        <button type="button" className={styles.startDraw} onClick={startDraw}>
+        <Button
+          variant="primary"
+          className={styles.startDraw}
+          onClick={startDraw}
+        >
           Start bag draw
-        </button>
+        </Button>
       )}
 
       {setupComplete &&
@@ -1233,13 +1238,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                   ? `Card hidden. Pass the device to ${nextUnassignedSeat.name}.`
                   : "Card hidden. Return the device to the storyteller."}
               </p>
-              <button
-                type="button"
+              <Button
                 className={styles.drawAction}
                 onClick={nextUnassignedSeat ? readyForNextDraw : openGrimoire}
               >
                 {nextUnassignedSeat ? "Ready to draw" : "Open the grimoire"}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -1254,13 +1258,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           traveller may join at any time per the rulebook, even in a game
           built with 0 travellers (issue #119). */}
       {!draw && !travellerFormOpen && (
-        <button
-          type="button"
-          className={styles.addTraveller}
-          onClick={openTravellerForm}
-        >
+        <Button className={styles.addTraveller} onClick={openTravellerForm}>
           Add traveller
-        </button>
+        </Button>
       )}
 
       {!draw && travellerFormOpen && (
@@ -1300,20 +1300,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               }))}
             />
           </label>
-          <button type="submit" className={styles.formSubmit}>
+          <Button type="submit" variant="primary" className={styles.formSubmit}>
             Add to the circle
-          </button>
+          </Button>
         </form>
       )}
 
       {setupComplete && !screenObscured && !tokenFormOpen && (
-        <button
-          type="button"
-          className={styles.addTraveller}
-          onClick={openTokenForm}
-        >
+        <Button className={styles.addTraveller} onClick={openTokenForm}>
           Add character
-        </button>
+        </Button>
       )}
 
       {setupComplete && !screenObscured && tokenFormOpen && (
@@ -1343,10 +1339,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               }))}
             />
           </label>
-          <button type="submit">Add to the grimoire</button>
-          <button type="button" onClick={() => setTokenFormOpen(false)}>
+          <Button type="submit" variant="primary">
+            Add to the grimoire
+          </Button>
+          <Button variant="ghost" onClick={() => setTokenFormOpen(false)}>
             Cancel
-          </button>
+          </Button>
         </form>
       )}
 
@@ -1374,20 +1372,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                     ? "pending."
                     : "to make before the first night."}
                 </p>
-                <button
-                  type="button"
-                  className={styles.walkthroughStart}
-                  onClick={openWalkthrough}
-                >
+                <Button variant="primary" onClick={openWalkthrough}>
                   Start walkthrough
-                </button>
-                <button
-                  type="button"
-                  className={styles.walkthroughSkip}
-                  onClick={dismissWalkthroughOffer}
-                >
+                </Button>
+                <Button variant="ghost" onClick={dismissWalkthroughOffer}>
                   Skip
-                </button>
+                </Button>
               </div>
             )}
           {/* Stays mounted (just hidden) rather than being swapped out for

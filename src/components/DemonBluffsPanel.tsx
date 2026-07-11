@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { DEMON_BLUFF_SLOTS, heldCharacterIds, type GameDocument } from "@/lib/gameDocument";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { Checkbox } from "./Checkbox";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -174,14 +175,13 @@ export function DemonBluffsFields({
       </ul>
 
       {showToDemonButton && (
-        <button
-          type="button"
+        <Button
           className={styles.showButton}
           disabled={!anyBluffSet}
           onClick={() => setShowingToDemon(true)}
         >
           Show to Demon
-        </button>
+        </Button>
       )}
 
       {showingToDemon && (
@@ -237,14 +237,9 @@ function ShowToDemonOverlay({
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        ref={closeButtonRef}
-        className={styles.closeButton}
-        onClick={onClose}
-      >
+      <Button ref={closeButtonRef} className={styles.closeButton} onClick={onClose}>
         Close
-      </button>
+      </Button>
     </div>
   );
 }

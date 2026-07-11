@@ -18,6 +18,8 @@ import {
 } from "@/lib/nightList";
 
 import { BottomSheet } from "./BottomSheet";
+import bottomSheetStyles from "./BottomSheet.module.css";
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { Checkbox } from "./Checkbox";
 import styles from "./NightList.module.css";
@@ -128,13 +130,9 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
         collapsed={game.nightListCollapsed}
         onToggleCollapsed={toggleCollapsed}
       >
-        <button
-          type="button"
-          className={styles.startNight}
-          onClick={startNight}
-        >
+        <Button variant="primary" onClick={startNight}>
           Start {phaseLabel(phase, nightNumber)}
-        </button>
+        </Button>
       </BottomSheet>
     );
   }
@@ -178,9 +176,13 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
         </p>
       }
     >
-      <button type="button" className={styles.back} onClick={undoStartNight}>
+      <Button
+        variant="ghost"
+        className={bottomSheetStyles.backAlign}
+        onClick={undoStartNight}
+      >
         ← Back
-      </button>
+      </Button>
 
       <label className={styles.showAll}>
         <Checkbox checked={showAll} onChange={setShowAll} />
@@ -266,22 +268,22 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
                 </span>
               </label>
               {entry.dead && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   className={styles.unskip}
                   onClick={() => toggleUnskipped(entry.id)}
                 >
                   {entry.skipped ? "Un-skip" : "Skip"}
-                </button>
+                </Button>
               )}
             </li>
           );
         })}
       </ol>
 
-      <button type="button" className={styles.endNight} onClick={endNight}>
+      <Button variant="primary" onClick={endNight}>
         End {phaseLabel(phase, nightNumber)}
-      </button>
+      </Button>
     </BottomSheet>
   );
 }
