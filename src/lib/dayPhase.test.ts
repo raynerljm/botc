@@ -9,6 +9,7 @@ import {
   hasSpentGhostVoteElsewhereToday,
   livingPlayerCount,
   nominationThreshold,
+  voteRosterOrder,
   wasNominatedToday,
 } from "./dayPhase";
 import { createGame, type GameDocument, type Nomination, type Player } from "./gameDocument";
@@ -471,5 +472,51 @@ describe("hasNominatedToday / wasNominatedToday", () => {
 
     expect(hasNominatedToday(nominations, "p1")).toBe(false);
     expect(wasNominatedToday(nominations, "traveller")).toBe(false);
+  });
+});
+
+describe("voteRosterOrder", () => {
+  it("starts at the seat clockwise of the nominee and wraps around, so the nominee is last (issue #248)", () => {
+    const players = [
+      makePlayer({ id: "p1", seat: 1 }),
+      makePlayer({ id: "p2", seat: 2 }),
+      makePlayer({ id: "p3", seat: 3 }),
+      makePlayer({ id: "p4", seat: 4 }),
+      makePlayer({ id: "p5", seat: 5 }),
+    ];
+
+    expect(voteRosterOrder(players, "p3").map((p) => p.id)).toEqual([
+      "p4",
+      "p5",
+      "p1",
+      "p2",
+      "p3",
+    ]);
+  });
+
+  it("derives order from seat number, not array order, so it's correct even after reseats/insertions", () => {
+    const players = [
+      makePlayer({ id: "p1", seat: 3 }),
+      makePlayer({ id: "p2", seat: 1 }),
+      makePlayer({ id: "p3", seat: 2 }),
+    ];
+
+    expect(voteRosterOrder(players, "p3").map((p) => p.id)).toEqual([
+      "p1",
+      "p2",
+      "p3",
+    ]);
+  });
+
+  it("falls back to seat order when the nominee isn't found among the players (e.g. since removed)", () => {
+    const players = [
+      makePlayer({ id: "p1", seat: 2 }),
+      makePlayer({ id: "p2", seat: 1 }),
+    ];
+
+    expect(voteRosterOrder(players, "gone").map((p) => p.id)).toEqual([
+      "p2",
+      "p1",
+    ]);
   });
 });

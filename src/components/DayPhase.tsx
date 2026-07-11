@@ -11,6 +11,7 @@ import {
   hasNominatedToday,
   hasSpentGhostVoteElsewhereToday,
   nominationThreshold,
+  voteRosterOrder,
   wasNominatedToday,
 } from "@/lib/dayPhase";
 import { pauseDayTimer } from "@/lib/dayTimer";
@@ -405,36 +406,39 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               {isOpen && (
                 <fieldset className={styles.voters}>
                   <legend>Record votes</legend>
-                  {game.players.map((player) => {
-                    const voted = nomination.votes.includes(player.id);
-                    // Advisory only (ADR 0003) — never disables the
-                    // checkbox, just labels a dead voter whose ghost vote
-                    // is already spent so the storyteller can see it before
-                    // choosing to record (or not record) the vote anyway.
-                    const alreadySpent =
-                      player.dead &&
-                      !voted &&
-                      !canRecordVote(player, nomination.isExile);
-                    return (
-                      <label key={player.id} className={styles.voter}>
-                        <Checkbox
-                          checked={voted}
-                          onChange={() => toggleVote(nomination, player)}
-                        />
-                        {player.name}
-                        {player.dead && (
-                          <span className={styles.note}>
-                            {" "}
-                            (
-                            {nomination.isExile
-                              ? "vote free"
-                              : `ghost vote${alreadySpent ? " — already spent" : ""}`}
-                            )
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
+                  {voteRosterOrder(game.players, nomination.nomineeId).map(
+                    (player) => {
+                      const voted = nomination.votes.includes(player.id);
+                      // Advisory only (ADR 0003) — never disables the
+                      // checkbox, just labels a dead voter whose ghost vote
+                      // is already spent so the storyteller can see it
+                      // before choosing to record (or not record) the vote
+                      // anyway.
+                      const alreadySpent =
+                        player.dead &&
+                        !voted &&
+                        !canRecordVote(player, nomination.isExile);
+                      return (
+                        <label key={player.id} className={styles.voter}>
+                          <Checkbox
+                            checked={voted}
+                            onChange={() => toggleVote(nomination, player)}
+                          />
+                          {player.name}
+                          {player.dead && (
+                            <span className={styles.note}>
+                              {" "}
+                              (
+                              {nomination.isExile
+                                ? "vote free"
+                                : `ghost vote${alreadySpent ? " — already spent" : ""}`}
+                              )
+                            </span>
+                          )}
+                        </label>
+                      );
+                    },
+                  )}
                 </fieldset>
               )}
 
