@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { CustomScriptsSection } from "@/components/CustomScriptsSection";
 import { GamesList } from "@/components/GamesList";
-import { TeensyvilleBadge } from "@/components/TeensyvilleBadge";
+import { ScriptLibrarySection } from "@/components/ScriptLibrarySection";
 import { listScriptSummaries } from "@/lib/scripts";
 
 import styles from "./page.module.css";
@@ -41,31 +41,7 @@ export default function Home() {
         ))}
       </ul>
 
-      {libraryScripts.length > 0 && (
-        <section className={styles.librarySection}>
-          <h2 className={styles.sectionHeading}>Script library</h2>
-          <ul className={styles.scriptList}>
-            {libraryScripts.map((script) => (
-              <li key={script.id}>
-                <Link
-                  href={`/scripts/${script.id}`}
-                  className={styles.scriptCard}
-                >
-                  <span className={styles.scriptName}>
-                    {script.name}
-                    {script.isTeensyville && <TeensyvilleBadge />}
-                  </span>
-                  <span className={styles.scriptMeta}>
-                    {script.author && `By ${script.author} — `}
-                    {script.characterCount} characters +{" "}
-                    {script.travellerCount} travellers
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <ScriptLibrarySection scripts={libraryScripts} />
 
       <CustomScriptsSection />
     </main>
