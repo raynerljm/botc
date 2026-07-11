@@ -237,6 +237,41 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     });
   });
 
+  it("checks the Marionette against the real Demon's seat, not a Lunatic disguised as that same Demon (issue #241)", () => {
+    // Seats: 0 Marionette, 1 Lunatic (stand-in "Imp"), 2 Imp (the real
+    // Demon), 3 Chef. The Marionette's actual neighbours are seat 3 (Chef)
+    // and seat 1 (the Lunatic) — not seat 2, the real Demon — so this must
+    // be flagged incorrect even though the Lunatic's characterId is also
+    // "imp" (issue #241 lets the Lunatic's stand-in be the in-play Demon).
+    const selected = characters("marionette", "imp", "lunatic", "chef");
+    const game = createGame({
+      scriptId: "custom",
+      scriptName: "Test script",
+      playerCount: 4,
+      selectedCharacters: selected,
+      standIn: null,
+      lunaticStandIn: getCharacter("imp")!,
+      extraCopies: {},
+      newId: (() => {
+        let n = 0;
+        return () => `id-${n++}`;
+      })(),
+    });
+    const players = game.players.map((p, i) => {
+      if (i === 0) return { ...p, characterId: "marionette" };
+      if (i === 1) return { ...p, characterId: "imp", isLunatic: true };
+      if (i === 2) return { ...p, characterId: "imp" };
+      return { ...p, characterId: "chef" };
+    });
+
+    const step = stepFor({ ...game, players }, "marionette");
+
+    expect(step).toMatchObject({
+      kind: "neighborCheck",
+      seatedCorrectly: false,
+    });
+  });
+
   it("gives the Drunk a review step keyed by the stand-in player, not their apparent character's own step", () => {
     const game = gameWithCharacters(["drunk", "washerwoman", "imp"], "washerwoman");
     const steps = buildSetupWalkthroughSteps(game);

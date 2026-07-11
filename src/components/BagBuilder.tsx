@@ -347,7 +347,7 @@ export function BagBuilder({
   // seated, so no seat numbers exist yet to break ties by), falling back to
   // the first available Demon otherwise.
   const defaultLunaticStandIn =
-    availableDemonStandIns.find((c) => selectedIds.has(c.id)) ??
+    selectedCharacters.find((c) => c.team === "demon") ??
     availableDemonStandIns[0] ??
     null;
   // Resolved against the current pool, not just "is an id present" — a

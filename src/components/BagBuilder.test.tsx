@@ -842,6 +842,35 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
     expect(standInToken?.characterId).toBe("imp");
   });
 
+  it("puts two Imp tokens in the bag when the in-play Demon is also the Lunatic's stand-in, one per seat that must draw it (issue #241)", async () => {
+    const user = userEvent.setup();
+    render(
+      <BagBuilder
+        characters={characters("lunatic", "imp")}
+        scriptId="tb"
+        scriptName="Trouble Brewing"
+      />,
+    );
+
+    // Imp is selected for real *and* left on its default stand-in (also
+    // Imp) — the real Demon's seat and the Lunatic's disguised seat each
+    // need their own physical "Imp" token to draw.
+    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Continue to seating/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Continue anyway/i }),
+    );
+
+    const game = loadGame();
+    const impTokens = game!.bag.filter((t) => t.characterId === "imp");
+    expect(impTokens).toHaveLength(2);
+    expect(impTokens.filter((t) => t.isLunaticStandIn)).toHaveLength(1);
+    expect(impTokens.filter((t) => !t.isLunaticStandIn)).toHaveLength(1);
+  });
+
   it("warns, but never blocks, in the rare case no Demon stand-in is available (ADR 0003)", async () => {
     const user = userEvent.setup();
     render(

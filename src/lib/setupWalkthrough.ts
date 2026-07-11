@@ -167,8 +167,15 @@ function seatedNextToDemon(
   const sorted = seatSorted(players);
   const total = sorted.length;
   if (total < 2) return false;
+  // Excludes the Lunatic even though their characterId can now be the same
+  // Demon's (issue #241 lets the Lunatic's stand-in be the in-play Demon) —
+  // this check is about the real Demon's seat, not whichever seat merely
+  // displays that character's name.
   const demonIndex = sorted.findIndex(
-    (p) => p.characterId && characterById.get(p.characterId)?.team === "demon",
+    (p) =>
+      !p.isLunatic &&
+      p.characterId &&
+      characterById.get(p.characterId)?.team === "demon",
   );
   if (demonIndex === -1) return false;
   const beforeId = sorted[(demonIndex - 1 + total) % total].id;
