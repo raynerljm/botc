@@ -146,8 +146,14 @@
   background: var(--surface);
 }
 
-/* The privacy screen (Hide grimoire) must stay a plain, uninformative
-   circle — no dial ticks bleeding through underneath it. */
+/* The privacy screen (Hide grimoire) must not leak any game state — no dial
+   ticks bleeding through underneath it. The gold ring/border/drop-shadow
+   chrome on .board itself is left alone: it carries no information (unlike
+   the ticks, which hint at "a circle with content"), and .board's border
+   already survived the hidden state before this issue (the pre-existing
+   data-hidden rule above only ever overrode `background`, never `border`),
+   so this keeps that same precedent rather than stripping polish a privacy
+   guard doesn't need to strip. */
 .board[data-hidden="true"]::before {
   content: none;
 }
