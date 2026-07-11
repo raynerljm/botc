@@ -95,6 +95,7 @@ describe("withRestoredReminder (code review: PR #37, double-undo dedup)", () => 
     label: "Poisoned",
     position: { x: 10, y: 20 },
     anchorPlayerId: null,
+    homePlayerId: null,
   };
 
   it("appends a restored reminder that isn't already present", () => {
@@ -129,6 +130,7 @@ describe("withBackfilledDrunkReminders (issue #186 migration)", () => {
       label: "Drunk",
       position: { x: 10, y: 20 },
       anchorPlayerId: "p1",
+      homePlayerId: "p1",
     };
     expect(withBackfilledDrunkReminders([legacyReminder], players)).toEqual([
       legacyReminder,

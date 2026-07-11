@@ -3236,6 +3236,175 @@ describe("reminder tokens (issue #14)", () => {
     // to store while anchored (which never updated as the seat moved).
     expect(reloaded.reminders[0].position).toBeDefined();
   });
+
+  describe("Re-circle re-homes reminders (issue #213)", () => {
+    function mockBoardRect(circle: HTMLElement) {
+      const board = circle.querySelector("[data-board]") as HTMLElement;
+      vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 400,
+        right: 400,
+        bottom: 400,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      });
+      return board;
+    }
+
+    it("re-anchors a reminder dragged off onto the pad back to its owning seat", async () => {
+      const user = userEvent.setup();
+      const circle = await completedBoard(user);
+
+      const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+      const seatPlayerId = wrap.dataset.playerId!;
+      await user.click(
+        within(wrap).getByRole("button", { name: "Add reminder" }),
+      );
+      const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+      const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+      await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+      expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).toBe(
+        seatPlayerId,
+      );
+
+      mockBoardRect(circle);
+      const reminderSummary = circle.querySelector(
+        "[data-reminder-id] summary",
+      ) as HTMLElement;
+      fireEvent(
+        reminderSummary,
+        pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+      );
+      fireEvent(
+        reminderSummary,
+        pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+      );
+      fireEvent(
+        reminderSummary,
+        pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }),
+      );
+      expect((loadGame() as GameDocument).reminders[0].anchorPlayerId).toBeNull();
+
+      await user.click(within(circle).getByRole("button", { name: /re-circle/i }));
+
+      const reloaded = loadGame() as GameDocument;
+      expect(reloaded.reminders[0].anchorPlayerId).toBe(seatPlayerId);
+      expect(reloaded.reminders[0].homePlayerId).toBe(seatPlayerId);
+    });
+
+    it("leaves a reminder that was never attached to any seat untouched", async () => {
+      const user = userEvent.setup();
+      const circle = await completedBoard(user);
+
+      const padControls = circle.querySelector("[data-controls]") as HTMLElement;
+      await user.click(
+        within(padControls).getByRole("button", { name: "Add reminder" }),
+      );
+      const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+      const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+      await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+      const before = loadGame() as GameDocument;
+      expect(before.reminders[0].anchorPlayerId).toBeNull();
+      expect(before.reminders[0].homePlayerId).toBeNull();
+
+      await user.click(within(circle).getByRole("button", { name: /re-circle/i }));
+
+      const reloaded = loadGame() as GameDocument;
+      expect(reloaded.reminders[0].anchorPlayerId).toBeNull();
+      expect(reloaded.reminders[0].homePlayerId).toBeNull();
+      expect(reloaded.reminders[0].position).toEqual(before.reminders[0].position);
+    });
+
+    it("keeps re-anchoring a detached reminder across repeated re-circles, without ever losing its owner", async () => {
+      const user = userEvent.setup();
+      const circle = await completedBoard(user);
+
+      const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+      const seatPlayerId = wrap.dataset.playerId!;
+      await user.click(
+        within(wrap).getByRole("button", { name: "Add reminder" }),
+      );
+      const dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+      const group = within(dialog).getByRole("group", { name: "Washerwoman" });
+      await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+      mockBoardRect(circle);
+      const reminderSummary = circle.querySelector(
+        "[data-reminder-id] summary",
+      ) as HTMLElement;
+      fireEvent(
+        reminderSummary,
+        pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+      );
+      fireEvent(
+        reminderSummary,
+        pointerEvent("pointermove", { pointerId: 1, clientX: 140, clientY: 180 }),
+      );
+      fireEvent(
+        reminderSummary,
+        pointerEvent("pointerup", { pointerId: 1, clientX: 140, clientY: 180 }),
+      );
+
+      await user.click(within(circle).getByRole("button", { name: /re-circle/i }));
+      await user.click(within(circle).getByRole("button", { name: /re-circle/i }));
+
+      const reloaded = loadGame() as GameDocument;
+      expect(reloaded.reminders[0].anchorPlayerId).toBe(seatPlayerId);
+      expect(reloaded.reminders[0].homePlayerId).toBe(seatPlayerId);
+    });
+
+    it("re-homes a detached reminder to a fanned-out, non-overlapping spot alongside a sibling that stayed anchored", async () => {
+      const user = userEvent.setup();
+      const circle = await completedBoard(user);
+
+      const wrap = circle.querySelectorAll("[data-player-id]")[0] as HTMLElement;
+      await user.click(
+        within(wrap).getByRole("button", { name: "Add reminder" }),
+      );
+      let dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+      let group = within(dialog).getByRole("group", { name: "Washerwoman" });
+      await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+
+      await user.click(
+        within(wrap).getByRole("button", { name: "Add reminder" }),
+      );
+      dialog = within(circle).getByRole("dialog", { name: "Add reminder" });
+      group = within(dialog).getByRole("group", { name: "Washerwoman" });
+      await user.click(within(group).getByRole("button", { name: "Townsfolk" }));
+      expect((loadGame() as GameDocument).reminders).toHaveLength(2);
+
+      mockBoardRect(circle);
+      const secondSummary = circle.querySelectorAll(
+        "[data-reminder-id] summary",
+      )[1] as HTMLElement;
+      fireEvent(
+        secondSummary,
+        pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+      );
+      fireEvent(
+        secondSummary,
+        pointerEvent("pointermove", { pointerId: 1, clientX: 250, clientY: 250 }),
+      );
+      fireEvent(
+        secondSummary,
+        pointerEvent("pointerup", { pointerId: 1, clientX: 250, clientY: 250 }),
+      );
+      expect((loadGame() as GameDocument).reminders[1].anchorPlayerId).toBeNull();
+
+      await user.click(within(circle).getByRole("button", { name: /re-circle/i }));
+
+      const reloaded = loadGame() as GameDocument;
+      expect(reloaded.reminders.every((r) => r.anchorPlayerId !== null)).toBe(
+        true,
+      );
+      const wraps = circle.querySelectorAll("[data-reminder-id]");
+      const tops = [...wraps].map((el) => (el as HTMLElement).style.top);
+      expect(new Set(tops).size).toBe(tops.length);
+    });
+  });
 });
 
 describe("automatic Drunk reminder token (issue #186)", () => {
@@ -3390,6 +3559,7 @@ describe("automatic Drunk reminder token (issue #186)", () => {
           label: "Drunk",
           position: { x: 10, y: 20 },
           anchorPlayerId: playerId,
+          homePlayerId: playerId,
         },
       ],
     };

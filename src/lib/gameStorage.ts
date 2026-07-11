@@ -72,7 +72,10 @@ const ROTATION_SCHEMA_VERSION = 22;
 // carries no storyteller-authored data, so (unlike notes) backfilling its
 // universal default is enough; nothing needs bespoke recovery here.
 function upgradeV21Rotation(game: unknown): unknown {
-  if (!isStoredGame(game) || game.schemaVersion !== NOTES_SECTIONS_SCHEMA_VERSION) {
+  if (
+    !isStoredGame(game) ||
+    game.schemaVersion !== NOTES_SECTIONS_SCHEMA_VERSION
+  ) {
     return game;
   }
   return {
@@ -82,17 +85,55 @@ function upgradeV21Rotation(game: unknown): unknown {
   };
 }
 
+// Same fixed-literal-target reasoning as the two migrations above: issue
+// #213 added the required `homePlayerId` field to every ReminderToken,
+// moving GAME_SCHEMA_VERSION from 22 to 23.
+const HOME_PLAYER_ID_SCHEMA_VERSION = 23;
+
+// Without this, upgradeV21Rotation's own output (a v22 document) would be
+// dropped by the version filter below the moment GAME_SCHEMA_VERSION moved
+// to 23, the same chain-breaking regression upgradeV21Rotation itself exists
+// to prevent one bump earlier. A pre-#213 reminder was never anchored to a
+// home independent of anchorPlayerId, so the closest-to-correct backfill is
+// simply "whatever it's anchored to right now, if anything" — a reminder
+// already parked beside a seat carries that seat as its home from the
+// moment this migration runs, same as any reminder created after #213; one
+// that had already been dragged free comes back with no home (null), the
+// same as a reminder Re-circle was never asked to track before this issue.
+function upgradeV22HomePlayerId(game: unknown): unknown {
+  if (!isStoredGame(game) || game.schemaVersion !== ROTATION_SCHEMA_VERSION) {
+    return game;
+  }
+  const reminders = Array.isArray(game.reminders) ? game.reminders : [];
+  return {
+    ...game,
+    schemaVersion: HOME_PLAYER_ID_SCHEMA_VERSION,
+    reminders: reminders.map((reminder) =>
+      isStoredGame(reminder) && reminder.homePlayerId === undefined
+        ? { ...reminder, homePlayerId: reminder.anchorPlayerId ?? null }
+        : reminder,
+    ),
+  };
+}
+
 function parseStore(raw: string | null): GamesStore {
   if (!raw) return EMPTY_STORE;
   try {
-    const parsed = JSON.parse(raw) as { activeId: string | null; games: unknown[] };
+    const parsed = JSON.parse(raw) as {
+      activeId: string | null;
+      games: unknown[];
+    };
     if (!parsed || !Array.isArray(parsed.games)) return EMPTY_STORE;
     // Drop any game written by a different schema version rather than handing
     // back something the app can't render.
-    const games = parsed.games.map(upgradeV20Notes).map(upgradeV21Rotation).filter(
-      (game): game is GameDocument =>
-        isStoredGame(game) && game.schemaVersion === GAME_SCHEMA_VERSION,
-    );
+    const games = parsed.games
+      .map(upgradeV20Notes)
+      .map(upgradeV21Rotation)
+      .map(upgradeV22HomePlayerId)
+      .filter(
+        (game): game is GameDocument =>
+          isStoredGame(game) && game.schemaVersion === GAME_SCHEMA_VERSION,
+      );
     const activeId = games.some((game) => game.id === parsed.activeId)
       ? parsed.activeId
       : null;
