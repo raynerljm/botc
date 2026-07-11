@@ -110,6 +110,29 @@ describe("DayTimer: pause and resume", () => {
   });
 });
 
+describe("DayTimer: peek footprint while active (issue #216)", () => {
+  it("hides the start-a-timer presets while a countdown is running, so the always-visible peek widget stays compact", () => {
+    const game = makeGame({
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    renderTimer(game);
+
+    expect(screen.queryByRole("button", { name: "2 min" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "3 min" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "6 min" })).not.toBeInTheDocument();
+    expect(screen.getByRole("timer")).toBeInTheDocument();
+  });
+
+  it("hides the presets while paused too", () => {
+    const game = makeGame({
+      dayTimer: { status: "paused", endAt: null, remainingMs: 45_000 },
+    });
+    renderTimer(game);
+
+    expect(screen.queryByRole("button", { name: "2 min" })).not.toBeInTheDocument();
+  });
+});
+
 describe("DayTimer: reset", () => {
   it("clears a running timer back to idle", async () => {
     const user = userEvent.setup();

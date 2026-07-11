@@ -39,8 +39,8 @@ const SHEET_DRAG_THRESHOLD_PX = 10;
 // drag would visibly snap the instant the inline override is cleared) — same
 // pattern GrimoireBoard.tsx already uses for its own board-sizing math.
 const PEEK_MIN_REM = 4.5;
-const PEEK_MAX_REM = 7.5;
-const PEEK_VIEWPORT_FRACTION = 0.16;
+const PEEK_MAX_REM = 10;
+const PEEK_VIEWPORT_FRACTION = 0.2;
 const EXPANDED_VIEWPORT_FRACTION = 0.45;
 
 function readRootFontSizePx(): number {

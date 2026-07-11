@@ -14,7 +14,14 @@
    animates between them, and dragging the handle (BottomSheet.tsx) live-
    overrides this via an inline style during the gesture. */
 .panel {
-  --sheet-peek-height: clamp(4.5rem, 16vh, 7.5rem);
+  /* The upper bound was raised from 7.5rem (issue #216): Day phase's peek
+     content — handle, the day timer's running countdown with its full-size
+     (2.75rem tap target) Pause/Resume/Reset buttons, and the heading — needs
+     roughly 9-10rem to avoid clipping the heading, taller than Night's
+     handle+heading+progress-line alone ever needed. The panel below stays a
+     scrollable fallback for the rarer case (e.g. a block holder recorded
+     while the timer is also running) that still doesn't fit. */
+  --sheet-peek-height: clamp(4.5rem, 20vh, 10rem);
   --sheet-expanded-height: 45vh;
   display: flex;
   flex-direction: column;
