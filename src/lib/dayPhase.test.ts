@@ -508,7 +508,7 @@ describe("voteRosterOrder", () => {
     ]);
   });
 
-  it("falls back to seat order when the nominee isn't found among the players (e.g. since removed)", () => {
+  it("still returns plain seat order when the nominee id doesn't match any player", () => {
     const players = [
       makePlayer({ id: "p1", seat: 2 }),
       makePlayer({ id: "p2", seat: 1 }),

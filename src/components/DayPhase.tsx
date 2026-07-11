@@ -112,6 +112,17 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   // last nomination recorded: reopening an earlier, already-locked one to
   // fix a mistake makes it the open one again, wherever it sits in the day.
   const openNomination = game.nominations.find((n) => !n.lockedIn) ?? null;
+  // Only the open nomination ever renders the voters fieldset (`isOpen &&`
+  // below), so this is the one roster order needed per render — memoized
+  // the same way `playerById` is, since re-sorting every seat on every
+  // vote-toggle round-trip is pure waste when `game.players` hasn't changed.
+  const voteRoster = useMemo(
+    () =>
+      openNomination
+        ? voteRosterOrder(game.players, openNomination.nomineeId)
+        : [],
+    [game.players, openNomination],
+  );
   const blockNomineeId = computeBlock(game.nominations, game.players);
   const blockNominationId = computeBlockNominationId(
     game.nominations,
@@ -406,39 +417,36 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               {isOpen && (
                 <fieldset className={styles.voters}>
                   <legend>Record votes</legend>
-                  {voteRosterOrder(game.players, nomination.nomineeId).map(
-                    (player) => {
-                      const voted = nomination.votes.includes(player.id);
-                      // Advisory only (ADR 0003) — never disables the
-                      // checkbox, just labels a dead voter whose ghost vote
-                      // is already spent so the storyteller can see it
-                      // before choosing to record (or not record) the vote
-                      // anyway.
-                      const alreadySpent =
-                        player.dead &&
-                        !voted &&
-                        !canRecordVote(player, nomination.isExile);
-                      return (
-                        <label key={player.id} className={styles.voter}>
-                          <Checkbox
-                            checked={voted}
-                            onChange={() => toggleVote(nomination, player)}
-                          />
-                          {player.name}
-                          {player.dead && (
-                            <span className={styles.note}>
-                              {" "}
-                              (
-                              {nomination.isExile
-                                ? "vote free"
-                                : `ghost vote${alreadySpent ? " — already spent" : ""}`}
-                              )
-                            </span>
-                          )}
-                        </label>
-                      );
-                    },
-                  )}
+                  {voteRoster.map((player) => {
+                    const voted = nomination.votes.includes(player.id);
+                    // Advisory only (ADR 0003) — never disables the
+                    // checkbox, just labels a dead voter whose ghost vote
+                    // is already spent so the storyteller can see it before
+                    // choosing to record (or not record) the vote anyway.
+                    const alreadySpent =
+                      player.dead &&
+                      !voted &&
+                      !canRecordVote(player, nomination.isExile);
+                    return (
+                      <label key={player.id} className={styles.voter}>
+                        <Checkbox
+                          checked={voted}
+                          onChange={() => toggleVote(nomination, player)}
+                        />
+                        {player.name}
+                        {player.dead && (
+                          <span className={styles.note}>
+                            {" "}
+                            (
+                            {nomination.isExile
+                              ? "vote free"
+                              : `ghost vote${alreadySpent ? " — already spent" : ""}`}
+                            )
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </fieldset>
               )}
 

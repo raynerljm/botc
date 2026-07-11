@@ -189,15 +189,15 @@ export function wasNominatedToday(
 // last (issue #248) — matches how voting actually proceeds around the table.
 // Derived from `player.seat`, not array order, so it stays correct after
 // reseats/insertions. Purely presentational — `nomination.votes` itself
-// stays in recorded order, untouched by this. Falls back to plain seat order
-// if the nominee isn't among the players (e.g. removed mid-game).
+// stays in recorded order, untouched by this. If the nominee isn't among
+// the players, `nomineeIndex` is -1 and the slice arithmetic below already
+// yields plain seat order with no special-casing needed.
 export function voteRosterOrder(
   players: Player[],
   nomineeId: string,
 ): Player[] {
   const bySeat = [...players].sort((a, b) => a.seat - b.seat);
   const nomineeIndex = bySeat.findIndex((player) => player.id === nomineeId);
-  if (nomineeIndex === -1) return bySeat;
   return [
     ...bySeat.slice(nomineeIndex + 1),
     ...bySeat.slice(0, nomineeIndex + 1),
