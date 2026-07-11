@@ -739,6 +739,102 @@ describe("acts-as (issue #17)", () => {
   });
 });
 
+describe("acts-as team constraints (issue #245)", () => {
+  // Deliberately includes one character from each of the four seat-holding
+  // teams, distinct from this file's other fixtures.
+  const teamMixedClaimOptions = [
+    getCharacter("librarian")!, // townsfolk
+    getCharacter("recluse")!, // outsider
+    getCharacter("poisoner")!, // minion
+    getCharacter("imp")!, // demon
+  ];
+
+  it.each(["philosopher", "boffin"])(
+    "offers %s's acts-as picker only good characters (Townsfolk/Outsider)",
+    async (characterId) => {
+      const user = userEvent.setup();
+      renderBoard([makePlayer({ characterId })], {
+        claimOptions: teamMixedClaimOptions,
+      });
+
+      await user.click(screen.getByText("Alice"));
+      const options = await getSelectOptions(
+        user,
+        screen.getByLabelText(/acts as/i),
+      );
+
+      expect(options.map((o) => o.value)).toEqual(["", "librarian", "recluse"]);
+    },
+  );
+
+  it("offers alchemist's acts-as picker only Minions", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ characterId: "alchemist" })], {
+      claimOptions: teamMixedClaimOptions,
+    });
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toEqual(["", "poisoner"]);
+  });
+
+  it("keeps an already-set off-spec-team acts-as target visible/selectable instead of silently clearing it", async () => {
+    const user = userEvent.setup();
+    renderBoard(
+      [makePlayer({ characterId: "philosopher", actsAs: "poisoner" })],
+      { claimOptions: teamMixedClaimOptions },
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/acts as/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
+  });
+
+  it("treats an empty-string acts-as (a malformed/hand-edited game document) as no target, not an off-spec one", async () => {
+    const user = userEvent.setup();
+    // A truthy check (matching the sibling Claim select) rather than an
+    // "!== null" check: an empty string must not be flagged off-spec and
+    // duplicated alongside "Not acting as anyone" (code review finding).
+    renderBoard(
+      [makePlayer({ characterId: "philosopher", actsAs: "" })],
+      { claimOptions: teamMixedClaimOptions },
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toEqual(["", "librarian", "recluse"]);
+  });
+
+  it("does not hard-block in-play status for the team it does offer (advisory, ADR 0003)", async () => {
+    const user = userEvent.setup();
+    // "recluse" isn't held by any seated player here — only present via
+    // claimOptions (script-wide) — so the team filter must not also
+    // require the target to already be in play.
+    renderBoard([makePlayer({ characterId: "philosopher" })], {
+      claimOptions: teamMixedClaimOptions,
+    });
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toContain("recluse");
+  });
+});
+
 describe("ghost votes", () => {
   it("shows a spent/unspent ghost vote marker only for dead players, toggleable with one tap", async () => {
     const user = userEvent.setup();
