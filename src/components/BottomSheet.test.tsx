@@ -259,7 +259,13 @@ describe("BottomSheet: fixed-height overlay (issue #212, ADR 0004)", () => {
     );
 
     const clampedHeightPx = parseFloat(panel.style.height);
-    expect(clampedHeightPx).toBeGreaterThanOrEqual(4.5 * 16);
+    // Mirrors BottomSheet.tsx's own peek-floor conversion (4.5rem at the
+    // *actual* root font size, not a hardcoded 16px-per-rem assumption —
+    // Copilot review finding) so this test stays correct even if the test
+    // environment's root font size ever differs from the browser default.
+    const rootFontSizePx =
+      parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    expect(clampedHeightPx).toBeGreaterThanOrEqual(4.5 * rootFontSizePx);
   });
 
   it("clears the live drag height on pointer cancel without toggling collapsed", () => {
