@@ -651,8 +651,12 @@ function GenericControls({
           ))}
         </ul>
       )}
+      {/* "Confirm", matching every other step kind's resolve action — not
+          "Done", which would collide with the walkthrough's own footer Done
+          button (issue #244 code review finding) whenever a homebrew step
+          is still open. */}
       <Button variant="primary" onClick={() => onDone(staged)}>
-        Done
+        Confirm
       </Button>
     </div>
   );
@@ -716,6 +720,15 @@ export function SetupWalkthrough({
             </li>
           ))}
         </ol>
+        {/* Always enabled — the storyteller may handle or skip steps in any
+            order and close when ready (ADR 0003, advisory never blocking).
+            Sticky, so it stays reachable below a long, internally-scrolling
+            step list (issue #244). */}
+        <footer className={styles.footer}>
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </footer>
       </div>
     </div>
   );
