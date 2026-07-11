@@ -1224,6 +1224,47 @@ describe("travellers addable at setup with alignment", () => {
     ).toBeInTheDocument();
   });
 
+  it("cancels the 'Add a traveller' form without adding a traveller, opened pre-setup (issue #243)", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await selectOption(
+      user,
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Add to the circle" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
+    expect(loadGame()).toBeNull();
+  });
+
+  it("reseeds the 'Add a traveller' form's fields on reopen after cancelling", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    const before = screen.getByLabelText("Traveller character").textContent;
+    await selectOption(
+      user,
+      screen.getByLabelText("Traveller character"),
+      "Bureaucrat",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+
+    expect(screen.getByLabelText("Traveller character").textContent).toBe(
+      before,
+    );
+  });
+
   it("offers a homebrew script's own traveller even in a 0-traveller game, not just vendored ones (code review finding)", async () => {
     const user = userEvent.setup();
     // Not in the vendored dataset — characterPool alone (which only holds
@@ -2165,6 +2206,34 @@ describe("mid-game token management (issue #15)", () => {
     const reloaded = loadGame()!;
     expect(reloaded.players).toHaveLength(2);
     expect(reloaded.players.some((p) => p.characterId === "baron")).toBe(false);
+  });
+
+  it("cancels the 'Add a traveller' form without adding a traveller, opened post-setup from the board menu (issue #243)", async () => {
+    const { user } = await completeSetup(2, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("scapegoat")!,
+    ]);
+
+    await openBoardMenu(user);
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await selectOption(
+      user,
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Add to the circle" }),
+    ).not.toBeInTheDocument();
+    await openBoardMenu(user);
+    expect(
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
+    const reloaded = loadGame()!;
+    expect(reloaded.players).toHaveLength(2);
+    expect(reloaded.players.some((p) => p.isTraveller)).toBe(false);
   });
 
   it("computes 'At the end' from the highest seat number, not the player count, once a removal has left a gap", async () => {

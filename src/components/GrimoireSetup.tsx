@@ -1353,6 +1353,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <Button type="submit" variant="primary">
             Add to the circle
           </Button>
+          <Button variant="ghost" onClick={() => setTravellerFormOpen(false)}>
+            Cancel
+          </Button>
         </form>
       )}
 
