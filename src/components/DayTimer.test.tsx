@@ -29,8 +29,9 @@ function makeGame(overrides: Partial<GameDocument> = {}): GameDocument {
 function renderTimer(
   game: GameDocument,
   onChange: (next: GameDocument) => void = () => {},
+  compact = false,
 ) {
-  return render(<DayTimer game={game} onChange={onChange} />);
+  return render(<DayTimer game={game} onChange={onChange} compact={compact} />);
 }
 
 describe("DayTimer: idle", () => {
@@ -157,5 +158,68 @@ describe("DayTimer: reaching zero", () => {
     const timer = screen.getByRole("timer");
     expect(timer).toHaveTextContent("Time's up");
     expect(timer.closest("[data-expired]")).not.toBeNull();
+  });
+});
+
+// The bottom sheet's fixed peek band (ADR 0004) has no room for the full
+// preset/pause/reset widget alongside the sheet's own heading and the
+// block-holder status shown next to it (issue #216) — `compact` renders
+// just the glanceable countdown line, nothing interactive.
+describe("DayTimer: compact (peek) rendering", () => {
+  it("renders nothing while idle — no countdown worth glancing at", () => {
+    renderTimer(makeGame(), () => {}, true);
+
+    expect(screen.queryByRole("timer")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("shows only the remaining time while running, with no preset/pause/reset controls", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+    const game = makeGame({
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    renderTimer(game, () => {}, true);
+
+    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("still counts down live while compact", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+    const game = makeGame({
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    renderTimer(game, () => {}, true);
+
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(screen.getByRole("timer")).toHaveTextContent("1:30");
+  });
+
+  it("signals expiry the same way as the full widget", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:02:30.000Z"));
+    const game = makeGame({
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    renderTimer(game, () => {}, true);
+
+    const timer = screen.getByRole("timer");
+    expect(timer).toHaveTextContent("Time's up");
+    expect(timer.closest("[data-expired]")).not.toBeNull();
+  });
+
+  it("shows the countdown while paused too", () => {
+    const game = makeGame({
+      dayTimer: { status: "paused", endAt: null, remainingMs: 45_000 },
+    });
+    renderTimer(game, () => {}, true);
+
+    expect(screen.getByRole("timer")).toHaveTextContent("0:45");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

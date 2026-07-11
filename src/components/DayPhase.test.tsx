@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getCharacter, type Character } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
@@ -39,6 +39,13 @@ function renderDayPhase(
 ) {
   return render(<DayPhase game={game} onChange={onChange} />);
 }
+
+// A failed assertion between useFakeTimers()/useRealTimers() would otherwise
+// leave fake timers active for a later test, hanging userEvent (which relies
+// on real timers) — same guard DayTimer.test.tsx uses for the same reason.
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 // DayPhase no longer guards on "before the first night ends" or "while a
 // night is open" — GrimoireSetup only ever mounts it once the game phase is
@@ -546,6 +553,64 @@ describe("Day phase: collapsing the panel (issue #168)", () => {
       screen.queryByRole("button", { name: "Record nomination" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Day 1" })).toBeInTheDocument();
+  });
+
+  it("shows a compact countdown with no preset/pause/reset controls while collapsed and the timer is running (issue #216)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+    const game = gameWith(["washerwoman", "imp"], {
+      nightListCollapsed: true,
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    renderDayPhase(game);
+
+    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
+    expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "2 min" })).not.toBeInTheDocument();
+  });
+
+  it("shows the full interactive timer widget once expanded", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+    const game = gameWith(["washerwoman", "imp"], {
+      nightListCollapsed: false,
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    renderDayPhase(game);
+
+    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
+  it("shows the compact countdown and the block status together while collapsed, rather than one hiding the other (issue #216)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+    const game = gameWith(["washerwoman", "imp", "recluse", "baron"], {
+      nightListCollapsed: true,
+      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
+    });
+    const [nominator, nominee, voter1, voter2] = game.players;
+    const withBlock: GameDocument = {
+      ...game,
+      nominations: [
+        {
+          id: "n1",
+          nominatorId: nominator.id,
+          nomineeId: nominee.id,
+          votes: [voter1.id, voter2.id],
+          threshold: 2,
+          isExile: false,
+          lockedIn: false,
+          ghostVoteSpenderIds: [],
+        },
+      ],
+    };
+    renderDayPhase(withBlock);
+
+    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
+    expect(
+      screen.getByText(`On the block: ${nominee.name}`),
+    ).toBeInTheDocument();
   });
 
   it("toggles the persisted collapsed state via the heading", async () => {

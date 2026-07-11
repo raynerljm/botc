@@ -267,22 +267,48 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       title={`Day ${day}`}
       collapsed={game.nightListCollapsed}
       onToggleCollapsed={toggleCollapsed}
-      // Above the collapsible body, like the block-holder status below — a
-      // glanceable storyteller aid (issue #190) that must stay visible even
-      // while the sheet is peeking (issue #168).
-      above={<DayTimer game={game} onChange={onChange} />}
+      // Above the collapsible body — the full interactive timer while
+      // expanded (issue #190). While peeking, `above` sits unused: the
+      // fixed peek band (ADR 0004) doesn't have room for the full widget
+      // alongside the heading and the block status, so both glanceable
+      // pieces of peek info move into one combined row in `below` instead
+      // (issue #216) rather than one displacing the other.
+      above={
+        game.nightListCollapsed ? null : <DayTimer game={game} onChange={onChange} />
+      }
       // Below the collapsible body, unlike the nomination form/history
       // itself — a storyteller peeking the sheet to reclaim circle width
       // (issue #168) still needs this glanceable status without expanding
       // the whole nomination record (code review finding). Also keeps issue
       // #125's fix intact: it was moved after the (now collapsible) list
       // specifically so it can never shift a voter checkbox down mid-tap —
-      // rendering it outside the list entirely preserves that.
+      // rendering it outside the list entirely preserves that. While
+      // peeking, this is the sheet's one glanceable info row (issue #216):
+      // a compact countdown and the block status side by side, sized to
+      // actually fit the fixed peek band, rather than the full timer
+      // widget above pushing the block status below the fold. DayTimer is
+      // rendered unconditionally here (not gated on the timer being
+      // active) so it stays mounted and its ticking effect keeps running
+      // regardless of whether a block holder comes and goes — compact
+      // idle already renders null on its own.
       below={
-        blockHolder && (
-          <p className={styles.block} role="status">
-            On the block: {blockHolder.name}
-          </p>
+        game.nightListCollapsed ? (
+          (blockHolder || game.dayTimer.status !== "idle") && (
+            <div className={styles.peekRow}>
+              <DayTimer game={game} onChange={onChange} compact />
+              {blockHolder && (
+                <span className={styles.blockPeek} role="status">
+                  On the block: {blockHolder.name}
+                </span>
+              )}
+            </div>
+          )
+        ) : (
+          blockHolder && (
+            <p className={styles.block} role="status">
+              On the block: {blockHolder.name}
+            </p>
+          )
         )
       }
     >

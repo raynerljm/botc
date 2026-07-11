@@ -10,14 +10,19 @@ export interface BottomSheetProps {
   title: string;
   collapsed: boolean;
   onToggleCollapsed: (collapsed: boolean) => void;
-  // Rendered above the heading, always visible regardless of collapsed
-  // state — e.g. the day timer, which must stay reachable even while the
-  // sheet is peeking (issue #190).
+  // Rendered above the heading. Unlike `children`, never hidden by
+  // CollapsibleSection when collapsed — but the sheet's peek band is a
+  // fixed height (ADR 0004), so content that doesn't fit within it is
+  // still visually clipped; a caller with peek-band content heavier than a
+  // short glanceable line (e.g. Day phase's timer, issue #216) may need to
+  // pass a lighter peek-specific rendering, or nothing at all, while
+  // collapsed rather than relying on this prop alone to guarantee
+  // visibility.
   above?: ReactNode;
-  // Rendered after the collapsible content, always visible regardless of
-  // collapsed state — e.g. the night list's progress line or Day phase's
-  // block-holder status, both glanceable-while-peeking summaries (issue
-  // #194).
+  // Rendered after the collapsible content. Same caveat as `above`: never
+  // hidden by collapsing, but still bound by the fixed peek band's height
+  // — e.g. the night list's progress line or Day phase's block-holder
+  // status, both sized to actually fit while peeking (issues #194, #216).
   below?: ReactNode;
   children: ReactNode;
 }
