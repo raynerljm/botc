@@ -268,6 +268,95 @@ describe("BottomSheet: fixed-height overlay (issue #212, ADR 0004)", () => {
     expect(clampedHeightPx).toBeGreaterThanOrEqual(4.5 * rootFontSizePx);
   });
 
+  it("caps the default peek ceiling at the compact bound, not Day phase's roomier one (issue #216 code review finding)", () => {
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 2000,
+    });
+    try {
+      const { container } = render(
+        <BottomSheet
+          ariaLabel="Night list"
+          title="Night list"
+          collapsed={false}
+          onToggleCollapsed={() => {}}
+        >
+          <p>Body</p>
+        </BottomSheet>,
+      );
+      const panel = container.querySelector("[data-bottom-sheet]") as HTMLElement;
+      const handle = container.querySelector("[data-handle]") as HTMLElement;
+
+      // A wildly oversized downward swipe on a very tall viewport, where the
+      // viewport-fraction term alone would exceed either peek variant's cap.
+      fireEvent(
+        handle,
+        pointerEvent("pointerdown", { pointerId: 1, clientY: -1000 }),
+      );
+      fireEvent(
+        handle,
+        pointerEvent("pointermove", { pointerId: 1, clientY: 5000 }),
+      );
+
+      const clampedHeightPx = parseFloat(panel.style.height);
+      const rootFontSizePx =
+        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      // Night doesn't opt into the roomier peek Day phase needs (issue #216)
+      // — its floor stays capped at the original 7.5rem, not the 10rem bound
+      // Day phase's timer content needs, or Night gains dead space it never
+      // asked for underneath its own, much shorter, peek content.
+      expect(clampedHeightPx).toBeCloseTo(7.5 * rootFontSizePx, 0);
+    } finally {
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: originalInnerHeight,
+      });
+    }
+  });
+
+  it("gives an opted-in sheet a roomier peek ceiling to fit taller always-visible content (issue #216 code review finding)", () => {
+    const originalInnerHeight = window.innerHeight;
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 2000,
+    });
+    try {
+      const { container } = render(
+        <BottomSheet
+          ariaLabel="Day phase"
+          title="Day 1"
+          collapsed={false}
+          onToggleCollapsed={() => {}}
+          peekVariant="roomy"
+        >
+          <p>Body</p>
+        </BottomSheet>,
+      );
+      const panel = container.querySelector("[data-bottom-sheet]") as HTMLElement;
+      const handle = container.querySelector("[data-handle]") as HTMLElement;
+
+      fireEvent(
+        handle,
+        pointerEvent("pointerdown", { pointerId: 1, clientY: -1000 }),
+      );
+      fireEvent(
+        handle,
+        pointerEvent("pointermove", { pointerId: 1, clientY: 5000 }),
+      );
+
+      const clampedHeightPx = parseFloat(panel.style.height);
+      const rootFontSizePx =
+        parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      expect(clampedHeightPx).toBeCloseTo(10 * rootFontSizePx, 0);
+    } finally {
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: originalInnerHeight,
+      });
+    }
+  });
+
   it("clears the live drag height on pointer cancel without toggling collapsed", () => {
     const onToggleCollapsed = vi.fn();
     const { container } = render(

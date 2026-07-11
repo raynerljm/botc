@@ -56,9 +56,9 @@ export function DayTimer({ game, onChange }: DayTimerProps) {
   return (
     <div className={styles.widget} role="group" aria-label="Discussion timer">
       {/* Hidden once a countdown is active (issue #216) — showing every
-          restart preset alongside the running countdown crowded the sheet's
-          always-visible peek slot. Reset already offers the way back to
-          idle, where these reappear. */}
+          restart preset alongside the running countdown was redundant (and,
+          in the sheet's peek slot specifically, crowded); Reset already
+          offers the way back to idle, where these reappear. */}
       {timer.status === "idle" && (
         <div className={styles.presets}>
           {DAY_TIMER_PRESETS_MINUTES.map((minutes) => (

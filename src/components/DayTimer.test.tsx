@@ -112,6 +112,12 @@ describe("DayTimer: pause and resume", () => {
 
 describe("DayTimer: peek footprint while active (issue #216)", () => {
   it("hides the start-a-timer presets while a countdown is running, so the always-visible peek widget stays compact", () => {
+    // Fixed "now" strictly before `endAt` (unlike the pause/reset tests
+    // above, which don't depend on wall-clock time) — without this, a real
+    // clock past `endAt` would silently exercise the expired branch instead
+    // of the running one this test is meant to cover.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
     const game = makeGame({
       dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
     });
@@ -120,7 +126,7 @@ describe("DayTimer: peek footprint while active (issue #216)", () => {
     expect(screen.queryByRole("button", { name: "2 min" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "3 min" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "6 min" })).not.toBeInTheDocument();
-    expect(screen.getByRole("timer")).toBeInTheDocument();
+    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
   });
 
   it("hides the presets while paused too", () => {

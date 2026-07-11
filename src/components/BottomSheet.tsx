@@ -19,6 +19,13 @@ export interface BottomSheetProps {
   // block-holder status, both glanceable-while-peeking summaries (issue
   // #194).
   below?: ReactNode;
+  // "compact" (default) fits Night's own peek content (handle, heading, a
+  // one-line progress status). Day phase opts into "roomy" (issue #216 code
+  // review finding) because its `above` slot (DayTimer, with full-size
+  // Pause/Resume/Reset tap targets) needs more room — a shared bound sized
+  // for Day's content would otherwise leave Night's much shorter peek with
+  // dead space it never asked for.
+  peekVariant?: "compact" | "roomy";
   children: ReactNode;
 }
 
@@ -29,28 +36,37 @@ export interface BottomSheetProps {
 const SHEET_DRAG_THRESHOLD_PX = 10;
 
 // Mirrors BottomSheet.module.css's `--sheet-peek-height`/`--sheet-expanded-
-// height` clamps. Kept in sync by hand: a CSS custom property can only be
-// read back as its raw declaration text (e.g. "clamp(4.5rem, 16vh, 7.5rem)"),
-// not a resolved pixel value, so live-drag clamping (issue #212 AC: "dragging
-// the handle follows the finger") recomputes the same bounds in JS instead.
-// The rem bounds are converted using the *actual* root font size (code review
-// finding: a hardcoded 16px-per-rem assumption drifts from the real rendered
-// CSS under a browser text-zoom/accessibility font-size setting, and the
-// drag would visibly snap the instant the inline override is cleared) — same
-// pattern GrimoireBoard.tsx already uses for its own board-sizing math.
+// height` clamps (one pair per `peekVariant`). Kept in sync by hand: a CSS
+// custom property can only be read back as its raw declaration text (e.g.
+// "clamp(4.5rem, 16vh, 7.5rem)"), not a resolved pixel value, so live-drag
+// clamping (issue #212 AC: "dragging the handle follows the finger")
+// recomputes the same bounds in JS instead. The rem bounds are converted
+// using the *actual* root font size (code review finding: a hardcoded
+// 16px-per-rem assumption drifts from the real rendered CSS under a browser
+// text-zoom/accessibility font-size setting, and the drag would visibly snap
+// the instant the inline override is cleared) — same pattern
+// GrimoireBoard.tsx already uses for its own board-sizing math.
 const PEEK_MIN_REM = 4.5;
-const PEEK_MAX_REM = 10;
-const PEEK_VIEWPORT_FRACTION = 0.2;
+const PEEK_BOUNDS_BY_VARIANT = {
+  compact: { maxRem: 7.5, viewportFraction: 0.16 },
+  roomy: { maxRem: 10, viewportFraction: 0.2 },
+} as const;
 const EXPANDED_VIEWPORT_FRACTION = 0.45;
 
 function readRootFontSizePx(): number {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 }
 
-function peekHeightPx(viewportHeightPx: number, rootFontSizePx: number): number {
+function peekHeightPx(
+  viewportHeightPx: number,
+  rootFontSizePx: number,
+  peekVariant: BottomSheetProps["peekVariant"],
+): number {
+  const { maxRem, viewportFraction } =
+    PEEK_BOUNDS_BY_VARIANT[peekVariant ?? "compact"];
   return Math.min(
-    PEEK_MAX_REM * rootFontSizePx,
-    Math.max(PEEK_MIN_REM * rootFontSizePx, viewportHeightPx * PEEK_VIEWPORT_FRACTION),
+    maxRem * rootFontSizePx,
+    Math.max(PEEK_MIN_REM * rootFontSizePx, viewportHeightPx * viewportFraction),
   );
 }
 
@@ -80,6 +96,7 @@ export function BottomSheet({
   onToggleCollapsed,
   above,
   below,
+  peekVariant,
   children,
 }: BottomSheetProps) {
   const dragRef = useRef<HandleDrag | null>(null);
@@ -108,7 +125,7 @@ export function BottomSheet({
     dragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
-      minHeightPx: peekHeightPx(viewportHeightPx, readRootFontSizePx()),
+      minHeightPx: peekHeightPx(viewportHeightPx, readRootFontSizePx(), peekVariant),
       maxHeightPx: expandedHeightPx(viewportHeightPx),
     };
   }
@@ -158,6 +175,10 @@ export function BottomSheet({
       className={styles.panel}
       aria-label={ariaLabel}
       data-bottom-sheet
+      // Selects the matching CSS peek-height clamp below (issue #216 code
+      // review finding) — only ever "roomy" for Day phase's taller `above`
+      // content, so Night's own peek stays at its original, tighter bound.
+      data-peek-variant={peekVariant ?? "compact"}
       // Drives the fixed peek/expanded heights in CSS (ADR 0004: a fixed
       // ~45vh when expanded, content scrolling internally, never resizing
       // the grimoire circle behind it).
