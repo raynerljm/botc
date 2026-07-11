@@ -164,6 +164,26 @@ export const SEAT_HOLDING_TEAMS: Team[] = [
 // definitions can't drift apart.
 export const GOOD_TEAMS: ReadonlySet<Team> = new Set(["townsfolk", "outsider"]);
 
+// Each acts-as-capable character's ability only makes sense targeting one
+// team — Philosopher/Boffin gain a good ability, Alchemist a Minion ability —
+// so their "Acts as" pickers are constrained to that team (issue #245).
+// In-play vs not-in-play stays advisory (ADR 0003): this only narrows by
+// team, never by whether the target is currently held by a seat.
+export const ACTS_AS_ALLOWED_TEAMS: Readonly<Record<string, ReadonlySet<Team>>> = {
+  philosopher: GOOD_TEAMS,
+  boffin: GOOD_TEAMS,
+  alchemist: new Set(["minion"]),
+};
+
+// Characters that canonically resolve another character's ability
+// (CONTEXT.md: Acts as), and so are the only ones offered the "Acts as"
+// picker/badge — everyone else's token never shows it (issue #187). Derived
+// from ACTS_AS_ALLOWED_TEAMS's keys rather than a second hand-maintained
+// list, so the two can't silently drift apart (issue #245 code review).
+export const ACTS_AS_CAPABLE_IDS: ReadonlySet<string> = new Set(
+  Object.keys(ACTS_AS_ALLOWED_TEAMS),
+);
+
 // The "script's characters first, then everything in the dataset" picker
 // pool (issue #15: swap, mid-game add, Fabled) — a script's own characters
 // (including homebrew ones with no vendored entry) take priority so the

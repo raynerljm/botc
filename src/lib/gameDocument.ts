@@ -1,4 +1,4 @@
-import { GOOD_TEAMS, type Character, type Team } from "./characters";
+import type { Character } from "./characters";
 import { createInitialNotes, type NotesSection } from "./gameNotes";
 import { normalizeCharacterId } from "./scriptParser";
 
@@ -602,26 +602,6 @@ export const DRUNK_ID = "drunk";
 
 // Same mechanic as DRUNK_ID, for the Lunatic's Demon stand-in (issue #163).
 export const LUNATIC_ID = "lunatic";
-
-// Each acts-as-capable character's ability only makes sense targeting one
-// team — Philosopher/Boffin gain a good ability, Alchemist a Minion ability —
-// so their "Acts as" pickers are constrained to that team (issue #245).
-// In-play vs not-in-play stays advisory (ADR 0003): this only narrows by
-// team, never by whether the target is currently held by a seat.
-export const ACTS_AS_ALLOWED_TEAMS: Readonly<Record<string, ReadonlySet<Team>>> = {
-  philosopher: GOOD_TEAMS,
-  boffin: GOOD_TEAMS,
-  alchemist: new Set(["minion"]),
-};
-
-// Characters that canonically resolve another character's ability
-// (CONTEXT.md: Acts as), and so are the only ones offered the "Acts as"
-// picker/badge — everyone else's token never shows it (issue #187). Derived
-// from ACTS_AS_ALLOWED_TEAMS's keys rather than a second hand-maintained
-// list, so the two can't silently drift apart (issue #245 code review).
-export const ACTS_AS_CAPABLE_IDS: ReadonlySet<string> = new Set(
-  Object.keys(ACTS_AS_ALLOWED_TEAMS),
-);
 
 // Every character id currently held by a seated player — the "who holds
 // what" set several pickers filter against (GrimoireBoard's reminder

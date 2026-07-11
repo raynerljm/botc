@@ -10,6 +10,8 @@ import {
 } from "react";
 
 import {
+  ACTS_AS_ALLOWED_TEAMS,
+  ACTS_AS_CAPABLE_IDS,
   characterPickerPool,
   getCharacter,
   groupByTeam,
@@ -20,8 +22,6 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
-  ACTS_AS_ALLOWED_TEAMS,
-  ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
   circlePosition,
   clampPct,

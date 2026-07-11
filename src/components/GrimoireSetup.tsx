@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import {
+  ACTS_AS_CAPABLE_IDS,
   characterPickerPool,
   getCharacter,
   SEAT_HOLDING_TEAMS,
@@ -17,7 +18,6 @@ import {
 } from "@/lib/characters";
 import { currentDay, executionNominations } from "@/lib/dayPhase";
 import {
-  ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
   defaultPlayerName,
   DRUNK_ID,
