@@ -2098,7 +2098,7 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     // Scoped to the Info tokens dialog — the board's own "Swap character"
     // <select> also has a Demons <optgroup> (an implicit role="group" too),
     // which would otherwise collide with this picker's fieldset.
@@ -2110,7 +2110,7 @@ describe("info tokens (issue #19)", () => {
     expect(
       screen.queryByRole("dialog", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
-    const showMode = screen.getByRole("dialog", { name: "This is the Demon" });
+    const showMode = screen.getByRole("dialog", { name: "You are" });
     expect(within(showMode).getByText("Imp")).toBeInTheDocument();
   });
 
@@ -2124,8 +2124,9 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
+    // "This is the Demon" doesn't need a character attached (issue #246),
+    // so it goes straight to the reveal with no intervening "Show" step.
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
-    await user.click(screen.getByRole("button", { name: "Show" }));
 
     expect(screen.queryByText("Alice")).not.toBeInTheDocument();
     expect(
@@ -2141,10 +2142,11 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
+    // "Did you nominate today?" doesn't need a character attached (issue
+    // #246), so it goes straight to the reveal.
     await user.click(
       screen.getByRole("button", { name: "Did you nominate today?" }),
     );
-    await user.click(screen.getByRole("button", { name: "Show" }));
     await user.click(screen.getByRole("button", { name: "Done" }));
 
     expect(
@@ -2176,10 +2178,11 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
+    // "Did you nominate today?" doesn't need a character attached (issue
+    // #246), so it goes straight to the reveal.
     await user.click(
       screen.getByRole("button", { name: "Did you nominate today?" }),
     );
-    await user.click(screen.getByRole("button", { name: "Show" }));
     await user.click(screen.getByRole("button", { name: "Done" }));
 
     expect(onMove).not.toHaveBeenCalled();
@@ -2851,7 +2854,7 @@ describe("board sizing (issue #78)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     const dialog = screen.getByRole("dialog", { name: "Info tokens" });
     const group = within(dialog).getByRole("group", { name: "Demons" });
     await user.click(within(group).getByRole("button", { name: "Imp" }));

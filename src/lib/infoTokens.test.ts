@@ -27,6 +27,13 @@ describe("standard info token library", () => {
     const ids = STANDARD_INFO_TOKENS.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("flags only 'You are' as needing a character attached (issue #246)", () => {
+    const attaching = STANDARD_INFO_TOKENS.filter((t) => t.attachesCharacter).map(
+      (t) => t.text,
+    );
+    expect(attaching).toEqual(["You are"]);
+  });
 });
 
 describe("visibleInfoTokens", () => {
