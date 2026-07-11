@@ -6,8 +6,16 @@
    the handle, heading, and below-content) vs. expanded (the full body) is
    driven by CollapsibleSection hiding its children, exactly as it already
    did when this was a collapsible side panel (issue #168) — reused here as
-   the sheet's peek/expanded state. */
+   the sheet's peek/expanded state.
+
+   ADR 0004: the sheet is a fixed-height overlay that floats over the
+   circle's lower portion and never resizes it — peek and expanded are both
+   fixed heights (not content-driven `auto`), so the height itself is what
+   animates between them, and dragging the handle (BottomSheet.tsx) live-
+   overrides this via an inline style during the gesture. */
 .panel {
+  --sheet-peek-height: clamp(4.5rem, 16vh, 7.5rem);
+  --sheet-expanded-height: 45vh;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -23,7 +31,7 @@
      must still render on top of it; only ordinary, un-menu'd board content
      needs to sit under the sheet. */
   z-index: 15;
-  max-height: 70vh;
+  height: var(--sheet-peek-height);
   overflow-y: auto;
   padding: 0.5rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
@@ -31,6 +39,19 @@
   border-bottom: none;
   border-radius: 0.75rem 0.75rem 0 0;
   box-shadow: 0 -0.25rem 1rem rgba(0, 0, 0, 0.15);
+  transition: height 250ms ease;
+}
+
+.panel[data-expanded] {
+  height: var(--sheet-expanded-height);
+}
+
+/* A live drag overrides `height` directly via inline style every pointer
+   move (BottomSheet.tsx) — transitioning toward each intermediate value
+   would lag a frame behind the finger, so the transition is suspended for
+   the gesture's duration and re-enabled the instant it ends. */
+.panel[data-dragging] {
+  transition: none;
 }
 
 .handle {
