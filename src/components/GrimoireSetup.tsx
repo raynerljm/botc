@@ -1441,8 +1441,16 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 // the same delegation onOpenSetupWalkthrough already uses.
                 // Hidden while its own form is already open, matching what
                 // the old standalone trigger buttons did (issue #217).
+                // `draw` is guaranteed null here in practice (GrimoireBoard
+                // only mounts once setupComplete, which precludes a "choosing"
+                // stage draw needing an unassigned seat) — but openTravellerForm
+                // seeds its default from travellerBag[0], the same bag-leak
+                // shape issue #111 closed for manual-assign selects, so this
+                // still checks `!draw` explicitly rather than leaning on that
+                // cross-file invariant staying true forever (code review
+                // finding).
                 onOpenAddTraveller={
-                  travellerFormOpen ? undefined : openTravellerForm
+                  draw || travellerFormOpen ? undefined : openTravellerForm
                 }
                 onOpenAddCharacter={
                   tokenFormOpen ? undefined : openTokenForm

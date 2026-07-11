@@ -65,6 +65,13 @@
   gap: 0.5rem;
   width: max-content;
   min-width: 10rem;
+  /* Same viewport clamp as .menuBody below (issue #124) — without it, a
+     short/landscape viewport could grow this menu past the visible area
+     with no way to scroll to its lower items (a background scroll reads as
+     an outside tap and closes the menu before it can reach them). */
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   padding: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);

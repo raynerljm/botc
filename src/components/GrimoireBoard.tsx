@@ -492,8 +492,7 @@ export function GrimoireBoard({
       ) {
         return;
       }
-      openMenuElRef.current = null;
-      setOpenMenu(null);
+      closeMenu();
     }
     document.addEventListener("pointerdown", handlePointerDownOutside);
     return () =>
@@ -510,8 +509,7 @@ export function GrimoireBoard({
       openMenuElRef.current = details;
       setOpenMenu({ kind, id });
     } else if (openMenu?.kind === kind && openMenu.id === id) {
-      openMenuElRef.current = null;
-      setOpenMenu(null);
+      closeMenu();
     }
   }
   const reminderPicker =
@@ -778,21 +776,28 @@ export function GrimoireBoard({
   // activation of these controls (which fires no pointerdown, so the
   // outside-tap-close effect never runs) leaves it stale, and the next
   // mount reopens the same seat's menu unprompted (issue #70 code review).
-  function cancelActiveDrag() {
-    dragRef.current = null;
-    setLiveDrag(null);
+  // Closes whichever menu is currently open — a token/reminder's own, or
+  // the board's overflow menu (issue #217) — sharing one implementation
+  // rather than three copies of the same two-line reset (outside-tap-close
+  // above, cancelActiveDrag below, and every board-menu item's own handler).
+  function closeMenu() {
     openMenuElRef.current = null;
     setOpenMenu(null);
   }
 
-  // Closes the board-options menu (issue #217) after any of its items fires
-  // — an overflow menu that stayed open after its one action would leave the
-  // just-opened form/dialog it handed off to (Add traveller/character,
-  // Setup walkthrough) fighting for attention with a still-expanded menu
-  // sitting right next to it.
-  function closeBoardMenu() {
-    openMenuElRef.current = null;
-    setOpenMenu(null);
+  // Re-circling or hiding the board while a drag is still in progress must
+  // discard that in-progress gesture — otherwise its stale local position
+  // either overrides the freshly re-circled layout, or resurfaces at an
+  // unsaved coordinate once the board is shown again. Hiding (or showing
+  // the info token library) unmounts every seat's <details>, so an open
+  // menu's `openMenu` state must go with it too — otherwise a keyboard
+  // activation of these controls (which fires no pointerdown, so the
+  // outside-tap-close effect never runs) leaves it stale, and the next
+  // mount reopens the same seat's menu unprompted (issue #70 code review).
+  function cancelActiveDrag() {
+    dragRef.current = null;
+    setLiveDrag(null);
+    closeMenu();
   }
 
   // Full-screen show mode replaces the board outright rather than layering
@@ -830,15 +835,27 @@ export function GrimoireBoard({
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
           <Button
-            onClick={() =>
-              setActiveOverlay({ type: "reminder", base: null, playerId: null })
-            }
+            onClick={() => {
+              // The board-options menu (issue #217) is a sibling control, not
+              // an ancestor of this button, so opening it doesn't close it —
+              // without this, tapping straight from an open board-options
+              // menu to here left it stranded open behind this overlay, with
+              // no way to dismiss it (the outside-tap-close effect no-ops
+              // while activeOverlay is set) until some other menu action.
+              closeMenu();
+              setActiveOverlay({ type: "reminder", base: null, playerId: null });
+            }}
           >
             Add reminder
           </Button>
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
-          <Button onClick={() => setActiveOverlay({ type: "infoTokens" })}>
+          <Button
+            onClick={() => {
+              closeMenu();
+              setActiveOverlay({ type: "infoTokens" });
+            }}
+          >
             Info tokens
           </Button>
         )}
@@ -863,7 +880,7 @@ export function GrimoireBoard({
             {onOpenAddTraveller && (
               <Button
                 onClick={() => {
-                  closeBoardMenu();
+                  closeMenu();
                   onOpenAddTraveller();
                 }}
               >
@@ -873,7 +890,7 @@ export function GrimoireBoard({
             {onOpenAddCharacter && (
               <Button
                 onClick={() => {
-                  closeBoardMenu();
+                  closeMenu();
                   onOpenAddCharacter();
                 }}
               >
@@ -882,7 +899,7 @@ export function GrimoireBoard({
             )}
             <Button
               onClick={() => {
-                closeBoardMenu();
+                closeMenu();
                 onRotate(stepRotation(rotation, -1));
               }}
             >
@@ -890,7 +907,7 @@ export function GrimoireBoard({
             </Button>
             <Button
               onClick={() => {
-                closeBoardMenu();
+                closeMenu();
                 onRotate(stepRotation(rotation, 1));
               }}
             >
@@ -902,7 +919,7 @@ export function GrimoireBoard({
               onOpenSetupWalkthrough && (
                 <Button
                   onClick={() => {
-                    closeBoardMenu();
+                    closeMenu();
                     onOpenSetupWalkthrough();
                   }}
                 >
@@ -915,8 +932,8 @@ export function GrimoireBoard({
                 // An overlay already open holds a player's position captured
                 // at open time — re-circling can move that player, so the
                 // stale parked position has to be discarded along with the
-                // drag. cancelActiveDrag already closes this menu too (it
-                // clears the same openMenu state closeBoardMenu does).
+                // drag. cancelActiveDrag already closes this menu too, via
+                // the shared closeMenu().
                 setActiveOverlay(null);
                 setPlacingReminderId(null);
                 onReCircle();

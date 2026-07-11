@@ -1915,15 +1915,20 @@ describe("board options overflow menu (issue #217)", () => {
     const { container } = renderBoard([makePlayer()]);
 
     const controls = container.querySelector("[data-controls]") as HTMLElement;
-    expect(
-      within(controls).getByRole("button", { name: "Hide grimoire" }),
-    ).toBeInTheDocument();
-    expect(
-      within(controls).getByRole("button", { name: "Add reminder" }),
-    ).toBeInTheDocument();
-    expect(
-      within(controls).getByRole("button", { name: "Info tokens" }),
-    ).toBeInTheDocument();
+    // The overflow menu's own body is also inside [data-controls] — scoping
+    // to controls alone wouldn't catch these three having been nested inside
+    // it by mistake, so each is asserted absent from .boardMenuBody too.
+    const menuBody = container.querySelector(
+      `.${styles.boardMenuBody}`,
+    ) as HTMLElement;
+    for (const name of ["Hide grimoire", "Add reminder", "Info tokens"]) {
+      expect(
+        within(controls).getByRole("button", { name }),
+      ).toBeInTheDocument();
+      expect(
+        within(menuBody).queryByRole("button", { name }),
+      ).not.toBeInTheDocument();
+    }
   });
 
   // jsdom doesn't implement the browser's native "hide non-summary content
@@ -1963,6 +1968,29 @@ describe("board options overflow menu (issue #217)", () => {
 
     await user.click(screen.getByRole("button", { name: "Rotate right" }));
 
+    expect(menu.open).toBe(false);
+  });
+
+  it("closes itself when 'Add reminder' or 'Info tokens' is opened instead of one of its own items (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const menu = screen.getByText("Board options").closest("details")!;
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+
+    await openBoardMenu(user);
+    expect(menu.open).toBe(true);
+    await user.click(
+      within(controls).getByRole("button", { name: "Add reminder" }),
+    );
+    expect(menu.open).toBe(false);
+    // Close the picker before exercising the second trigger.
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    await openBoardMenu(user);
+    expect(menu.open).toBe(true);
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
     expect(menu.open).toBe(false);
   });
 
