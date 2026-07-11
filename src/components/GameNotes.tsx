@@ -27,7 +27,11 @@ export function GameNotes({ game, onChangeSection, onToggleCollapsed }: GameNote
         collapsed={game.notesCollapsed}
         onToggleCollapsed={onToggleCollapsed}
       >
-        {game.notes.map((section) => (
+        {/* Sections are stored oldest-first (General, then each phase as it
+            begins — gameNotes.ts's withNotesSection appends) so storage and
+            export stay chronological; display order is flipped here only,
+            newest phase on top with General last (issue #214). */}
+        {[...game.notes].reverse().map((section) => (
           <label key={section.id} className={styles.section}>
             {section.title}
             <textarea

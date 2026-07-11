@@ -38,6 +38,10 @@ function renderGameNotes(
   );
 }
 
+function precedes(a: Element, b: Element): boolean {
+  return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
 describe("GameNotes", () => {
   it("starts expanded, showing the General section for a fresh game", () => {
     renderGameNotes(makeGame());
@@ -74,6 +78,56 @@ describe("GameNotes", () => {
     await user.type(screen.getByLabelText("Night 1"), "x");
 
     expect(onChangeSection).toHaveBeenLastCalledWith("night-1", "x");
+  });
+
+  it("renders sections newest-first: latest phase on top, General last (issue #214)", () => {
+    renderGameNotes(
+      makeGame({
+        notes: [
+          { id: "general", title: "General", text: "" },
+          { id: "night-1", title: "Night 1", text: "" },
+          { id: "day-1", title: "Day 1", text: "" },
+          { id: "night-2", title: "Night 2", text: "" },
+        ],
+      }),
+    );
+
+    const night2 = screen.getByLabelText("Night 2");
+    const day1 = screen.getByLabelText("Day 1");
+    const night1 = screen.getByLabelText("Night 1");
+    const general = screen.getByLabelText("General");
+
+    expect(precedes(night2, day1)).toBe(true);
+    expect(precedes(day1, night1)).toBe(true);
+    expect(precedes(night1, general)).toBe(true);
+  });
+
+  it("keeps a newly added phase section on top as its phase begins (issue #214)", () => {
+    const game = makeGame({
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "night-1", title: "Night 1", text: "" },
+      ],
+    });
+    const { rerender } = renderGameNotes(game);
+
+    rerender(
+      <GameNotes
+        game={{
+          ...game,
+          notes: [...game.notes, { id: "day-1", title: "Day 1", text: "" }],
+        }}
+        onChangeSection={vi.fn()}
+        onToggleCollapsed={vi.fn()}
+      />,
+    );
+
+    const day1 = screen.getByLabelText("Day 1");
+    const night1 = screen.getByLabelText("Night 1");
+    const general = screen.getByLabelText("General");
+
+    expect(precedes(day1, night1)).toBe(true);
+    expect(precedes(night1, general)).toBe(true);
   });
 
   it("persists a manual collapse toggle via onToggleCollapsed", async () => {
