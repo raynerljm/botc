@@ -52,10 +52,10 @@ import { normalizeCharacterId } from "./scriptParser";
 // dropped, since it may carry text the storyteller already wrote (issue
 // #193 AC: "without data loss") — and again for issue #192 (GameDocument
 // gained the required `rotation` field), and again for issue #213
-// (ReminderToken gained the required `homePlayerId` field, the same
-// no-migration-needed precedent as anchorPlayerId itself: a document saved
-// under the older shape is rejected rather than loaded with it silently
-// undefined).
+// (ReminderToken gained the required `homePlayerId` field) — unlike
+// anchorPlayerId's own original bump, a v22 document is upgraded in place by
+// gameStorage's chained migration rather than dropped, backfilling
+// `homePlayerId` from each reminder's current `anchorPlayerId`.
 export const GAME_SCHEMA_VERSION = 23;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
