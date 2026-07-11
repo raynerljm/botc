@@ -59,27 +59,3 @@
   gap: 0.75rem;
   margin-top: 1.25rem;
 }
-
-.actions button {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  background: var(--surface-raised);
-  color: var(--foreground);
-}
-
-.confirm {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--background);
-}
-
-.destructive {
-  background: var(--team-demon);
-  border-color: var(--team-demon);
-  color: var(--background);
-}

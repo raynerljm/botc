@@ -67,19 +67,6 @@
 
 .showButton {
   align-self: flex-start;
-  padding: 0.6rem 1rem;
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface-raised);
-  color: var(--foreground);
-  cursor: pointer;
-  min-height: 2.75rem;
-}
-
-.showButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .overlay {
@@ -162,13 +149,3 @@
   text-align: center;
 }
 
-.closeButton {
-  padding: 0.6rem 1rem;
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface-raised);
-  color: var(--foreground);
-  cursor: pointer;
-  min-height: 2.75rem;
-}

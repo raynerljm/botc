@@ -45,14 +45,6 @@
 .randomize,
 .continue {
   align-self: flex-end;
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .banner {
@@ -97,7 +89,7 @@
 .teamCount {
   font-size: 0.95rem;
   color: var(--muted);
-  transition: color 200ms ease;
+  transition: color var(--duration-base) var(--ease-standard);
 }
 
 .teamCount[data-state="under"] {

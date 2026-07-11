@@ -11,6 +11,7 @@ import {
 } from "@/lib/gameDocument";
 import { downloadGameSnapshot } from "@/lib/gameExport";
 
+import { Button } from "./Button";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./EndGamePanel.module.css";
@@ -74,35 +75,30 @@ export function EndGamePanel({
 
         <div className={styles.actions}>
           {ended ? (
-            <button type="button" onClick={reopen}>
-              Reopen game
-            </button>
+            <Button onClick={reopen}>Reopen game</Button>
           ) : (
             <div className={styles.declare}>
               <span className={styles.declareLabel}>Declare winner</span>
-              <button
-                type="button"
+              <Button
                 className={styles.good}
                 onClick={() => setPendingWinner("good")}
               >
                 Good wins
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 className={styles.evil}
                 onClick={() => setPendingWinner("evil")}
               >
                 Evil wins
-              </button>
+              </Button>
             </div>
           )}
-          <button
-            type="button"
+          <Button
             className={styles.export}
             onClick={() => downloadGameSnapshot(game)}
           >
             Export game
-          </button>
+          </Button>
         </div>
 
         {pendingWinner && (

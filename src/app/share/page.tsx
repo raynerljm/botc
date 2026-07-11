@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useSyncExternalStore } from "react";
 
+import { Button } from "@/components/Button";
 import { ScriptSheet } from "@/components/ScriptSheet";
 import { saveCustomScript } from "@/lib/customScripts";
 import { describeScriptParseError } from "@/lib/scriptParser";
@@ -74,9 +75,9 @@ export default function SharedScriptPage() {
       )}
       {result && result.ok && (
         <>
-          <button type="button" className={styles.save} onClick={handleSave}>
+          <Button variant="primary" className={styles.save} onClick={handleSave}>
             Add to Your scripts
-          </button>
+          </Button>
           <ScriptSheet
             meta={result.script.meta}
             characters={result.script.characters}

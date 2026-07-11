@@ -51,6 +51,7 @@ import {
 } from "@/lib/nightList";
 import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DayPhase } from "./DayPhase";
@@ -305,6 +306,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       label: "Drunk",
       position: parkBeside(livePlayerPosition(playerId, players)),
       anchorPlayerId: playerId,
+      homePlayerId: playerId,
     };
     return [...withoutDrunkStandInReminder(reminders, playerId), reminder];
   }
@@ -353,11 +355,23 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   }
 
   // Every seat's dragged position is cleared, so the next render falls back
-  // to the computed circle for all of them at once.
+  // to the computed circle for all of them at once. Also re-anchors every
+  // reminder that belongs to a still-live seat (homePlayerId) but had been
+  // dragged off onto the pad (anchorPlayerId null) — restoring the anchor is
+  // enough on its own: the board's render loop already recomputes an
+  // anchored reminder's on-screen position fresh from its seat's live
+  // position and sibling index every render (issue #213), so there's no
+  // stale `position` value to recompute here, and a reminder that was
+  // already anchored (or never owned by any seat) is left untouched.
   function reCircle() {
     update({
       ...game,
       players: game.players.map((player) => ({ ...player, position: null })),
+      reminders: game.reminders.map((r) =>
+        r.homePlayerId && game.players.some((p) => p.id === r.homePlayerId)
+          ? { ...r, anchorPlayerId: r.homePlayerId }
+          : r,
+      ),
     });
   }
 
@@ -409,7 +423,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     position: PlayerPosition;
     anchorPlayerId: string | null;
   }) {
-    const reminder: ReminderToken = { id: crypto.randomUUID(), ...input };
+    const reminder: ReminderToken = {
+      id: crypto.randomUUID(),
+      ...input,
+      // Owned by whatever seat it's placed anchored to, from the start
+      // (issue #213) — null for a reminder added generically from the
+      // pad-level button, same as anchorPlayerId.
+      homePlayerId: input.anchorPlayerId,
+    };
     update({
       ...gameRef.current,
       reminders: [...gameRef.current.reminders, reminder],
@@ -445,7 +466,17 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       ...gameRef.current,
       reminders: gameRef.current.reminders.map((r) =>
         r.id === reminderId
-          ? { ...r, position: parkBeside(base), anchorPlayerId: playerId }
+          ? {
+              ...r,
+              position: parkBeside(base),
+              anchorPlayerId: playerId,
+              // A deliberate tap-to-place re-homes the reminder too (issue
+              // #213), the same as an anchored reminder created fresh —
+              // otherwise re-attaching it to a different seat than the one
+              // it was last home to would leave a stale owner for Re-circle
+              // to (wrongly) send it back to.
+              homePlayerId: playerId,
+            }
           : r,
       ),
     });
@@ -468,14 +499,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // anchorPlayerId — permanently invisible to the pad-spiral's unanchored
   // count and stuck at a stale never-updated position (code review
   // finding), so drop the anchor the same way removePlayer does for every
-  // reminder still anchored to a live seat at removal time.
+  // reminder still anchored to a live seat at removal time. Same dangling-
+  // reference guard applies to homePlayerId (issue #213): a snapshot from
+  // before that seat was removed would otherwise hand Re-circle a home seat
+  // that no longer exists.
   function restoreReminder(reminder: ReminderToken) {
     const anchorStillLive =
       reminder.anchorPlayerId === null ||
       game.players.some((p) => p.id === reminder.anchorPlayerId);
-    const restored = anchorStillLive
-      ? reminder
-      : { ...reminder, anchorPlayerId: null };
+    const homeStillLive =
+      reminder.homePlayerId === null ||
+      game.players.some((p) => p.id === reminder.homePlayerId);
+    const restored = {
+      ...reminder,
+      anchorPlayerId: anchorStillLive ? reminder.anchorPlayerId : null,
+      homePlayerId: homeStillLive ? reminder.homePlayerId : null,
+    };
     update({
       ...game,
       reminders: withRestoredReminder(game.reminders, restored),
@@ -520,6 +559,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const newReminders: ReminderToken[] = reminders.map((input, index) => ({
       id: setupWalkthroughReminderId(stepId, index),
       ...input,
+      // Owned by whatever seat the walkthrough step anchored it to, the same
+      // as any other reminder (issue #213).
+      homePlayerId: input.anchorPlayerId,
     }));
     const isThisStepsOldReminder = (r: ReminderToken) =>
       r.id.startsWith(`setupwalkthrough:${stepId}:`);
@@ -675,13 +717,20 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       (r) => r.anchorPlayerId === playerId,
     );
     const reminders = game.reminders.map((r) => {
-      if (r.anchorPlayerId !== playerId) return r;
+      // homePlayerId is cleared whenever it points at this seat, even for a
+      // reminder already dragged off onto the pad (anchorPlayerId already
+      // null there, so it wouldn't otherwise hit the branch below) — the
+      // seat it belongs to is gone, so there's nothing left for a later
+      // Re-circle to home it back to (issue #213).
+      const homePlayerId = r.homePlayerId === playerId ? null : r.homePlayerId;
+      if (r.anchorPlayerId !== playerId) return { ...r, homePlayerId };
       const siblingIndex = anchoredHere.findIndex(
         (sibling) => sibling.id === r.id,
       );
       return {
         ...r,
         anchorPlayerId: null,
+        homePlayerId,
         position: anchoredReminderPosition(removedPosition, siblingIndex),
       };
     });
@@ -1121,13 +1170,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         // resuming them). Hidden for the whole draw ritual (any stage, not
         // just the "hidden" privacy-guard one) so a mid-draw tap can't
         // discard an in-flight choice or reveal.
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={styles.back}
           onClick={() => router.back()}
         >
           ← {game.scriptName}
-        </button>
+        </Button>
       )}
       <h1 className={styles.title}>{game.scriptName}</h1>
 
@@ -1145,9 +1194,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {!draw && nextUnassignedSeat && !bagEmpty && (
-        <button type="button" className={styles.startDraw} onClick={startDraw}>
+        <Button
+          variant="primary"
+          className={styles.startDraw}
+          onClick={startDraw}
+        >
           Start bag draw
-        </button>
+        </Button>
       )}
 
       {setupComplete &&
@@ -1233,13 +1286,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                   ? `Card hidden. Pass the device to ${nextUnassignedSeat.name}.`
                   : "Card hidden. Return the device to the storyteller."}
               </p>
-              <button
-                type="button"
-                className={styles.drawAction}
+              <Button
                 onClick={nextUnassignedSeat ? readyForNextDraw : openGrimoire}
               >
                 {nextUnassignedSeat ? "Ready to draw" : "Open the grimoire"}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -1252,15 +1303,14 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           leak issue #111 closed for the official bag's manual-assign
           selects. Always offered regardless of travellerBag's size — a
           traveller may join at any time per the rulebook, even in a game
-          built with 0 travellers (issue #119). */}
-      {!draw && !travellerFormOpen && (
-        <button
-          type="button"
-          className={styles.addTraveller}
-          onClick={openTravellerForm}
-        >
+          built with 0 travellers (issue #119).
+          Hidden once setupComplete (issue #217): the board exists by then,
+          and reaches this same openTravellerForm through its own overflow
+          menu instead — see the GrimoireBoard onOpenAddTraveller prop below. */}
+      {!draw && !travellerFormOpen && !setupComplete && (
+        <Button className={styles.addTraveller} onClick={openTravellerForm}>
           Add traveller
-        </button>
+        </Button>
       )}
 
       {!draw && travellerFormOpen && (
@@ -1300,22 +1350,15 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               }))}
             />
           </label>
-          <button type="submit" className={styles.formSubmit}>
+          <Button type="submit" variant="primary">
             Add to the circle
-          </button>
+          </Button>
         </form>
       )}
 
-      {setupComplete && !screenObscured && !tokenFormOpen && (
-        <button
-          type="button"
-          className={styles.addTraveller}
-          onClick={openTokenForm}
-        >
-          Add character
-        </button>
-      )}
-
+      {/* No standalone trigger button here (issue #217) — reached through
+          the board's own overflow menu instead (onOpenAddCharacter below),
+          since this form is only ever valid once the board already exists. */}
       {setupComplete && !screenObscured && tokenFormOpen && (
         <form className={styles.travellerForm} onSubmit={addToken}>
           <label>
@@ -1343,15 +1386,23 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               }))}
             />
           </label>
-          <button type="submit">Add to the grimoire</button>
-          <button type="button" onClick={() => setTokenFormOpen(false)}>
+          <Button type="submit" variant="primary">
+            Add to the grimoire
+          </Button>
+          <Button variant="ghost" onClick={() => setTokenFormOpen(false)}>
             Cancel
-          </button>
+          </Button>
         </form>
       )}
 
       {setupComplete ? (
-        <>
+        // Setup→play handoff (issue #220): this whole branch mounts fresh
+        // exactly once, the moment the last seat is filled — everything
+        // inside (circle, sheet, Demon bluffs, walkthrough) stays mounted
+        // afterward regardless of `hidden` toggles (see the comment on
+        // .circleLayout below), so this wrapper's mount animation plays
+        // once for the handoff and never replays after.
+        <div className={styles.boardEnter}>
           {/* No `walkthroughSteps.length > 0` conjunct here — the walkthrough
               always has at least its Demon bluffs step (issue #155), so this
               offer is never conditioned on any character being in play. */}
@@ -1374,20 +1425,10 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                     ? "pending."
                     : "to make before the first night."}
                 </p>
-                <button
-                  type="button"
-                  className={styles.walkthroughStart}
-                  onClick={openWalkthrough}
-                >
+                <Button variant="primary" onClick={openWalkthrough}>
                   Start walkthrough
-                </button>
-                <button
-                  type="button"
-                  className={styles.walkthroughSkip}
-                  onClick={dismissWalkthroughOffer}
-                >
-                  Skip
-                </button>
+                </Button>
+                <Button onClick={dismissWalkthroughOffer}>Skip</Button>
               </div>
             )}
           {/* Stays mounted (just hidden) rather than being swapped out for
@@ -1410,6 +1451,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               aria-label="Grimoire circle"
               className={styles.circleArea}
             >
+              {/* Day/night phase sweep (issue #220): a brief translucent
+                  wash over the circle whenever the single bottom sheet
+                  swaps between Night list and Day phase — keyed on
+                  sheetPhase so it remounts (replaying the fade) only on an
+                  actual phase change, never on an ordinary re-render.
+                  Decorative only (aria-hidden, pointer-events: none via
+                  CSS) so it never intercepts a token/reminder drag. */}
+              <div
+                key={sheetPhase}
+                className={styles.phaseSweep}
+                aria-hidden="true"
+              />
               <GrimoireBoard
                 players={game.players}
                 characterById={characterById}
@@ -1447,6 +1500,26 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 // generically reusable board, not specific to this.
                 onOpenSetupWalkthrough={
                   firstNightEnded(game) ? undefined : openWalkthrough
+                }
+                // Both forms are owned by this component (they seed default
+                // selections from state only this page holds — travellerBag,
+                // lastSeat), so the board just gets a callback to open them,
+                // the same delegation onOpenSetupWalkthrough already uses.
+                // Hidden while its own form is already open, matching what
+                // the old standalone trigger buttons did (issue #217).
+                // `draw` is guaranteed null here in practice (GrimoireBoard
+                // only mounts once setupComplete, which precludes a "choosing"
+                // stage draw needing an unassigned seat) — but openTravellerForm
+                // seeds its default from travellerBag[0], the same bag-leak
+                // shape issue #111 closed for manual-assign selects, so this
+                // still checks `!draw` explicitly rather than leaning on that
+                // cross-file invariant staying true forever (code review
+                // finding).
+                onOpenAddTraveller={
+                  draw || travellerFormOpen ? undefined : openTravellerForm
+                }
+                onOpenAddCharacter={
+                  tokenFormOpen ? undefined : openTokenForm
                 }
               />
             </div>
@@ -1493,7 +1566,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               onClose={() => setShowWalkthrough(false)}
             />
           )}
-        </>
+        </div>
       ) : (
         // Hidden for the whole draw session, not just the obscured stages —
         // the choosing stage's own full-screen token grid (issue #158) means

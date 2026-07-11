@@ -11,6 +11,7 @@ import {
 } from "@/lib/customScripts";
 
 import { AddScriptDialog } from "./AddScriptDialog";
+import { Button } from "./Button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./CustomScriptsSection.module.css";
 
@@ -48,13 +49,13 @@ export function CustomScriptsSection() {
                   <span className={styles.author}> by {script.author}</span>
                 )}
               </Link>
-              <button
-                type="button"
+              <Button
+                variant="destructive"
                 className={styles.remove}
                 onClick={() => setPendingRemove(script)}
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

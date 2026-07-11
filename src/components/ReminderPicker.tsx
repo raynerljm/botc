@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import type { Character } from "@/lib/characters";
 
+import { Button } from "./Button";
 import { Checkbox } from "./Checkbox";
 import { DialogOverlay } from "./DialogOverlay";
 import { PickerCustomTextForm } from "./PickerCustomTextForm";
@@ -57,14 +58,13 @@ export function ReminderPicker({
         aria-label="Add reminder"
         aria-modal="true"
       >
-        <button
-          type="button"
+        <Button
           ref={cancelButtonRef}
           className={styles.cancelButton}
           onClick={onCancel}
         >
           Cancel
-        </button>
+        </Button>
 
         <PickerGroup
           legend="Global reminders"

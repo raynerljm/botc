@@ -8,18 +8,6 @@
   color: var(--muted);
 }
 
-/* Shared with Day phase's own forward/back buttons (BottomSheet.module.css:
-   .forwardAction/.backAction, issue #195 code review finding — these two
-   rules used to be redefined identically in both sheets' CSS modules). */
-.startNight,
-.endNight {
-  composes: forwardAction from "./BottomSheet.module.css";
-}
-
-.back {
-  composes: backAction from "./BottomSheet.module.css";
-}
-
 .showAll {
   display: flex;
   align-items: center;
@@ -49,8 +37,10 @@
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   transition:
-    opacity 200ms ease,
-    background-color 200ms ease;
+    opacity var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard),
+    border-color var(--duration-base) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard);
 }
 
 .entry[data-dead] {
@@ -63,6 +53,16 @@
     var(--accent) 12%,
     var(--surface-raised)
   );
+}
+
+/* Step progress (issue #220): the same "next" entry the glanceable progress
+   line above already names by label gets a matching highlight here, so
+   checking one off visibly advances the highlight to the next li's own
+   border-color/box-shadow transition, rather than only the text above
+   silently jumping to a new name. */
+.entry[data-current] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-ring-soft);
 }
 
 .entry[data-skipped] {
@@ -136,12 +136,8 @@
 }
 
 .unskip {
+  min-height: unset;
   padding: 0.3rem 0.6rem;
   font-size: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  cursor: pointer;
   flex-shrink: 0;
 }

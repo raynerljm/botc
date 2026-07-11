@@ -499,6 +499,61 @@ describe("Night list: entries", () => {
   });
 });
 
+describe("Night list: current entry highlight (issue #220)", () => {
+  it("marks the next unchecked, un-skipped entry as current, advancing as entries are checked off", async () => {
+    // washerwoman acts first night (firstNight 32), imp doesn't (firstNight
+    // 0) — so with show-all off the checkable steps are exactly Dusk,
+    // Washerwoman, Dawn, in that order (same fixture as the peek-state
+    // progress test above).
+    const user = userEvent.setup();
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
+    let latest = game;
+    const { rerender } = renderNightList(game, (next) => {
+      latest = next;
+    });
+
+    expect(
+      screen.getByRole("checkbox", { name: "Dusk" }).closest("li"),
+    ).toHaveAttribute("data-current");
+
+    await user.click(screen.getByRole("checkbox", { name: "Dusk" }));
+    rerender(
+      <NightList
+        game={latest}
+        characterById={characterById(latest)}
+        onChange={() => {}}
+      />,
+    );
+
+    const washerwoman = getCharacter("washerwoman")!;
+    expect(
+      screen.getByRole("checkbox", { name: "Dusk" }).closest("li"),
+    ).not.toHaveAttribute("data-current");
+    expect(
+      screen
+        .getByRole("checkbox", { name: `${washerwoman.name} — Seat 1` })
+        .closest("li"),
+    ).toHaveAttribute("data-current");
+  });
+
+  it("marks no entry as current once every entry is checked off", () => {
+    const game = gameWith(["washerwoman", "imp"], {
+      night: 0,
+      nightOpen: true,
+    });
+    const allChecked: GameDocument = {
+      ...game,
+      nightChecked: ["fixed:dusk", `char:${game.players[0].id}`, "fixed:dawn"],
+    };
+    const { container } = renderNightList(allChecked);
+
+    expect(container.querySelectorAll("[data-current]")).toHaveLength(0);
+  });
+});
+
 describe("Night list: dead players", () => {
   it("dims and auto-skips a dead player's entry, but keeps it visible", () => {
     const game = gameWith(["washerwoman", "imp"], {

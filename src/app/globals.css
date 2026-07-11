@@ -5,20 +5,67 @@
      the app's own dark-themed ones. */
   color-scheme: dark;
 
-  /* Dark-first: the storyteller uses this at a table in the dark. */
-  --background: #16131d;
-  --surface: #211c2b;
-  --surface-raised: #2a2438;
+  /* Dark-first, gothic-clocktower palette (issue #215): deeper surfaces than
+     a flat dark theme, a refined gold accent, and explicit good/evil tones
+     so declare-winner and destructive controls stop leaning on undefined
+     var() fallbacks. The storyteller uses this at a table in the dark, so
+     every tier below still needs strong contrast against --background. */
+  --background: #120f19;
+  --surface: #1c1826;
+  --surface-raised: #262032;
+  --surface-overlay: rgb(8 6 12 / 72%);
   --border: #3a3350;
+  --border-strong: #4d4468;
   --foreground: #ece5d8;
   --muted: #a99f8f;
   --accent: #c9a86a;
+  --accent-strong: #e0c184;
+  --good: #4f9a72;
+  --evil: #c1524f;
 
   --team-townsfolk: #6ea8d8;
   --team-outsider: #5ecfcf;
   --team-minion: #e08a5a;
   --team-demon: #d85f5f;
   --team-traveller: #b08ad8;
+
+  /* Gilded-accent tiers (issue #219): every derived translucent-gold value
+     used by the atmospheric background, grimoire circle, and token framing
+     draws from these three, instead of each call site hand-deriving its own
+     color-mix() percentage — the same reuse rationale as the motion tokens
+     below. */
+  --accent-glow: color-mix(in srgb, var(--accent) 7%, transparent);
+  --accent-ring-soft: color-mix(in srgb, var(--accent) 35%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 55%, transparent);
+
+  /* Typography: a display serif for headings against the body's system-ui
+     sans, so headings read as a distinct voice without depending on a
+     network font fetch (ADR 0001 — the app must work offline). */
+  --font-body:
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading:
+    ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --leading-tight: 1.15;
+  --leading-normal: 1.5;
+
+  /* Motion: shared duration/easing so the animation pass (issue #220) and
+     every transition added meanwhile draw from one place. Reduced-motion is
+     still handled by the blanket override below, which wins regardless of
+     which token a component used. */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0.1, 1);
 }
 
 * {
@@ -43,19 +90,63 @@ body {
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  /* Atmospheric background (issue #219): a low-contrast candlelit-vignette
+     over the flat --background, not a busy illustration. A warm glow high
+     and off-centre (like a single lamp over the table) fading into a
+     darker vignette at the corners — static, so it never competes with
+     token/reminder legibility or costs a frame of animation. Scrolls with
+     the page (no `background-attachment: fixed`) since that property is
+     unreliable/janky on mobile browsers, which is where this app is mostly
+     used. */
+  background:
+    radial-gradient(
+      ellipse 70% 50% at 50% 0%,
+      var(--accent-glow),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 120% 90% at 50% 100%,
+      rgb(0 0 0 / 40%),
+      transparent 60%
+    ),
+    var(--background);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+}
+
+h1 {
+  font-size: var(--text-3xl);
+}
+
+h2 {
+  font-size: var(--text-2xl);
+}
+
+h3 {
+  font-size: var(--text-xl);
+}
+
+h4,
+h5,
+h6 {
+  font-size: var(--text-lg);
 }
 
 /* One rule to honor prefers-reduced-motion everywhere (issue #77 AC), rather

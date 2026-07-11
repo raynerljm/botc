@@ -38,6 +38,7 @@ import {
 } from "@/lib/gameDocument";
 import { isHttpUrl } from "@/lib/scriptParser";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import { InfoTokenLibrary } from "./InfoTokenLibrary";
 import { InfoTokenShowMode } from "./InfoTokenShowMode";
@@ -90,6 +91,12 @@ export interface GrimoireBoardProps {
   // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
   // when there's nothing for it to show, so no button renders.
   onOpenSetupWalkthrough?: () => void;
+  // Opens the mid-game "Add traveller"/"Add character" forms (owned by the
+  // page that hosts this board, not this component — see the comment on
+  // onOpenSetupWalkthrough above for why). Omitted entirely when there's
+  // nothing valid for it to open, so no menu entry renders (issue #217).
+  onOpenAddTraveller?: () => void;
+  onOpenAddCharacter?: () => void;
 }
 
 // The token *icon* keeps shrinking at high player counts (visual density,
@@ -164,8 +171,24 @@ function fitBoardSizePx(
 // A real finger drag always moves a few pixels before settling — without a
 // threshold, every tap-to-open-the-menu would also fire a (near-zero) move.
 const DRAG_THRESHOLD_PX = 6;
+// How long the "Removed" undo banner offers restoring a reminder (issue
+// #14), and how long its brief exit-animation ghost fades for (issue #220,
+// GrimoireBoard.module.css's --duration-slow) — kept far shorter than the
+// undo window so the ghost doesn't linger looking "stuck" long after the
+// removal itself has settled.
+const REMOVED_UNDO_MS = 6000;
+const REMINDER_EXIT_MS = 320;
 
 type TokenKind = "player" | "reminder";
+// The board's own overflow menu (issue #217) is a single instance, not one
+// per token — but it closes the exact same way a token/reminder menu does
+// (an outside tap, or another menu opening), so it shares their openMenu/
+// isMenuOpenFor/handleMenuToggle machinery rather than growing a parallel
+// open/close system of its own.
+type MenuKind = TokenKind | "boardOptions";
+// The single board-options menu has no per-instance id to distinguish it by
+// (unlike a token/reminder's own id) — this constant fills that slot.
+const BOARD_MENU_ID = "board-options";
 
 interface DragState {
   kind: TokenKind;
@@ -212,6 +235,8 @@ export function GrimoireBoard({
   onSetClaim,
   onSetActsAs,
   onOpenSetupWalkthrough,
+  onOpenAddTraveller,
+  onOpenAddCharacter,
 }: GrimoireBoardProps) {
   const claimById = useMemo(
     () => new Map(claimOptions.map((c) => [c.id, c] as const)),
@@ -354,7 +379,7 @@ export function GrimoireBoard({
   // source of truth every menu's `open` prop is derived from (issue #70:
   // opening one must close any other, and a tap outside must close it too).
   const [openMenu, setOpenMenu] = useState<{
-    kind: TokenKind;
+    kind: MenuKind;
     id: string;
   } | null>(null);
   const openMenuElRef = useRef<HTMLDetailsElement | null>(null);
@@ -363,7 +388,7 @@ export function GrimoireBoard({
   // `data-menu-open` (issue #117: lets CSS stack the open menu above
   // neighbours) must never drift apart, so both read this instead of each
   // re-deriving the same comparison (code review finding).
-  function isMenuOpenFor(kind: TokenKind, id: string): boolean {
+  function isMenuOpenFor(kind: MenuKind, id: string): boolean {
     return openMenu?.kind === kind && openMenu.id === id;
   }
 
@@ -385,8 +410,7 @@ export function GrimoireBoard({
       ) {
         return;
       }
-      openMenuElRef.current = null;
-      setOpenMenu(null);
+      closeMenu();
     }
     document.addEventListener("pointerdown", handlePointerDownOutside);
     return () =>
@@ -394,7 +418,7 @@ export function GrimoireBoard({
   }, [openMenu, activeOverlay]);
 
   function handleMenuToggle(
-    kind: TokenKind,
+    kind: MenuKind,
     id: string,
     event: React.SyntheticEvent<HTMLDetailsElement>,
   ) {
@@ -403,8 +427,7 @@ export function GrimoireBoard({
       openMenuElRef.current = details;
       setOpenMenu({ kind, id });
     } else if (openMenu?.kind === kind && openMenu.id === id) {
-      openMenuElRef.current = null;
-      setOpenMenu(null);
+      closeMenu();
     }
   }
   const reminderPicker =
@@ -422,6 +445,15 @@ export function GrimoireBoard({
     null,
   );
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A just-removed reminder's brief fading ghost (issue #220), separate from
+  // removedReminder above — that one lives the full undo-banner window
+  // (REMOVED_UNDO_MS), far longer than an exit animation should visually
+  // linger for.
+  const [exitingReminder, setExitingReminder] = useState<{
+    reminder: ReminderToken;
+    position: PlayerPosition;
+  } | null>(null);
+  const exitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [infoTokenShowing, setInfoTokenShowing] = useState<{
     text: string;
     characterIds: string[];
@@ -430,6 +462,7 @@ export function GrimoireBoard({
   useEffect(() => {
     return () => {
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
     };
   }, []);
 
@@ -643,16 +676,31 @@ export function GrimoireBoard({
     setActiveOverlay(null);
   }
 
-  function handleRemoveReminder(reminder: ReminderToken) {
+  function handleRemoveReminder(
+    reminder: ReminderToken,
+    position: PlayerPosition,
+  ) {
     onRemoveReminder(reminder.id);
     setRemovedReminder(reminder);
+    // Its last on-board position, captured now — once removed it's no
+    // longer in `reminders`/positionByPlayerId, so this is the only place
+    // that position is still available (issue #220).
+    setExitingReminder({ reminder, position });
     // A reminder removed while it's the one armed for tap-to-place must also
     // clear that placement state — otherwise the "Tap a seat to attach"
     // banner keeps showing and the next seat tap silently no-ops against a
     // reminder id that no longer exists (code review finding).
     if (placingReminderId === reminder.id) setPlacingReminderId(null);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    undoTimeoutRef.current = setTimeout(() => setRemovedReminder(null), 6000);
+    undoTimeoutRef.current = setTimeout(
+      () => setRemovedReminder(null),
+      REMOVED_UNDO_MS,
+    );
+    if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
+    exitTimeoutRef.current = setTimeout(
+      () => setExitingReminder(null),
+      REMINDER_EXIT_MS,
+    );
   }
 
   function handleUndoRemove() {
@@ -660,6 +708,30 @@ export function GrimoireBoard({
     onRestoreReminder(removedReminder);
     setRemovedReminder(null);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    // Undo can land while the exit ghost is still mid-fade (issue #220 code
+    // review finding) — without clearing it here too, the restored, live
+    // reminder and its own still-fading ghost would render simultaneously
+    // at the same position until the ghost's timeout catches up.
+    setExitingReminder(null);
+    if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
+  }
+
+  // Re-circling or hiding the board while a drag is still in progress must
+  // discard that in-progress gesture — otherwise its stale local position
+  // either overrides the freshly re-circled layout, or resurfaces at an
+  // unsaved coordinate once the board is shown again. Hiding (or showing
+  // the info token library) unmounts every seat's <details>, so an open
+  // menu's `openMenu` state must go with it too — otherwise a keyboard
+  // activation of these controls (which fires no pointerdown, so the
+  // outside-tap-close effect never runs) leaves it stale, and the next
+  // mount reopens the same seat's menu unprompted (issue #70 code review).
+  // Closes whichever menu is currently open — a token/reminder's own, or
+  // the board's overflow menu (issue #217) — sharing one implementation
+  // rather than three copies of the same two-line reset (outside-tap-close
+  // above, cancelActiveDrag below, and every board-menu item's own handler).
+  function closeMenu() {
+    openMenuElRef.current = null;
+    setOpenMenu(null);
   }
 
   // Re-circling or hiding the board while a drag is still in progress must
@@ -674,8 +746,7 @@ export function GrimoireBoard({
   function cancelActiveDrag() {
     dragRef.current = null;
     setLiveDrag(null);
-    openMenuElRef.current = null;
-    setOpenMenu(null);
+    closeMenu();
   }
 
   // Full-screen show mode replaces the board outright rather than layering
@@ -699,29 +770,8 @@ export function GrimoireBoard({
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls} data-controls>
-        <button
-          type="button"
-          onClick={() => {
-            cancelActiveDrag();
-            // An overlay already open holds a player's position captured at
-            // open time — re-circling can move that player, so the stale
-            // parked position has to be discarded along with the drag.
-            setActiveOverlay(null);
-            setPlacingReminderId(null);
-            onReCircle();
-          }}
-        >
-          Re-circle
-        </button>
-        <button type="button" onClick={() => onRotate(stepRotation(rotation, -1))}>
-          Rotate left
-        </button>
-        <button type="button" onClick={() => onRotate(stepRotation(rotation, 1))}>
-          Rotate right
-        </button>
         {!hidden && (
-          <button
-            type="button"
+          <Button
             onClick={() => {
               cancelActiveDrag();
               setActiveOverlay(null);
@@ -730,42 +780,126 @@ export function GrimoireBoard({
             }}
           >
             Hide grimoire
-          </button>
+          </Button>
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
-          <button
-            type="button"
-            onClick={() =>
-              setActiveOverlay({ type: "reminder", base: null, playerId: null })
-            }
+          <Button
+            onClick={() => {
+              // The board-options menu (issue #217) is a sibling control, not
+              // an ancestor of this button, so opening it doesn't close it —
+              // without this, tapping straight from an open board-options
+              // menu to here left it stranded open behind this overlay, with
+              // no way to dismiss it (the outside-tap-close effect no-ops
+              // while activeOverlay is set) until some other menu action.
+              closeMenu();
+              setActiveOverlay({ type: "reminder", base: null, playerId: null });
+            }}
           >
             Add reminder
-          </button>
+          </Button>
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
-          <button
-            type="button"
-            onClick={() => setActiveOverlay({ type: "infoTokens" })}
+          <Button
+            onClick={() => {
+              closeMenu();
+              setActiveOverlay({ type: "infoTokens" });
+            }}
           >
             Info tokens
-          </button>
+          </Button>
         )}
-        {!hidden &&
-          !activeOverlay &&
-          !placingReminderId &&
-          onOpenSetupWalkthrough && (
-            <button type="button" onClick={onOpenSetupWalkthrough}>
-              Setup walkthrough
-            </button>
-          )}
+
+        {/* One-time/setup actions, tucked behind a single overflow trigger
+            (issue #217) so they don't compete with the frequent controls
+            above as equal peers. Shares the same open/close plumbing as
+            every token/reminder menu (isMenuOpenFor/handleMenuToggle) rather
+            than a bespoke system of its own. */}
+        <details
+          className={styles.boardMenu}
+          open={isMenuOpenFor("boardOptions", BOARD_MENU_ID)}
+          onToggle={(event) =>
+            handleMenuToggle("boardOptions", BOARD_MENU_ID, event)
+          }
+        >
+          <summary className={styles.boardMenuSummary}>
+            <span aria-hidden="true">⋯</span>
+            <span className={styles.srOnly}>Board options</span>
+          </summary>
+          <div className={styles.boardMenuBody}>
+            {onOpenAddTraveller && (
+              <Button
+                onClick={() => {
+                  closeMenu();
+                  onOpenAddTraveller();
+                }}
+              >
+                Add traveller
+              </Button>
+            )}
+            {onOpenAddCharacter && (
+              <Button
+                onClick={() => {
+                  closeMenu();
+                  onOpenAddCharacter();
+                }}
+              >
+                Add character
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                closeMenu();
+                onRotate(stepRotation(rotation, -1));
+              }}
+            >
+              Rotate left
+            </Button>
+            <Button
+              onClick={() => {
+                closeMenu();
+                onRotate(stepRotation(rotation, 1));
+              }}
+            >
+              Rotate right
+            </Button>
+            {!hidden &&
+              !activeOverlay &&
+              !placingReminderId &&
+              onOpenSetupWalkthrough && (
+                <Button
+                  onClick={() => {
+                    closeMenu();
+                    onOpenSetupWalkthrough();
+                  }}
+                >
+                  Setup walkthrough
+                </Button>
+              )}
+            <Button
+              onClick={() => {
+                cancelActiveDrag();
+                // An overlay already open holds a player's position captured
+                // at open time — re-circling can move that player, so the
+                // stale parked position has to be discarded along with the
+                // drag. cancelActiveDrag already closes this menu too, via
+                // the shared closeMenu().
+                setActiveOverlay(null);
+                setPlacingReminderId(null);
+                onReCircle();
+              }}
+            >
+              Re-circle
+            </Button>
+          </div>
+        </details>
       </div>
 
       {!hidden && placingReminderId && (
         <div className={styles.placingBanner} role="status">
           <span>Tap a seat to attach this reminder</span>
-          <button type="button" onClick={() => setPlacingReminderId(null)}>
+          <Button variant="primary" onClick={() => setPlacingReminderId(null)}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
 
@@ -800,9 +934,9 @@ export function GrimoireBoard({
       {!hidden && removedReminder && (
         <div className={styles.undoBanner}>
           <span>Removed &ldquo;{removedReminder.label}&rdquo;</span>
-          <button type="button" onClick={handleUndoRemove}>
+          <Button variant="primary" onClick={handleUndoRemove}>
             Undo
-          </button>
+          </Button>
         </div>
       )}
 
@@ -916,13 +1050,19 @@ export function GrimoireBoard({
                       </span>
                     )}
                     {player.claim && (
-                      <span className={styles.claimBadge}>
+                      <span
+                        key={`claim-${player.claim}`}
+                        className={styles.claimBadge}
+                      >
                         Claims{" "}
                         {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
                     )}
                     {actsAsCapable && player.actsAs && (
-                      <span className={styles.claimBadge}>
+                      <span
+                        key={`acts-as-${player.actsAs}`}
+                        className={styles.claimBadge}
+                      >
                         Acts as{" "}
                         {claimById.get(player.actsAs)?.name ?? player.actsAs}
                       </span>
@@ -954,13 +1094,9 @@ export function GrimoireBoard({
                       />
                     </label>
 
-                    <button
-                      type="button"
-                      className={styles.markDead}
-                      onClick={() => onToggleDead(player.id)}
-                    >
+                    <Button onClick={() => onToggleDead(player.id)}>
                       {player.dead ? "Mark alive" : "Mark dead"}
-                    </button>
+                    </Button>
 
                     <label
                       className={styles.field}
@@ -983,27 +1119,20 @@ export function GrimoireBoard({
                     </label>
 
                     {isHiddenDrunk && (
-                      <button
-                        type="button"
-                        className={styles.menuButton}
-                        onClick={() => onRevealDrunk(player.id)}
-                      >
+                      <Button onClick={() => onRevealDrunk(player.id)}>
                         Reveal Drunk
-                      </button>
+                      </Button>
                     )}
 
-                    <button
-                      type="button"
-                      className={styles.menuButton}
+                    <Button
+                      variant="destructive"
                       onClick={() => onRemovePlayer(player.id)}
                     >
                       Remove player
-                    </button>
+                    </Button>
 
                     {!activeOverlay && !placingReminderId && (
-                      <button
-                        type="button"
-                        className={styles.menuButton}
+                      <Button
                         onClick={() =>
                           setActiveOverlay({
                             type: "reminder",
@@ -1019,7 +1148,7 @@ export function GrimoireBoard({
                         }
                       >
                         Add reminder
-                      </button>
+                      </Button>
                     )}
 
                     <label
@@ -1091,42 +1220,53 @@ export function GrimoireBoard({
                       <details className={styles.detail}>
                         <summary className={styles.detailSummary}>
                           Character detail
-                        </summary>
-                        <p>{character.ability}</p>
-                        {official ? (
-                          <a
-                            href={wikiUrl(character)}
-                            target="_blank"
-                            rel="noreferrer"
+                          <span
+                            className={styles.detailChevron}
+                            aria-hidden="true"
                           >
-                            Official wiki page
-                          </a>
-                        ) : (
-                          almanacUrl &&
-                          isHttpUrl(almanacUrl) && (
+                            ▸
+                          </span>
+                        </summary>
+                        <div className={styles.detailBody}>
+                          <p className={styles.detailAbility}>
+                            {character.ability}
+                          </p>
+                          {official ? (
                             <a
-                              href={almanacUrl}
+                              href={wikiUrl(character)}
                               target="_blank"
                               rel="noreferrer"
+                              className={styles.detailLink}
                             >
-                              Script almanac
+                              Official wiki page
                             </a>
-                          )
-                        )}
+                          ) : (
+                            almanacUrl &&
+                            isHttpUrl(almanacUrl) && (
+                              <a
+                                href={almanacUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className={styles.detailLink}
+                              >
+                                Script almanac
+                              </a>
+                            )
+                          )}
+                        </div>
                       </details>
                     )}
                   </div>
                 </details>
 
                 {player.dead && (
-                  <button
-                    type="button"
+                  <Button
                     className={styles.ghostVote}
                     aria-pressed={player.ghostVoteSpent}
                     onClick={() => onToggleGhostVote(player.id)}
                   >
                     Ghost vote: {player.ghostVoteSpent ? "spent" : "available"}
-                  </button>
+                  </Button>
                 )}
               </div>
             );
@@ -1214,8 +1354,7 @@ export function GrimoireBoard({
 
                   <div className={styles.menuBody}>
                     {!placingReminderId && (
-                      <button
-                        type="button"
+                      <Button
                         onClick={() => {
                           cancelActiveDrag();
                           setActiveOverlay(null);
@@ -1223,25 +1362,52 @@ export function GrimoireBoard({
                         }}
                       >
                         Attach to seat
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveReminder(reminder)}
+                    <Button
+                      onClick={() => handleRemoveReminder(reminder, position)}
                     >
                       Remove reminder
-                    </button>
+                    </Button>
                   </div>
                 </details>
               </div>
             );
           })}
 
+        {!hidden && exitingReminder && (
+          <div
+            // Keyed on the removed reminder's own id (issue #220 code review
+            // finding): without a key, removing a second reminder while the
+            // first one's ghost is still mid-fade would reuse this same DOM
+            // node instead of remounting it, and chip-out only replays on
+            // insertion — the second ghost would silently skip its own fade
+            // and pick up wherever the first one's animation had gotten to.
+            key={exitingReminder.reminder.id}
+            className={styles.reminderGhost}
+            data-reminder-ghost
+            aria-hidden="true"
+            style={{
+              left: `${exitingReminder.position.x}%`,
+              top: `${exitingReminder.position.y}%`,
+            }}
+          >
+            <ReminderChip
+              character={
+                exitingReminder.reminder.characterId
+                  ? characterById.get(exitingReminder.reminder.characterId)
+                  : undefined
+              }
+              label={exitingReminder.reminder.label}
+            />
+          </div>
+        )}
+
         {hidden && (
           <div className={styles.hiddenOverlay}>
-            <button type="button" onClick={() => setHidden(false)}>
+            <Button variant="primary" onClick={() => setHidden(false)}>
               Show grimoire
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -1259,9 +1425,9 @@ export function GrimoireBoard({
               <div key={id} className={styles.fabledToken}>
                 <CharacterToken character={character} />
                 <span>{character.name}</span>
-                <button type="button" onClick={() => onRemoveFabled(id)}>
+                <Button variant="ghost" onClick={() => onRemoveFabled(id)}>
                   Remove {character.name}
-                </button>
+                </Button>
               </div>
             );
           })}

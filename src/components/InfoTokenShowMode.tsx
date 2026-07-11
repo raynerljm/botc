@@ -1,5 +1,6 @@
 import type { Character } from "@/lib/characters";
 
+import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
 import styles from "./InfoTokenShowMode.module.css";
 
@@ -33,9 +34,9 @@ export function InfoTokenShowMode({
         </div>
       )}
 
-      <button type="button" onClick={onClose}>
+      <Button variant="primary" onClick={onClose}>
         Done
-      </button>
+      </Button>
     </div>
   );
 }

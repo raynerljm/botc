@@ -12,14 +12,6 @@
 
 .cancelButton {
   align-self: flex-start;
-  padding: 0.5rem 1rem;
-  font: inherit;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  cursor: pointer;
-  min-height: 2.75rem;
 }
 
 .showAll {

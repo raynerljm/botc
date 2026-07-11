@@ -18,28 +18,144 @@
 }
 
 .controls button {
-  padding: 0.5rem 1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
   white-space: nowrap;
-  min-height: 2.75rem;
 }
 
+/* The board's single overflow menu (issue #217) — same <details> disclosure
+   pattern as a token/reminder's own .menu below, just anchored to the
+   controls row instead of a circle position. */
+.boardMenu {
+  position: relative;
+  display: inline-flex;
+}
+
+.boardMenuSummary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.4rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--muted);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.boardMenuSummary:hover {
+  color: var(--foreground);
+  background: var(--surface-raised);
+}
+
+.boardMenuSummary::-webkit-details-marker {
+  display: none;
+}
+
+.boardMenuBody {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: max-content;
+  min-width: 10rem;
+  /* Same viewport clamp as .menuBody below (issue #124) — without it, a
+     short/landscape viewport could grow this menu past the visible area
+     with no way to scroll to its lower items (a background scroll reads as
+     an outside tap and closes the menu before it can reach them). */
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.boardMenu[open] > .boardMenuBody {
+  animation: fade-slide-in 160ms ease;
+}
+
+/* Themed grimoire circle (issue #219): a gilded clock-face rather than a
+   plain dashed ring — a soft radial "dial" fill, a thin gold hairline, and
+   a lifting drop shadow. The tick marks are drawn by .board::before below
+   so the ring itself stays a plain circle for hit-testing/layout math
+   elsewhere in this file (data-board queries, drag math) that assume
+   .board's own box is the circle. */
 .board {
   position: relative;
   width: min(90vw, 40rem);
   height: min(90vw, 40rem);
   margin: 1rem auto 3rem;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 42%,
+    var(--surface) 0%,
+    var(--background) 72%
+  );
+  box-shadow:
+    0 0 0 3px var(--accent-ring-soft),
+    0 24px 48px -20px rgb(0 0 0 / 65%);
+}
+
+/* Twelve gold ticks in a band just inside the rim — a clock-face nod
+   fitting the "clocktower" theme. A repeating-conic-gradient radiates
+   full-circle lines from the centre by default; mask-image trims that down
+   to a band well inside the border (not flush against it, where a 1px
+   border would swallow a similarly-thin tick) so the ticks read clearly as
+   rim marks rather than a busy pie behind every token. Purely decorative
+   (no content, pointer-events: none) so it never intercepts a token/
+   reminder drag. */
+.board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--accent-ring) 0deg 0.9deg,
+    transparent 0.9deg 30deg
+  );
+  /* `circle farthest-side` (not the bare `circle` default of
+     farthest-corner) is what makes 100% land exactly on the visible rim —
+     .board is a square box, so farthest-corner reaches past the circle
+     border-radius clips to, pushing the whole "opaque" band outside the
+     visible circle where it's invisible. One custom property feeds both the
+     standard and -webkit- properties below so the two can't drift apart the
+     way two independently-typed copies of the same gradient could. */
+  --rim-mask: radial-gradient(
+    circle farthest-side,
+    transparent 83%,
+    black 86%,
+    black 93%,
+    transparent 96%
+  );
+  mask-image: var(--rim-mask);
+  -webkit-mask-image: var(--rim-mask);
 }
 
 .board[data-hidden="true"] {
   background: var(--surface);
+}
+
+/* The privacy screen (Hide grimoire) must not leak any game state — no dial
+   ticks bleeding through underneath it. The gold ring/border/drop-shadow
+   chrome on .board itself is left alone: it carries no information (unlike
+   the ticks, which hint at "a circle with content"), and .board's border
+   already survived the hidden state before this issue (the pre-existing
+   data-hidden rule above only ever overrode `background`, never `border`),
+   so this keeps that same precedent rather than stripping polish a privacy
+   guard doesn't need to strip. */
+.board[data-hidden="true"]::before {
+  content: none;
 }
 
 .tokenWrap {
@@ -55,7 +171,32 @@
   z-index: 1;
   /* Only plays on mount (a newly-placed reminder) — dragging an existing
      one just updates its left/top style on the same element, no remount. */
-  animation: chip-in 200ms ease;
+  animation: chip-in var(--duration-base) var(--ease-standard);
+}
+
+/* The fading twin of .reminderWrap above (issue #220): rendered in place of
+   a just-removed reminder for its brief exit animation, at the position it
+   held the instant before removal — decorative only (aria-hidden,
+   pointer-events: none), gone from the DOM once handleRemoveReminder's own
+   short timeout clears it. */
+.reminderGhost {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  pointer-events: none;
+  z-index: 1;
+  animation: chip-out var(--duration-slow) var(--ease-standard) forwards;
+}
+
+@keyframes chip-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
 }
 
 /* `transform` gives every .tokenWrap/.reminderWrap its own stacking
@@ -112,13 +253,8 @@
 
 .undoBanner button,
 .placingBanner button {
+  min-height: unset;
   padding: 0.25rem 0.6rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.4rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 /* position: relative so .menuBody (below) can anchor to the summary alone,
@@ -163,10 +299,21 @@
   display: none;
 }
 
+/* Gilded token framing (issue #219): a dark separator ring plus a thin gold
+   ring around every seat token/placeholder, lifted off the dial with a soft
+   drop shadow — reads as a set medallion rather than a bare circular photo.
+   box-shadow (not border) so it doesn't affect the token's own layout box,
+   which .shroud (the death overlay, inset: 0 on this same element) still
+   needs to match exactly. */
 .tokenVisual {
   position: relative;
   width: var(--token-size, 3rem);
   height: var(--token-size, 3rem);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3px var(--accent-ring),
+    0 3px 8px -2px rgb(0 0 0 / 60%);
 }
 
 .tokenVisual :global(img),
@@ -182,7 +329,7 @@
   background: color-mix(in srgb, var(--background) 65%, transparent);
   box-shadow: inset 0 0 0 2px var(--muted);
   opacity: 0;
-  transition: opacity 200ms ease;
+  transition: opacity var(--duration-base) var(--ease-standard);
   pointer-events: none;
 }
 
@@ -234,6 +381,10 @@
   color: var(--background);
   background: var(--accent);
   border-radius: 1rem;
+  /* A claim/acts-as badge is keyed on its own value at the render site
+     (issue #220), so setting or changing it — not just the initial mount —
+     remounts this span and replays the animation. */
+  animation: chip-in var(--duration-base) var(--ease-standard);
 }
 
 .menuBody {
@@ -327,35 +478,6 @@
   min-height: 2.75rem;
 }
 
-.menuButton {
-  min-height: 2.75rem;
-  padding: 0.5rem 1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.menuButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.markDead {
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
-}
 
 .claimSelect {
   min-height: 2.75rem;
@@ -366,16 +488,65 @@
   color: var(--foreground);
 }
 
+/* --surface-raised at rest, matching every sibling control in this menu
+   (.select/.textInput/.claimSelect) — .menuBody itself is --surface, so a
+   --surface disclosure would blend into it instead of reading as a
+   distinct, tappable control. No overflow: hidden, so a keyboard focus
+   ring on .detailSummary or .detailLink isn't clipped by the rounded
+   corners. */
+.detail {
+  width: 100%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
 .detailSummary {
   min-height: 2.75rem;
   display: flex;
   align-items: center;
-  padding: 0.5rem 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--foreground);
   cursor: pointer;
+  list-style: none;
 }
 
-.detail {
-  width: 100%;
+.detailSummary::-webkit-details-marker {
+  display: none;
+}
+
+.detailChevron {
+  font-size: 0.7rem;
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.detail[open] .detailChevron {
+  transform: rotate(90deg);
+}
+
+.detailBody {
+  padding: 0 0.75rem 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.detailAbility {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+.detailLink {
+  color: var(--accent);
+  font-size: 0.85rem;
+  width: fit-content;
+}
+
+.detailLink:hover {
+  text-decoration: underline;
 }
 
 .ghostVote {
@@ -386,18 +557,10 @@
      it (issue #70 code review). */
   position: relative;
   z-index: 6;
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-height: unset;
   margin-top: 0.35rem;
   padding: 0.4rem 0.75rem;
   font-size: 0.7rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  cursor: pointer;
 }
 
 .ghostVote[aria-pressed="true"] {
@@ -415,12 +578,6 @@
 
 .hiddenOverlay button {
   padding: 0.75rem 1.5rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .fabledRow {

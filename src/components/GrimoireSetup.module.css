@@ -2,6 +2,20 @@
   max-width: 64rem;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 3rem;
+  /* Entering the grimoire (issue #220): .main is the single top-level
+     wrapper for this whole component, so this plays once — when /game
+     first mounts it — not on every internal setup/board or draw-stage
+     swap those have their own entrance motion for. */
+  animation: fade-in var(--duration-slow) var(--ease-standard);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .title {
@@ -10,18 +24,7 @@
 }
 
 .back {
-  display: inline-block;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.95rem;
   padding: 0.5rem 0.5rem 0.5rem 0;
-  cursor: pointer;
-}
-
-.back:hover {
-  color: var(--foreground);
 }
 
 .seats {
@@ -84,43 +87,7 @@
 }
 
 .startDraw {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
   margin-bottom: 1.5rem;
-}
-
-/* "Ready to draw" / "Open the grimoire" — one tap per seat every game, and
-   previously fully unstyled (browser-default button chrome). */
-.drawAction {
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.6rem 1.1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* "Add to the circle" — the traveller-add form's submit. */
-.formSubmit {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .drawFlow {
@@ -200,7 +167,7 @@
   flex-direction: column;
   align-items: center;
   gap: 1rem;
-  animation: reveal-in 200ms ease;
+  animation: reveal-in var(--duration-base) var(--ease-standard);
 }
 
 /* Full-screen choosing stage (issue #158): composes .reveal's fixed-viewport
@@ -225,14 +192,20 @@
   }
 }
 
+/* Setup→play handoff (issue #220): see the GrimoireSetup.tsx comment at its
+   render site — mounts once, the moment the last seat is filled. Reuses
+   fade-in rather than also animating a transform: the BottomSheet nested
+   inside this wrapper is `position: fixed` (ADR 0004 — it floats over the
+   circle, anchored to the viewport), and any element with an animated
+   transform other than `none` becomes a containing block for its
+   `position: fixed` descendants for the animation's duration — which would
+   detach the sheet from the viewport and misposition it for this
+   animation's whole run. Opacity alone never creates a containing block. */
+.boardEnter {
+  animation: fade-in var(--duration-slow) var(--ease-emphasized);
+}
+
 .addTraveller {
-  padding: 0.6rem 1.1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
   margin-bottom: 1.5rem;
 }
 
@@ -267,29 +240,6 @@
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-}
-
-.walkthroughStart {
-  padding: 0.6rem 1.1rem;
-  font: inherit;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 2.75rem;
-}
-
-.walkthroughSkip {
-  padding: 0.6rem 1.1rem;
-  font: inherit;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  cursor: pointer;
-  min-height: 2.75rem;
 }
 
 /* max-width (issue #124): a native <select>'s intrinsic content width (e.g.
@@ -334,5 +284,46 @@
 }
 
 .circleArea {
+  position: relative;
   width: 100%;
+}
+
+/* Day/night phase sweep (issue #220): see the GrimoireSetup.tsx comment at
+   its render site — keyed on sheetPhase so it only remounts (replaying
+   this fade) on an actual phase change. A soft diagonal wash rather than a
+   flat tint, so it reads as a sweep passing across the circle instead of a
+   plain flash. Sized/positioned to match GrimoireBoard.module.css's own
+   .board box exactly (same width/height/centering) rather than filling
+   .circleArea's full (often wider, non-square) row — otherwise its
+   border-radius: 50% clip renders as a mismatched ellipse bleeding past
+   the actual round board underneath it. `forwards` is required, not
+   decorative: without it, the animation's end state (opacity: 0) doesn't
+   persist once the animation finishes — the element would silently snap
+   back to its un-animated base opacity (1, fully visible) and sit there
+   permanently until the next phase change replays this animation. */
+.phaseSweep {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  width: min(90vw, 40rem);
+  height: min(90vw, 40rem);
+  transform: translateX(-50%);
+  pointer-events: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    var(--accent-glow) 50%,
+    transparent 70%
+  );
+  animation: phase-sweep var(--duration-slow) var(--ease-emphasized) forwards;
+}
+
+@keyframes phase-sweep {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }

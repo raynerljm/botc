@@ -13,6 +13,7 @@ import {
 } from "@/lib/dayTimer";
 import type { GameDocument } from "@/lib/gameDocument";
 
+import { Button } from "./Button";
 import styles from "./DayTimer.module.css";
 
 export interface DayTimerProps {
@@ -56,14 +57,9 @@ export function DayTimer({ game, onChange }: DayTimerProps) {
     <div className={styles.widget} role="group" aria-label="Discussion timer">
       <div className={styles.presets}>
         {DAY_TIMER_PRESETS_MINUTES.map((minutes) => (
-          <button
-            key={minutes}
-            type="button"
-            className={styles.preset}
-            onClick={() => start(minutes)}
-          >
+          <Button key={minutes} onClick={() => start(minutes)}>
             {minutes} min
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -77,12 +73,10 @@ export function DayTimer({ game, onChange }: DayTimerProps) {
             {expired ? "Time's up" : formatDayTimerMs(remainingMs)}
           </span>
           <div className={styles.controls}>
-            <button type="button" className={styles.control} onClick={togglePause}>
+            <Button onClick={togglePause}>
               {timer.status === "running" ? "Pause" : "Resume"}
-            </button>
-            <button type="button" className={styles.control} onClick={reset}>
-              Reset
-            </button>
+            </Button>
+            <Button onClick={reset}>Reset</Button>
           </div>
         </div>
       )}
