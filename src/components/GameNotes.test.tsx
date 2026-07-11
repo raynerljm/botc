@@ -76,6 +76,55 @@ describe("GameNotes", () => {
     expect(onChangeSection).toHaveBeenLastCalledWith("night-1", "x");
   });
 
+  it("renders sections newest-first: latest phase on top, General last (issue #214)", () => {
+    const { container } = renderGameNotes(
+      makeGame({
+        notes: [
+          { id: "general", title: "General", text: "" },
+          { id: "night-1", title: "Night 1", text: "" },
+          { id: "day-1", title: "Day 1", text: "" },
+          { id: "night-2", title: "Night 2", text: "" },
+        ],
+      }),
+    );
+
+    const text = container.textContent ?? "";
+    const night2Index = text.indexOf("Night 2");
+    const day1Index = text.indexOf("Day 1");
+    const night1Index = text.indexOf("Night 1");
+    const generalIndex = text.indexOf("General");
+
+    expect(night2Index).toBeGreaterThanOrEqual(0);
+    expect(night2Index).toBeLessThan(day1Index);
+    expect(day1Index).toBeLessThan(night1Index);
+    expect(night1Index).toBeLessThan(generalIndex);
+  });
+
+  it("keeps a newly added phase section on top as its phase begins (issue #214)", () => {
+    const game = makeGame({
+      notes: [
+        { id: "general", title: "General", text: "" },
+        { id: "night-1", title: "Night 1", text: "" },
+      ],
+    });
+    const { container, rerender } = renderGameNotes(game);
+
+    rerender(
+      <GameNotes
+        game={{
+          ...game,
+          notes: [...game.notes, { id: "day-1", title: "Day 1", text: "" }],
+        }}
+        onChangeSection={vi.fn()}
+        onToggleCollapsed={vi.fn()}
+      />,
+    );
+
+    const text = container.textContent ?? "";
+    expect(text.indexOf("Day 1")).toBeLessThan(text.indexOf("Night 1"));
+    expect(text.indexOf("Night 1")).toBeLessThan(text.indexOf("General"));
+  });
+
   it("persists a manual collapse toggle via onToggleCollapsed", async () => {
     const user = userEvent.setup();
     const onToggleCollapsed = vi.fn();
