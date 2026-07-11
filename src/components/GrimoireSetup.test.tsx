@@ -1530,17 +1530,25 @@ describe("Lunatic seat display (stand-in identity + actually the Lunatic, issue 
 
 describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52)", () => {
   async function drunkBoard(user: ReturnType<typeof userEvent.setup>) {
+    const selectedCharacters = [
+      getCharacter("drunk")!,
+      getCharacter("chef")!,
+      getCharacter("grandmother")!,
+    ];
+    const standIn = getCharacter("washerwoman")!;
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
       playerCount: 2,
-      selectedCharacters: [
-        getCharacter("drunk")!,
-        getCharacter("chef")!,
-        getCharacter("grandmother")!,
-      ],
-      standIn: getCharacter("washerwoman")!,
+      selectedCharacters,
+      standIn,
       extraCopies: {},
+      // The real BagBuilder always passes the full script pool (issue #242)
+      // — without this, scriptCharacters defaults to just
+      // selectedCharacters, which omits the stand-in itself (Washerwoman)
+      // and any not-selected Townsfolk (Librarian) the picker should still
+      // offer.
+      scriptCharacters: [...selectedCharacters, standIn, getCharacter("librarian")!],
     });
     render(<GrimoireSetup game={game} />);
 
@@ -1615,35 +1623,36 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
 
     expect(options).not.toContain("Chef");
     expect(options).toContain("Grandmother");
+    // Issue #242: Librarian is on the script but never selected into the
+    // bag — the narrow-pool bug excluded it entirely, collapsing the
+    // picker to just the current stand-in.
+    expect(options).toContain("Librarian");
   });
 });
 
 describe("reassigning the Lunatic's stand-in from the setup walkthrough (issue #163)", () => {
   async function lunaticBoard(user: ReturnType<typeof userEvent.setup>) {
+    const selectedCharacters = [
+      getCharacter("lunatic")!,
+      getCharacter("chef")!,
+      getCharacter("zombuul")!,
+    ];
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
       playerCount: 2,
-      selectedCharacters: [
-        getCharacter("lunatic")!,
-        getCharacter("chef")!,
-        getCharacter("zombuul")!,
-      ],
+      selectedCharacters,
       standIn: null,
       lunaticStandIn: getCharacter("imp")!,
       extraCopies: {},
       // The real BagBuilder always passes the full script pool (issue #242:
       // the stand-in reassignment picker sources from it) — without this,
       // scriptCharacters defaults to just selectedCharacters, which omits
-      // Imp (the lunaticStandIn) entirely. Named explicitly rather than via
-      // getEditionCharacters("tb") since Zombuul isn't actually on that
-      // script — this scenario's "script" is this test's own fixture.
-      scriptCharacters: [
-        getCharacter("lunatic")!,
-        getCharacter("chef")!,
-        getCharacter("zombuul")!,
-        getCharacter("imp")!,
-      ],
+      // Imp (the lunaticStandIn) entirely. Derived from selectedCharacters
+      // rather than via getEditionCharacters("tb") since Zombuul isn't
+      // actually on that script — this scenario's "script" is this test's
+      // own fixture.
+      scriptCharacters: [...selectedCharacters, getCharacter("imp")!],
     });
     render(<GrimoireSetup game={game} />);
 

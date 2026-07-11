@@ -665,13 +665,16 @@ describe("review step (Drunk)", () => {
   // builder's own stand-in picker, is what this test locks in.
   it("offers the full script's Townsfolk, not just the narrow in-play pool (issue #242)", async () => {
     const user = userEvent.setup();
+    // Mirrors production: the characterPool prop only holds what's already
+    // selected/built into the bag (gameDocument.ts), which in a
+    // fully-seated game is entirely accounted for by held seats — the bug
+    // this issue fixes. game.scriptCharacters (the module-level
+    // characterPool fixture, the full script) is wider — named distinctly
+    // here so the two pools' identifiers can't be confused with each other.
+    const narrowCharacterPool = [getCharacter("washerwoman")!, getCharacter("imp")!];
     renderWalkthrough({
       steps: [drunkStep],
-      // Mirrors production: characterPool only holds what's already
-      // selected/built into the bag (gameDocument.ts), which in a
-      // fully-seated game is entirely accounted for by held seats — the bug
-      // this issue fixes. game.scriptCharacters (the full script) is wider.
-      characterPool: [getCharacter("washerwoman")!, getCharacter("imp")!],
+      characterPool: narrowCharacterPool,
       players: [
         makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "washerwoman" }),
         makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
