@@ -91,6 +91,12 @@ export interface GrimoireBoardProps {
   // Reopens the post-draw setup walkthrough (issue #26). Omitted entirely
   // when there's nothing for it to show, so no button renders.
   onOpenSetupWalkthrough?: () => void;
+  // Opens the mid-game "Add traveller"/"Add character" forms (owned by the
+  // page that hosts this board, not this component — see the comment on
+  // onOpenSetupWalkthrough above for why). Omitted entirely when there's
+  // nothing valid for it to open, so no menu entry renders (issue #217).
+  onOpenAddTraveller?: () => void;
+  onOpenAddCharacter?: () => void;
   // A value whose identity change signals that something outside this
   // component's own DOM (its board node, its wrapper, and the observed
   // body) has altered how much height is actually available for the circle
@@ -177,6 +183,15 @@ function fitBoardSizePx(
 const DRAG_THRESHOLD_PX = 6;
 
 type TokenKind = "player" | "reminder";
+// The board's own overflow menu (issue #217) is a single instance, not one
+// per token — but it closes the exact same way a token/reminder menu does
+// (an outside tap, or another menu opening), so it shares their openMenu/
+// isMenuOpenFor/handleMenuToggle machinery rather than growing a parallel
+// open/close system of its own.
+type MenuKind = TokenKind | "boardOptions";
+// The single board-options menu has no per-instance id to distinguish it by
+// (unlike a token/reminder's own id) — this constant fills that slot.
+const BOARD_MENU_ID = "board-options";
 
 interface DragState {
   kind: TokenKind;
@@ -223,6 +238,8 @@ export function GrimoireBoard({
   onSetClaim,
   onSetActsAs,
   onOpenSetupWalkthrough,
+  onOpenAddTraveller,
+  onOpenAddCharacter,
   remeasureOn,
 }: GrimoireBoardProps) {
   const claimById = useMemo(
@@ -444,7 +461,7 @@ export function GrimoireBoard({
   // source of truth every menu's `open` prop is derived from (issue #70:
   // opening one must close any other, and a tap outside must close it too).
   const [openMenu, setOpenMenu] = useState<{
-    kind: TokenKind;
+    kind: MenuKind;
     id: string;
   } | null>(null);
   const openMenuElRef = useRef<HTMLDetailsElement | null>(null);
@@ -453,7 +470,7 @@ export function GrimoireBoard({
   // `data-menu-open` (issue #117: lets CSS stack the open menu above
   // neighbours) must never drift apart, so both read this instead of each
   // re-deriving the same comparison (code review finding).
-  function isMenuOpenFor(kind: TokenKind, id: string): boolean {
+  function isMenuOpenFor(kind: MenuKind, id: string): boolean {
     return openMenu?.kind === kind && openMenu.id === id;
   }
 
@@ -475,8 +492,7 @@ export function GrimoireBoard({
       ) {
         return;
       }
-      openMenuElRef.current = null;
-      setOpenMenu(null);
+      closeMenu();
     }
     document.addEventListener("pointerdown", handlePointerDownOutside);
     return () =>
@@ -484,7 +500,7 @@ export function GrimoireBoard({
   }, [openMenu, activeOverlay]);
 
   function handleMenuToggle(
-    kind: TokenKind,
+    kind: MenuKind,
     id: string,
     event: React.SyntheticEvent<HTMLDetailsElement>,
   ) {
@@ -493,8 +509,7 @@ export function GrimoireBoard({
       openMenuElRef.current = details;
       setOpenMenu({ kind, id });
     } else if (openMenu?.kind === kind && openMenu.id === id) {
-      openMenuElRef.current = null;
-      setOpenMenu(null);
+      closeMenu();
     }
   }
   const reminderPicker =
@@ -761,11 +776,28 @@ export function GrimoireBoard({
   // activation of these controls (which fires no pointerdown, so the
   // outside-tap-close effect never runs) leaves it stale, and the next
   // mount reopens the same seat's menu unprompted (issue #70 code review).
+  // Closes whichever menu is currently open — a token/reminder's own, or
+  // the board's overflow menu (issue #217) — sharing one implementation
+  // rather than three copies of the same two-line reset (outside-tap-close
+  // above, cancelActiveDrag below, and every board-menu item's own handler).
+  function closeMenu() {
+    openMenuElRef.current = null;
+    setOpenMenu(null);
+  }
+
+  // Re-circling or hiding the board while a drag is still in progress must
+  // discard that in-progress gesture — otherwise its stale local position
+  // either overrides the freshly re-circled layout, or resurfaces at an
+  // unsaved coordinate once the board is shown again. Hiding (or showing
+  // the info token library) unmounts every seat's <details>, so an open
+  // menu's `openMenu` state must go with it too — otherwise a keyboard
+  // activation of these controls (which fires no pointerdown, so the
+  // outside-tap-close effect never runs) leaves it stale, and the next
+  // mount reopens the same seat's menu unprompted (issue #70 code review).
   function cancelActiveDrag() {
     dragRef.current = null;
     setLiveDrag(null);
-    openMenuElRef.current = null;
-    setOpenMenu(null);
+    closeMenu();
   }
 
   // Full-screen show mode replaces the board outright rather than layering
@@ -789,25 +821,6 @@ export function GrimoireBoard({
   return (
     <div className={styles.wrapper}>
       <div className={styles.controls} data-controls>
-        <Button
-          onClick={() => {
-            cancelActiveDrag();
-            // An overlay already open holds a player's position captured at
-            // open time — re-circling can move that player, so the stale
-            // parked position has to be discarded along with the drag.
-            setActiveOverlay(null);
-            setPlacingReminderId(null);
-            onReCircle();
-          }}
-        >
-          Re-circle
-        </Button>
-        <Button onClick={() => onRotate(stepRotation(rotation, -1))}>
-          Rotate left
-        </Button>
-        <Button onClick={() => onRotate(stepRotation(rotation, 1))}>
-          Rotate right
-        </Button>
         {!hidden && (
           <Button
             onClick={() => {
@@ -822,24 +835,114 @@ export function GrimoireBoard({
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
           <Button
-            onClick={() =>
-              setActiveOverlay({ type: "reminder", base: null, playerId: null })
-            }
+            onClick={() => {
+              // The board-options menu (issue #217) is a sibling control, not
+              // an ancestor of this button, so opening it doesn't close it —
+              // without this, tapping straight from an open board-options
+              // menu to here left it stranded open behind this overlay, with
+              // no way to dismiss it (the outside-tap-close effect no-ops
+              // while activeOverlay is set) until some other menu action.
+              closeMenu();
+              setActiveOverlay({ type: "reminder", base: null, playerId: null });
+            }}
           >
             Add reminder
           </Button>
         )}
         {!hidden && !activeOverlay && !placingReminderId && (
-          <Button onClick={() => setActiveOverlay({ type: "infoTokens" })}>
+          <Button
+            onClick={() => {
+              closeMenu();
+              setActiveOverlay({ type: "infoTokens" });
+            }}
+          >
             Info tokens
           </Button>
         )}
-        {!hidden &&
-          !activeOverlay &&
-          !placingReminderId &&
-          onOpenSetupWalkthrough && (
-            <Button onClick={onOpenSetupWalkthrough}>Setup walkthrough</Button>
-          )}
+
+        {/* One-time/setup actions, tucked behind a single overflow trigger
+            (issue #217) so they don't compete with the frequent controls
+            above as equal peers. Shares the same open/close plumbing as
+            every token/reminder menu (isMenuOpenFor/handleMenuToggle) rather
+            than a bespoke system of its own. */}
+        <details
+          className={styles.boardMenu}
+          open={isMenuOpenFor("boardOptions", BOARD_MENU_ID)}
+          onToggle={(event) =>
+            handleMenuToggle("boardOptions", BOARD_MENU_ID, event)
+          }
+        >
+          <summary className={styles.boardMenuSummary}>
+            <span aria-hidden="true">⋯</span>
+            <span className={styles.srOnly}>Board options</span>
+          </summary>
+          <div className={styles.boardMenuBody}>
+            {onOpenAddTraveller && (
+              <Button
+                onClick={() => {
+                  closeMenu();
+                  onOpenAddTraveller();
+                }}
+              >
+                Add traveller
+              </Button>
+            )}
+            {onOpenAddCharacter && (
+              <Button
+                onClick={() => {
+                  closeMenu();
+                  onOpenAddCharacter();
+                }}
+              >
+                Add character
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                closeMenu();
+                onRotate(stepRotation(rotation, -1));
+              }}
+            >
+              Rotate left
+            </Button>
+            <Button
+              onClick={() => {
+                closeMenu();
+                onRotate(stepRotation(rotation, 1));
+              }}
+            >
+              Rotate right
+            </Button>
+            {!hidden &&
+              !activeOverlay &&
+              !placingReminderId &&
+              onOpenSetupWalkthrough && (
+                <Button
+                  onClick={() => {
+                    closeMenu();
+                    onOpenSetupWalkthrough();
+                  }}
+                >
+                  Setup walkthrough
+                </Button>
+              )}
+            <Button
+              onClick={() => {
+                cancelActiveDrag();
+                // An overlay already open holds a player's position captured
+                // at open time — re-circling can move that player, so the
+                // stale parked position has to be discarded along with the
+                // drag. cancelActiveDrag already closes this menu too, via
+                // the shared closeMenu().
+                setActiveOverlay(null);
+                setPlacingReminderId(null);
+                onReCircle();
+              }}
+            >
+              Re-circle
+            </Button>
+          </div>
+        </details>
       </div>
 
       {!hidden && placingReminderId && (

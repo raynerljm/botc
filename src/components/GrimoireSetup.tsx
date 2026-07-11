@@ -1255,8 +1255,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           leak issue #111 closed for the official bag's manual-assign
           selects. Always offered regardless of travellerBag's size — a
           traveller may join at any time per the rulebook, even in a game
-          built with 0 travellers (issue #119). */}
-      {!draw && !travellerFormOpen && (
+          built with 0 travellers (issue #119).
+          Hidden once setupComplete (issue #217): the board exists by then,
+          and reaches this same openTravellerForm through its own overflow
+          menu instead — see the GrimoireBoard onOpenAddTraveller prop below. */}
+      {!draw && !travellerFormOpen && !setupComplete && (
         <Button className={styles.addTraveller} onClick={openTravellerForm}>
           Add traveller
         </Button>
@@ -1305,12 +1308,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
         </form>
       )}
 
-      {setupComplete && !screenObscured && !tokenFormOpen && (
-        <Button className={styles.addTraveller} onClick={openTokenForm}>
-          Add character
-        </Button>
-      )}
-
+      {/* No standalone trigger button here (issue #217) — reached through
+          the board's own overflow menu instead (onOpenAddCharacter below),
+          since this form is only ever valid once the board already exists. */}
       {setupComplete && !screenObscured && tokenFormOpen && (
         <form className={styles.travellerForm} onSubmit={addToken}>
           <label>
@@ -1434,6 +1434,26 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 // generically reusable board, not specific to this.
                 onOpenSetupWalkthrough={
                   firstNightEnded(game) ? undefined : openWalkthrough
+                }
+                // Both forms are owned by this component (they seed default
+                // selections from state only this page holds — travellerBag,
+                // lastSeat), so the board just gets a callback to open them,
+                // the same delegation onOpenSetupWalkthrough already uses.
+                // Hidden while its own form is already open, matching what
+                // the old standalone trigger buttons did (issue #217).
+                // `draw` is guaranteed null here in practice (GrimoireBoard
+                // only mounts once setupComplete, which precludes a "choosing"
+                // stage draw needing an unassigned seat) — but openTravellerForm
+                // seeds its default from travellerBag[0], the same bag-leak
+                // shape issue #111 closed for manual-assign selects, so this
+                // still checks `!draw` explicitly rather than leaning on that
+                // cross-file invariant staying true forever (code review
+                // finding).
+                onOpenAddTraveller={
+                  draw || travellerFormOpen ? undefined : openTravellerForm
+                }
+                onOpenAddCharacter={
+                  tokenFormOpen ? undefined : openTokenForm
                 }
                 // Swapping which of Night list/Day phase renders the sheet
                 // (below) mounts a genuinely different DOM node — this tells

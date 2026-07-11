@@ -79,6 +79,17 @@ function pointerEvent(
   return event;
 }
 
+// Opens the board's overflow menu (issue #217) — Re-circle, Rotate left/
+// right, Setup walkthrough, Add traveller, and Add character all live
+// behind it now, so any test exercising one of those needs this first. The
+// summary has no accessible "button" role in this environment (unlike a
+// real <button>), so it's found by its (visually hidden) label text instead
+// — the same convention this file already uses for a token's own summary
+// (queried by its rendered name text, not by role).
+async function openBoardMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByText("Board options"));
+}
+
 function makeHandlers() {
   return {
     onRename: vi.fn(),
@@ -134,6 +145,8 @@ function renderBoard(
       nominatorTodayIds?: ReadonlySet<string>;
       nomineeTodayIds?: ReadonlySet<string>;
       onOpenSetupWalkthrough?: () => void;
+      onOpenAddTraveller?: () => void;
+      onOpenAddCharacter?: () => void;
       rotation?: number;
     }
   > = {},
@@ -757,6 +770,7 @@ describe("re-circle", () => {
       makePlayer({ id: "p1", position: { x: 10, y: 10 } }),
     ]);
 
+    await openBoardMenu(user);
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
 
     expect(handlers.onReCircle).toHaveBeenCalled();
@@ -796,6 +810,7 @@ describe("re-circle", () => {
     );
     expect(wrap.style.left).toBe("20%");
 
+    await openBoardMenu(user);
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     // The stale in-progress drag position must not resurface on the next
     // pointermove for the same (now-abandoned) gesture.
@@ -813,9 +828,11 @@ describe("rotate the grimoire (issue #192)", () => {
     const user = userEvent.setup();
     const handlers = renderBoard([makePlayer()], { rotation: 0 });
 
+    await openBoardMenu(user);
     await user.click(screen.getByRole("button", { name: "Rotate right" }));
     expect(handlers.onRotate).toHaveBeenCalledWith(45);
 
+    await openBoardMenu(user);
     await user.click(screen.getByRole("button", { name: "Rotate left" }));
     expect(handlers.onRotate).toHaveBeenCalledWith(315);
   });
@@ -1494,6 +1511,7 @@ describe("reminders (issue #14)", () => {
       screen.getByRole("dialog", { name: "Add reminder" }),
     ).toBeInTheDocument();
 
+    await openBoardMenu(user);
     await user.click(screen.getByRole("button", { name: /re-circle/i }));
     expect(
       screen.queryByRole("dialog", { name: "Add reminder" }),
@@ -1844,17 +1862,21 @@ describe("reminder placement (issue #71)", () => {
 });
 
 describe("setup walkthrough reopen button (issue #26)", () => {
-  it("renders the button when a handler is provided", () => {
+  it("renders the button in the board's overflow menu when a handler is provided", async () => {
+    const user = userEvent.setup();
     renderBoard([makePlayer()], { onOpenSetupWalkthrough: vi.fn() });
 
+    await openBoardMenu(user);
     expect(
       screen.getByRole("button", { name: "Setup walkthrough" }),
     ).toBeInTheDocument();
   });
 
-  it("omits the button entirely when there's nothing for it to reopen", () => {
+  it("omits the button entirely when there's nothing for it to reopen", async () => {
+    const user = userEvent.setup();
     renderBoard([makePlayer()]);
 
+    await openBoardMenu(user);
     expect(
       screen.queryByRole("button", { name: "Setup walkthrough" }),
     ).not.toBeInTheDocument();
@@ -1865,6 +1887,7 @@ describe("setup walkthrough reopen button (issue #26)", () => {
     const onOpenSetupWalkthrough = vi.fn();
     renderBoard([makePlayer()], { onOpenSetupWalkthrough });
 
+    await openBoardMenu(user);
     await user.click(screen.getByRole("button", { name: "Setup walkthrough" }));
     expect(onOpenSetupWalkthrough).toHaveBeenCalled();
   });
@@ -1879,9 +1902,124 @@ describe("setup walkthrough reopen button (issue #26)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Add reminder" }),
     );
+    await openBoardMenu(user);
 
     expect(
       screen.queryByRole("button", { name: "Setup walkthrough" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("board options overflow menu (issue #217)", () => {
+  it("keeps the frequent actions directly on the board, not behind the overflow menu", () => {
+    const { container } = renderBoard([makePlayer()]);
+
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+    // The overflow menu's own body is also inside [data-controls] — scoping
+    // to controls alone wouldn't catch these three having been nested inside
+    // it by mistake, so each is asserted absent from .boardMenuBody too.
+    const menuBody = container.querySelector(
+      `.${styles.boardMenuBody}`,
+    ) as HTMLElement;
+    for (const name of ["Hide grimoire", "Add reminder", "Info tokens"]) {
+      expect(
+        within(controls).getByRole("button", { name }),
+      ).toBeInTheDocument();
+      expect(
+        within(menuBody).queryByRole("button", { name }),
+      ).not.toBeInTheDocument();
+    }
+  });
+
+  // jsdom doesn't implement the browser's native "hide non-summary content
+  // while a <details> is closed" behavior, so a closed menu's items stay
+  // queryable here even though a real browser would visually hide them —
+  // the <details> element's own `open` property is what's actually
+  // observable in this environment, so that's what these assert against
+  // rather than the (here, unreliable) presence of its contents.
+  it("tucks Rotate left/right and Re-circle behind the overflow menu, closed by default", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    const menu = screen.getByText("Board options").closest("details")!;
+    expect(menu.open).toBe(false);
+
+    await openBoardMenu(user);
+
+    expect(menu.open).toBe(true);
+    expect(
+      screen.getByRole("button", { name: "Rotate left" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Rotate right" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /re-circle/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes itself once an item is chosen", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    const menu = screen.getByText("Board options").closest("details")!;
+    await openBoardMenu(user);
+    expect(menu.open).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+
+    expect(menu.open).toBe(false);
+  });
+
+  it("closes itself when 'Add reminder' or 'Info tokens' is opened instead of one of its own items (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([makePlayer()]);
+    const menu = screen.getByText("Board options").closest("details")!;
+    const controls = container.querySelector("[data-controls]") as HTMLElement;
+
+    await openBoardMenu(user);
+    expect(menu.open).toBe(true);
+    await user.click(
+      within(controls).getByRole("button", { name: "Add reminder" }),
+    );
+    expect(menu.open).toBe(false);
+    // Close the picker before exercising the second trigger.
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    await openBoardMenu(user);
+    expect(menu.open).toBe(true);
+    await user.click(
+      within(controls).getByRole("button", { name: "Info tokens" }),
+    );
+    expect(menu.open).toBe(false);
+  });
+
+  it("offers Add traveller/Add character only when a handler is provided, and calls it on click", async () => {
+    const user = userEvent.setup();
+    const onOpenAddTraveller = vi.fn();
+    const onOpenAddCharacter = vi.fn();
+    renderBoard([makePlayer()], { onOpenAddTraveller, onOpenAddCharacter });
+
+    await openBoardMenu(user);
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    expect(onOpenAddTraveller).toHaveBeenCalled();
+
+    await openBoardMenu(user);
+    await user.click(screen.getByRole("button", { name: "Add character" }));
+    expect(onOpenAddCharacter).toHaveBeenCalled();
+  });
+
+  it("omits Add traveller/Add character when no handler is provided", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer()]);
+
+    await openBoardMenu(user);
+
+    expect(
+      screen.queryByRole("button", { name: "Add traveller" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add character" }),
     ).not.toBeInTheDocument();
   });
 });
