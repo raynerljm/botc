@@ -385,16 +385,65 @@
   color: var(--foreground);
 }
 
+/* --surface-raised at rest, matching every sibling control in this menu
+   (.select/.textInput/.claimSelect) — .menuBody itself is --surface, so a
+   --surface disclosure would blend into it instead of reading as a
+   distinct, tappable control. No overflow: hidden, so a keyboard focus
+   ring on .detailSummary or .detailLink isn't clipped by the rounded
+   corners. */
+.detail {
+  width: 100%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
 .detailSummary {
   min-height: 2.75rem;
   display: flex;
   align-items: center;
-  padding: 0.5rem 0;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--foreground);
   cursor: pointer;
+  list-style: none;
 }
 
-.detail {
-  width: 100%;
+.detailSummary::-webkit-details-marker {
+  display: none;
+}
+
+.detailChevron {
+  font-size: 0.7rem;
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.detail[open] .detailChevron {
+  transform: rotate(90deg);
+}
+
+.detailBody {
+  padding: 0 0.75rem 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.detailAbility {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+.detailLink {
+  color: var(--accent);
+  font-size: 0.85rem;
+  width: fit-content;
+}
+
+.detailLink:hover {
+  text-decoration: underline;
 }
 
 .ghostVote {

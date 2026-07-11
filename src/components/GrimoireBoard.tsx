@@ -1265,28 +1265,40 @@ export function GrimoireBoard({
                       <details className={styles.detail}>
                         <summary className={styles.detailSummary}>
                           Character detail
-                        </summary>
-                        <p>{character.ability}</p>
-                        {official ? (
-                          <a
-                            href={wikiUrl(character)}
-                            target="_blank"
-                            rel="noreferrer"
+                          <span
+                            className={styles.detailChevron}
+                            aria-hidden="true"
                           >
-                            Official wiki page
-                          </a>
-                        ) : (
-                          almanacUrl &&
-                          isHttpUrl(almanacUrl) && (
+                            ▸
+                          </span>
+                        </summary>
+                        <div className={styles.detailBody}>
+                          <p className={styles.detailAbility}>
+                            {character.ability}
+                          </p>
+                          {official ? (
                             <a
-                              href={almanacUrl}
+                              href={wikiUrl(character)}
                               target="_blank"
                               rel="noreferrer"
+                              className={styles.detailLink}
                             >
-                              Script almanac
+                              Official wiki page
                             </a>
-                          )
-                        )}
+                          ) : (
+                            almanacUrl &&
+                            isHttpUrl(almanacUrl) && (
+                              <a
+                                href={almanacUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className={styles.detailLink}
+                              >
+                                Script almanac
+                              </a>
+                            )
+                          )}
+                        </div>
                       </details>
                     )}
                   </div>
