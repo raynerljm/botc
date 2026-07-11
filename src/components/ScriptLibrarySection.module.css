@@ -59,7 +59,6 @@
 .meta {
   color: var(--muted);
   font-size: 0.9rem;
-  white-space: nowrap;
 }
 
 .empty {
