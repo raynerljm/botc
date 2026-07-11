@@ -535,6 +535,28 @@ describe("token menu", () => {
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
   });
+
+  it("styles the character-detail disclosure with a chevron affordance, not a bare native control", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ characterId: "washerwoman" })]);
+
+    await user.click(screen.getByText("Alice"));
+    const summary = screen.getByText(/character detail/i);
+
+    expect(summary).toHaveClass(styles.detailSummary);
+    const chevron = summary.querySelector("[aria-hidden='true']");
+    expect(chevron).toBeInTheDocument();
+    expect(chevron).toHaveClass(styles.detailChevron);
+
+    await user.click(summary);
+
+    expect(screen.getByText(getCharacter("washerwoman")!.ability)).toHaveClass(
+      styles.detailAbility,
+    );
+    expect(screen.getByRole("link", { name: /wiki/i })).toHaveClass(
+      styles.detailLink,
+    );
+  });
 });
 
 describe("claims", () => {
