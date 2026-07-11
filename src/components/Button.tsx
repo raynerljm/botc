@@ -28,12 +28,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
+        {...props}
         type={type}
         data-variant={variant}
         className={[styles.button, styles[variant], className]
           .filter(Boolean)
           .join(" ")}
-        {...props}
       />
     );
   },
