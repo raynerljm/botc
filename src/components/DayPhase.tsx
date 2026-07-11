@@ -271,6 +271,11 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       // glanceable storyteller aid (issue #190) that must stay visible even
       // while the sheet is peeking (issue #168).
       above={<DayTimer game={game} onChange={onChange} />}
+      // The timer's full-size Pause/Resume/Reset controls need more peek
+      // headroom than Night's own content, so this is the one BottomSheet
+      // call site that opts into the roomier bound (issue #216 code review
+      // finding) rather than that bound becoming everyone's default.
+      peekVariant="roomy"
       // Below the collapsible body, unlike the nomination form/history
       // itself — a storyteller peeking the sheet to reclaim circle width
       // (issue #168) still needs this glanceable status without expanding

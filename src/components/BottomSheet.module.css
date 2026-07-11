@@ -14,6 +14,16 @@
    animates between them, and dragging the handle (BottomSheet.tsx) live-
    overrides this via an inline style during the gesture. */
 .panel {
+  /* "compact" fits Night's own peek content (handle, heading, a one-line
+     progress status) and is the default. Day phase's peek content — handle,
+     the day timer's running countdown with its full-size (2.75rem tap
+     target) Pause/Resume/Reset buttons, and the heading — needs roughly
+     9-10rem to avoid clipping the heading, so it opts into "roomy" via
+     `peekVariant` (issue #216 code review finding: a single bound sized for
+     Day's content left Night's much shorter peek with dead space it never
+     asked for). Either way the panel stays a scrollable fallback for the
+     rarer case (e.g. a block holder recorded while the timer is also
+     running) that still doesn't fit. */
   --sheet-peek-height: clamp(4.5rem, 16vh, 7.5rem);
   --sheet-expanded-height: 45vh;
   display: flex;
@@ -59,6 +69,10 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.panel[data-peek-variant="roomy"] {
+  --sheet-peek-height: clamp(4.5rem, 20vh, 10rem);
 }
 
 .panel[data-expanded] {
