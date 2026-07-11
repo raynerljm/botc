@@ -30,7 +30,7 @@
   color: var(--muted);
 }
 
-.textarea {
+.control {
   font-family: inherit;
   font-size: 0.9rem;
   padding: 0.6rem;
@@ -38,6 +38,10 @@
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   color: var(--foreground);
+}
+
+.textarea {
+  composes: control;
   resize: vertical;
 }
 

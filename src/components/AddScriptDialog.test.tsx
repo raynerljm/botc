@@ -56,6 +56,74 @@ describe("AddScriptDialog", () => {
     });
   });
 
+  it("prefills the name field from the script's _meta name", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: {
+        value: JSON.stringify([
+          { id: "_meta", name: "My Script" },
+          "washerwoman",
+        ]),
+      },
+    });
+
+    expect(screen.getByLabelText(/^name/i)).toHaveValue("My Script");
+  });
+
+  it("prefills the name field even while the rest of the script is still invalid", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: {
+        value: JSON.stringify([
+          { id: "_meta", name: "My Script" },
+          "not-a-character",
+        ]),
+      },
+    });
+
+    expect(screen.getByLabelText(/^name/i)).toHaveValue("My Script");
+  });
+
+  it("lets the user edit the prefilled name before saving", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: {
+        value: JSON.stringify([
+          { id: "_meta", name: "My Script" },
+          "washerwoman",
+        ]),
+      },
+    });
+    const nameInput = screen.getByLabelText(/^name/i);
+    await user.clear(nameInput);
+    await user.type(nameInput, "Renamed Script");
+    await user.click(screen.getByRole("button", { name: "Add script" }));
+
+    expect(listCustomScripts()[0]).toMatchObject({ name: "Renamed Script" });
+  });
+
+  it("saves as Untitled script when the name field is left blank", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: { value: '["washerwoman"]' },
+    });
+    await user.click(screen.getByRole("button", { name: "Add script" }));
+
+    expect(listCustomScripts()[0]).toMatchObject({ name: "Untitled script" });
+  });
+
   it("shows a friendly error and does not save when the JSON is malformed", async () => {
     render(<AddScriptDialog onAdded={vi.fn()} />);
     const user = userEvent.setup();
