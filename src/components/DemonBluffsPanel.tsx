@@ -237,7 +237,7 @@ function ShowToDemonOverlay({
           </li>
         ))}
       </ul>
-      <Button ref={closeButtonRef} className={styles.closeButton} onClick={onClose}>
+      <Button ref={closeButtonRef} onClick={onClose}>
         Close
       </Button>
     </div>

@@ -78,10 +78,11 @@
   color: var(--foreground);
 }
 
-/* Icon: icon-only controls — same tap target, square and unlabeled. */
+/* Icon: icon-only controls — same 2.75rem tap target as every other tier
+   (this app's baseline, e.g. .button above), just square and unlabeled. */
 .icon {
-  min-height: 2.5rem;
-  min-width: 2.5rem;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
   padding: 0.4rem;
   border-color: transparent;
   background: transparent;

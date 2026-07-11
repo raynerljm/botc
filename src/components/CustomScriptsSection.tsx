@@ -50,7 +50,7 @@ export function CustomScriptsSection() {
                 )}
               </Link>
               <Button
-                variant="ghost"
+                variant="destructive"
                 className={styles.remove}
                 onClick={() => setPendingRemove(script)}
               >

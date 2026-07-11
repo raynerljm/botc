@@ -294,9 +294,9 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       {game.lastEndedNightSnapshot && (
         <Button
           variant="ghost"
-          className={[bottomSheetStyles.backAlign, styles.reopenNight].join(
-            " ",
-          )}
+          className={[bottomSheetStyles.backAlign, styles.reopenNight]
+            .filter(Boolean)
+            .join(" ")}
           onClick={undoEndNight}
         >
           ← Reopen {phaseLabel(phaseForNight(game.night), game.night)}
@@ -345,12 +345,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               ? `${selectedNominator.name} will nominate ${selectedNominee.name}`
               : "Choose a nominator and a nominee to start a nomination."}
           </p>
-          <Button
-            type="submit"
-            variant="primary"
-            className={styles.submit}
-            disabled={!canSubmit}
-          >
+          <Button type="submit" variant="primary" disabled={!canSubmit}>
             Record nomination
           </Button>
         </form>

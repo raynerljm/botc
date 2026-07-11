@@ -1239,7 +1239,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                   : "Card hidden. Return the device to the storyteller."}
               </p>
               <Button
-                className={styles.drawAction}
                 onClick={nextUnassignedSeat ? readyForNextDraw : openGrimoire}
               >
                 {nextUnassignedSeat ? "Ready to draw" : "Open the grimoire"}
@@ -1300,7 +1299,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               }))}
             />
           </label>
-          <Button type="submit" variant="primary" className={styles.formSubmit}>
+          <Button type="submit" variant="primary">
             Add to the circle
           </Button>
         </form>
@@ -1375,9 +1374,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 <Button variant="primary" onClick={openWalkthrough}>
                   Start walkthrough
                 </Button>
-                <Button variant="ghost" onClick={dismissWalkthroughOffer}>
-                  Skip
-                </Button>
+                <Button onClick={dismissWalkthroughOffer}>Skip</Button>
               </div>
             )}
           {/* Stays mounted (just hidden) rather than being swapped out for

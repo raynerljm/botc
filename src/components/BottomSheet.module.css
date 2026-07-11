@@ -49,9 +49,13 @@
    action (← Back, ← Reopen) are now the shared Button primitive's primary
    and ghost tiers (issue #215) — NightList/DayPhase render <Button
    variant="primary"|"ghost"> directly instead of composing local classes
-   here. .backAlign is the one layout bit Button itself doesn't know: the
-   back/undo control sits at the start of the sheet's content, not centered
-   or full-width like a Button defaults to. */
+   here. .backAlign covers what Button itself doesn't know: the back/undo
+   control sits at the start of the sheet's content rather than centered or
+   full-width like a Button defaults to, and stays visibly smaller than a
+   forward action so it can't be confused with one (issue #165 AC). */
 .backAlign {
   align-self: flex-start;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
 }

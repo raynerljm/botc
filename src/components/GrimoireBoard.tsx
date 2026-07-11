@@ -1036,10 +1036,7 @@ export function GrimoireBoard({
                       />
                     </label>
 
-                    <Button
-                      className={styles.markDead}
-                      onClick={() => onToggleDead(player.id)}
-                    >
+                    <Button onClick={() => onToggleDead(player.id)}>
                       {player.dead ? "Mark alive" : "Mark dead"}
                     </Button>
 
@@ -1064,16 +1061,13 @@ export function GrimoireBoard({
                     </label>
 
                     {isHiddenDrunk && (
-                      <Button
-                        className={styles.menuButton}
-                        onClick={() => onRevealDrunk(player.id)}
-                      >
+                      <Button onClick={() => onRevealDrunk(player.id)}>
                         Reveal Drunk
                       </Button>
                     )}
 
                     <Button
-                      className={styles.menuButton}
+                      variant="destructive"
                       onClick={() => onRemovePlayer(player.id)}
                     >
                       Remove player
@@ -1081,7 +1075,6 @@ export function GrimoireBoard({
 
                     {!activeOverlay && !placingReminderId && (
                       <Button
-                        className={styles.menuButton}
                         onClick={() =>
                           setActiveOverlay({
                             type: "reminder",

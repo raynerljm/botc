@@ -42,7 +42,7 @@
 }
 
 .errors {
-  color: var(--team-demon);
+  color: var(--evil);
   font-size: 0.9rem;
   display: grid;
   gap: 0.25rem;

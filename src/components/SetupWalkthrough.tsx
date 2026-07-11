@@ -349,13 +349,7 @@ function StepPanel({
             />
           )}
 
-          <Button
-            variant="ghost"
-            className={styles.skip}
-            onClick={() => resolve("skipped")}
-          >
-            Skip
-          </Button>
+          <Button onClick={() => resolve("skipped")}>Skip</Button>
         </>
       )}
     </fieldset>

@@ -111,7 +111,7 @@ function ShareScriptModal({
             Copy link if scanning fails.
           </p>
         )}
-        <Button variant="primary" className={styles.copy} onClick={copyUrl}>
+        <Button variant="primary" onClick={copyUrl}>
           {copied ? "Copied!" : "Copy link"}
         </Button>
         {copyFailed && (

@@ -73,12 +73,10 @@ export function DayTimer({ game, onChange }: DayTimerProps) {
             {expired ? "Time's up" : formatDayTimerMs(remainingMs)}
           </span>
           <div className={styles.controls}>
-            <Button variant="ghost" onClick={togglePause}>
+            <Button onClick={togglePause}>
               {timer.status === "running" ? "Pause" : "Resume"}
             </Button>
-            <Button variant="ghost" onClick={reset}>
-              Reset
-            </Button>
+            <Button onClick={reset}>Reset</Button>
           </div>
         </div>
       )}
