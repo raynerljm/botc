@@ -29,6 +29,15 @@
   --team-demon: #d85f5f;
   --team-traveller: #b08ad8;
 
+  /* Gilded-accent tiers (issue #219): every derived translucent-gold value
+     used by the atmospheric background, grimoire circle, and token framing
+     draws from these three, instead of each call site hand-deriving its own
+     color-mix() percentage — the same reuse rationale as the motion tokens
+     below. */
+  --accent-glow: color-mix(in srgb, var(--accent) 7%, transparent);
+  --accent-ring-soft: color-mix(in srgb, var(--accent) 35%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 55%, transparent);
+
   /* Typography: a display serif for headings against the body's system-ui
      sans, so headings read as a distinct voice without depending on a
      network font fetch (ADR 0001 — the app must work offline). */
@@ -81,7 +90,26 @@ body {
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  /* Atmospheric background (issue #219): a low-contrast candlelit-vignette
+     over the flat --background, not a busy illustration. A warm glow high
+     and off-centre (like a single lamp over the table) fading into a
+     darker vignette at the corners — static, so it never competes with
+     token/reminder legibility or costs a frame of animation. Scrolls with
+     the page (no `background-attachment: fixed`) since that property is
+     unreliable/janky on mobile browsers, which is where this app is mostly
+     used. */
+  background:
+    radial-gradient(
+      ellipse 70% 50% at 50% 0%,
+      var(--accent-glow),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 120% 90% at 50% 100%,
+      rgb(0 0 0 / 40%),
+      transparent 60%
+    ),
+    var(--background);
   font-family: var(--font-body);
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;

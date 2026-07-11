@@ -82,17 +82,80 @@
   animation: fade-slide-in 160ms ease;
 }
 
+/* Themed grimoire circle (issue #219): a gilded clock-face rather than a
+   plain dashed ring — a soft radial "dial" fill, a thin gold hairline, and
+   a lifting drop shadow. The tick marks are drawn by .board::before below
+   so the ring itself stays a plain circle for hit-testing/layout math
+   elsewhere in this file (data-board queries, drag math) that assume
+   .board's own box is the circle. */
 .board {
   position: relative;
   width: min(90vw, 40rem);
   height: min(90vw, 40rem);
   margin: 1rem auto 3rem;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 42%,
+    var(--surface) 0%,
+    var(--background) 72%
+  );
+  box-shadow:
+    0 0 0 3px var(--accent-ring-soft),
+    0 24px 48px -20px rgb(0 0 0 / 65%);
+}
+
+/* Twelve gold ticks in a band just inside the rim — a clock-face nod
+   fitting the "clocktower" theme. A repeating-conic-gradient radiates
+   full-circle lines from the centre by default; mask-image trims that down
+   to a band well inside the border (not flush against it, where a 1px
+   border would swallow a similarly-thin tick) so the ticks read clearly as
+   rim marks rather than a busy pie behind every token. Purely decorative
+   (no content, pointer-events: none) so it never intercepts a token/
+   reminder drag. */
+.board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--accent-ring) 0deg 0.9deg,
+    transparent 0.9deg 30deg
+  );
+  /* `circle farthest-side` (not the bare `circle` default of
+     farthest-corner) is what makes 100% land exactly on the visible rim —
+     .board is a square box, so farthest-corner reaches past the circle
+     border-radius clips to, pushing the whole "opaque" band outside the
+     visible circle where it's invisible. One custom property feeds both the
+     standard and -webkit- properties below so the two can't drift apart the
+     way two independently-typed copies of the same gradient could. */
+  --rim-mask: radial-gradient(
+    circle farthest-side,
+    transparent 83%,
+    black 86%,
+    black 93%,
+    transparent 96%
+  );
+  mask-image: var(--rim-mask);
+  -webkit-mask-image: var(--rim-mask);
 }
 
 .board[data-hidden="true"] {
   background: var(--surface);
+}
+
+/* The privacy screen (Hide grimoire) must not leak any game state — no dial
+   ticks bleeding through underneath it. The gold ring/border/drop-shadow
+   chrome on .board itself is left alone: it carries no information (unlike
+   the ticks, which hint at "a circle with content"), and .board's border
+   already survived the hidden state before this issue (the pre-existing
+   data-hidden rule above only ever overrode `background`, never `border`),
+   so this keeps that same precedent rather than stripping polish a privacy
+   guard doesn't need to strip. */
+.board[data-hidden="true"]::before {
+  content: none;
 }
 
 .tokenWrap {
@@ -211,10 +274,21 @@
   display: none;
 }
 
+/* Gilded token framing (issue #219): a dark separator ring plus a thin gold
+   ring around every seat token/placeholder, lifted off the dial with a soft
+   drop shadow — reads as a set medallion rather than a bare circular photo.
+   box-shadow (not border) so it doesn't affect the token's own layout box,
+   which .shroud (the death overlay, inset: 0 on this same element) still
+   needs to match exactly. */
 .tokenVisual {
   position: relative;
   width: var(--token-size, 3rem);
   height: var(--token-size, 3rem);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3px var(--accent-ring),
+    0 3px 8px -2px rgb(0 0 0 / 60%);
 }
 
 .tokenVisual :global(img),
