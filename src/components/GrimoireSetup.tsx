@@ -1521,13 +1521,6 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onOpenAddCharacter={
                   tokenFormOpen ? undefined : openTokenForm
                 }
-                // Swapping which of Night list/Day phase renders the sheet
-                // (below) mounts a genuinely different DOM node — this tells
-                // the board to re-fit the circle around it immediately,
-                // rather than waiting on an unrelated resize (issue #195,
-                // extending issue #194's "circle re-fits ... as the sheet
-                // expands and collapses" AC to a phase change too).
-                remeasureOn={sheetPhase}
               />
             </div>
             {/* Renders as a fixed-position bottom sheet (BottomSheet.module.css)
