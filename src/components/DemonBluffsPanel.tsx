@@ -21,16 +21,22 @@ export interface DemonBluffsPanelProps {
   // (the other consumer of this props type, for the setup walkthrough) has
   // no root element of its own to hide, so it just ignores the field.
   hidden?: boolean;
-  // Only DemonBluffsFields uses this — the setup walkthrough passes false to
-  // suppress "Show to Demon", since bluffs are revealed to the Demon during
-  // the first night's night order, not during pre-game setup (issue #211).
-  // Defaults to true so the board panel keeps its reveal button unchanged.
+  // The setup walkthrough passes false to suppress "Show to Demon", since
+  // bluffs are revealed to the Demon during the first night's night order,
+  // not during pre-game setup (issue #211). Defaults to true, and forwarded
+  // through unchanged by DemonBluffsPanel, so the board panel keeps its
+  // reveal button unless a caller deliberately opts out.
   showToDemonButton?: boolean;
 }
 
 const GOOD_TEAMS = new Set<Character["team"]>(["townsfolk", "outsider"]);
 
-export function DemonBluffsPanel({ game, onChange, hidden }: DemonBluffsPanelProps) {
+export function DemonBluffsPanel({
+  game,
+  onChange,
+  hidden,
+  showToDemonButton,
+}: DemonBluffsPanelProps) {
   return (
     <section className={styles.panel} aria-label="Demon bluffs" hidden={hidden}>
       <CollapsibleSection
@@ -40,7 +46,11 @@ export function DemonBluffsPanel({ game, onChange, hidden }: DemonBluffsPanelPro
           onChange({ ...game, demonBluffsCollapsed: collapsed })
         }
       >
-        <DemonBluffsFields game={game} onChange={onChange} />
+        <DemonBluffsFields
+          game={game}
+          onChange={onChange}
+          showToDemonButton={showToDemonButton}
+        />
       </CollapsibleSection>
     </section>
   );
