@@ -181,6 +181,13 @@ function fitBoardSizePx(
 // A real finger drag always moves a few pixels before settling — without a
 // threshold, every tap-to-open-the-menu would also fire a (near-zero) move.
 const DRAG_THRESHOLD_PX = 6;
+// How long the "Removed" undo banner offers restoring a reminder (issue
+// #14), and how long its brief exit-animation ghost fades for (issue #220,
+// GrimoireBoard.module.css's --duration-slow) — kept far shorter than the
+// undo window so the ghost doesn't linger looking "stuck" long after the
+// removal itself has settled.
+const REMOVED_UNDO_MS = 6000;
+const REMINDER_EXIT_MS = 320;
 
 type TokenKind = "player" | "reminder";
 // The board's own overflow menu (issue #217) is a single instance, not one
@@ -527,6 +534,15 @@ export function GrimoireBoard({
     null,
   );
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A just-removed reminder's brief fading ghost (issue #220), separate from
+  // removedReminder above — that one lives the full undo-banner window
+  // (REMOVED_UNDO_MS), far longer than an exit animation should visually
+  // linger for.
+  const [exitingReminder, setExitingReminder] = useState<{
+    reminder: ReminderToken;
+    position: PlayerPosition;
+  } | null>(null);
+  const exitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [infoTokenShowing, setInfoTokenShowing] = useState<{
     text: string;
     characterIds: string[];
@@ -535,6 +551,7 @@ export function GrimoireBoard({
   useEffect(() => {
     return () => {
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
     };
   }, []);
 
@@ -748,16 +765,31 @@ export function GrimoireBoard({
     setActiveOverlay(null);
   }
 
-  function handleRemoveReminder(reminder: ReminderToken) {
+  function handleRemoveReminder(
+    reminder: ReminderToken,
+    position: PlayerPosition,
+  ) {
     onRemoveReminder(reminder.id);
     setRemovedReminder(reminder);
+    // Its last on-board position, captured now — once removed it's no
+    // longer in `reminders`/positionByPlayerId, so this is the only place
+    // that position is still available (issue #220).
+    setExitingReminder({ reminder, position });
     // A reminder removed while it's the one armed for tap-to-place must also
     // clear that placement state — otherwise the "Tap a seat to attach"
     // banner keeps showing and the next seat tap silently no-ops against a
     // reminder id that no longer exists (code review finding).
     if (placingReminderId === reminder.id) setPlacingReminderId(null);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    undoTimeoutRef.current = setTimeout(() => setRemovedReminder(null), 6000);
+    undoTimeoutRef.current = setTimeout(
+      () => setRemovedReminder(null),
+      REMOVED_UNDO_MS,
+    );
+    if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
+    exitTimeoutRef.current = setTimeout(
+      () => setExitingReminder(null),
+      REMINDER_EXIT_MS,
+    );
   }
 
   function handleUndoRemove() {
@@ -1101,13 +1133,13 @@ export function GrimoireBoard({
                       </span>
                     )}
                     {player.claim && (
-                      <span className={styles.claimBadge}>
+                      <span key={player.claim} className={styles.claimBadge}>
                         Claims{" "}
                         {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
                     )}
                     {actsAsCapable && player.actsAs && (
-                      <span className={styles.claimBadge}>
+                      <span key={player.actsAs} className={styles.claimBadge}>
                         Acts as{" "}
                         {claimById.get(player.actsAs)?.name ?? player.actsAs}
                       </span>
@@ -1409,7 +1441,9 @@ export function GrimoireBoard({
                         Attach to seat
                       </Button>
                     )}
-                    <Button onClick={() => handleRemoveReminder(reminder)}>
+                    <Button
+                      onClick={() => handleRemoveReminder(reminder, position)}
+                    >
                       Remove reminder
                     </Button>
                   </div>
@@ -1417,6 +1451,27 @@ export function GrimoireBoard({
               </div>
             );
           })}
+
+        {!hidden && exitingReminder && (
+          <div
+            className={styles.reminderGhost}
+            data-reminder-ghost
+            aria-hidden="true"
+            style={{
+              left: `${exitingReminder.position.x}%`,
+              top: `${exitingReminder.position.y}%`,
+            }}
+          >
+            <ReminderChip
+              character={
+                exitingReminder.reminder.characterId
+                  ? characterById.get(exitingReminder.reminder.characterId)
+                  : undefined
+              }
+              label={exitingReminder.reminder.label}
+            />
+          </div>
+        )}
 
         {hidden && (
           <div className={styles.hiddenOverlay}>

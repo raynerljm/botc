@@ -2,6 +2,20 @@
   max-width: 64rem;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 3rem;
+  /* Entering the grimoire (issue #220): .main is the single top-level
+     wrapper for this whole component, so this plays once — when /game
+     first mounts it — not on every internal setup/board or draw-stage
+     swap those have their own entrance motion for. */
+  animation: fade-in var(--duration-slow) var(--ease-standard);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .title {
@@ -153,7 +167,7 @@
   flex-direction: column;
   align-items: center;
   gap: 1rem;
-  animation: reveal-in 200ms ease;
+  animation: reveal-in var(--duration-base) var(--ease-standard);
 }
 
 /* Full-screen choosing stage (issue #158): composes .reveal's fixed-viewport
@@ -175,6 +189,23 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* Setup→play handoff (issue #220): see the GrimoireSetup.tsx comment at its
+   render site — mounts once, the moment the last seat is filled. */
+.boardEnter {
+  animation: board-enter var(--duration-slow) var(--ease-emphasized);
+}
+
+@keyframes board-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -257,5 +288,34 @@
 }
 
 .circleArea {
+  position: relative;
   width: 100%;
+}
+
+/* Day/night phase sweep (issue #220): see the GrimoireSetup.tsx comment at
+   its render site — keyed on sheetPhase so it only remounts (replaying
+   this fade) on an actual phase change. A soft diagonal wash rather than a
+   flat tint, so it reads as a sweep passing across the circle instead of a
+   plain flash. */
+.phaseSweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    var(--accent-glow) 50%,
+    transparent 70%
+  );
+  animation: phase-sweep var(--duration-slow) var(--ease-emphasized);
+}
+
+@keyframes phase-sweep {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
