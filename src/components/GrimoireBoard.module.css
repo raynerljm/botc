@@ -101,7 +101,7 @@
     var(--background) 72%
   );
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 0 3px var(--accent-ring-soft),
     0 24px 48px -20px rgb(0 0 0 / 65%);
 }
 
@@ -121,28 +121,25 @@
   pointer-events: none;
   background: repeating-conic-gradient(
     from 0deg,
-    color-mix(in srgb, var(--accent) 55%, transparent) 0deg 0.9deg,
+    var(--accent-ring) 0deg 0.9deg,
     transparent 0.9deg 30deg
   );
   /* `circle farthest-side` (not the bare `circle` default of
      farthest-corner) is what makes 100% land exactly on the visible rim —
      .board is a square box, so farthest-corner reaches past the circle
      border-radius clips to, pushing the whole "opaque" band outside the
-     visible circle where it's invisible. */
-  mask-image: radial-gradient(
+     visible circle where it's invisible. One custom property feeds both the
+     standard and -webkit- properties below so the two can't drift apart the
+     way two independently-typed copies of the same gradient could. */
+  --rim-mask: radial-gradient(
     circle farthest-side,
     transparent 83%,
     black 86%,
     black 93%,
     transparent 96%
   );
-  -webkit-mask-image: radial-gradient(
-    circle farthest-side,
-    transparent 83%,
-    black 86%,
-    black 93%,
-    transparent 96%
-  );
+  mask-image: var(--rim-mask);
+  -webkit-mask-image: var(--rim-mask);
 }
 
 .board[data-hidden="true"] {
@@ -284,7 +281,7 @@
   border-radius: 50%;
   box-shadow:
     0 0 0 2px var(--surface),
-    0 0 0 3px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 0 3px var(--accent-ring),
     0 3px 8px -2px rgb(0 0 0 / 60%);
 }
 

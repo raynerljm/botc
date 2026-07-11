@@ -29,6 +29,15 @@
   --team-demon: #d85f5f;
   --team-traveller: #b08ad8;
 
+  /* Gilded-accent tiers (issue #219): every derived translucent-gold value
+     used by the atmospheric background, grimoire circle, and token framing
+     draws from these three, instead of each call site hand-deriving its own
+     color-mix() percentage — the same reuse rationale as the motion tokens
+     below. */
+  --accent-glow: color-mix(in srgb, var(--accent) 7%, transparent);
+  --accent-ring-soft: color-mix(in srgb, var(--accent) 35%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 55%, transparent);
+
   /* Typography: a display serif for headings against the body's system-ui
      sans, so headings read as a distinct voice without depending on a
      network font fetch (ADR 0001 — the app must work offline). */
@@ -92,7 +101,7 @@ body {
   background:
     radial-gradient(
       ellipse 70% 50% at 50% 0%,
-      color-mix(in srgb, var(--accent) 7%, transparent),
+      var(--accent-glow),
       transparent 60%
     ),
     radial-gradient(
