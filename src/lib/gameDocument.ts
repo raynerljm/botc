@@ -1,4 +1,4 @@
-import type { Character } from "./characters";
+import type { Character, Team } from "./characters";
 import { createInitialNotes, type NotesSection } from "./gameNotes";
 import { normalizeCharacterId } from "./scriptParser";
 
@@ -611,6 +611,17 @@ export const ACTS_AS_CAPABLE_IDS: ReadonlySet<string> = new Set([
   "alchemist",
   "boffin",
 ]);
+
+// Each acts-as-capable character's ability only makes sense targeting one
+// team — Philosopher/Boffin gain a good ability, Alchemist a Minion ability —
+// so their "Acts as" pickers are constrained to that team (issue #245).
+// In-play vs not-in-play stays advisory (ADR 0003): this only narrows by
+// team, never by whether the target is currently held by a seat.
+export const ACTS_AS_ALLOWED_TEAMS: Readonly<Record<string, readonly Team[]>> = {
+  philosopher: ["townsfolk", "outsider"],
+  boffin: ["townsfolk", "outsider"],
+  alchemist: ["minion"],
+};
 
 // Every character id currently held by a seated player — the "who holds
 // what" set several pickers filter against (GrimoireBoard's reminder

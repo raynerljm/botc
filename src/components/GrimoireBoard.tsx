@@ -20,6 +20,7 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
+  ACTS_AS_ALLOWED_TEAMS,
   ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
   circlePosition,
@@ -980,6 +981,26 @@ export function GrimoireBoard({
             const actsAsCapable = player.characterId
               ? ACTS_AS_CAPABLE_IDS.has(player.characterId)
               : false;
+            // Each acts-as-capable role only resolves one team's ability
+            // (Philosopher/Boffin: good, Alchemist: Minion) — scope the
+            // picker's groups accordingly (issue #245).
+            const actsAsAllowedTeams = player.characterId
+              ? ACTS_AS_ALLOWED_TEAMS[player.characterId]
+              : undefined;
+            const actsAsGroups = actsAsAllowedTeams
+              ? claimGroups.filter((group) =>
+                  actsAsAllowedTeams.includes(group.team),
+                )
+              : claimGroups;
+            // A target set before this filter existed (or before the script
+            // last changed) can be off-spec-team or altogether missing from
+            // claimOptions — keep it visible/selectable rather than
+            // silently clearing it (same safeguard as the Claim select).
+            const actsAsCurrentOffSpec =
+              player.actsAs !== null &&
+              !actsAsGroups.some((group) =>
+                group.characters.some((c) => c.id === player.actsAs),
+              );
             const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
@@ -1196,15 +1217,23 @@ export function GrimoireBoard({
                           }
                           entries={[
                             { value: "", label: "Not acting as anyone" },
-                            // Same "keep an orphaned value selectable/visible"
-                            // safeguard as the Claim select above — an actsAs
-                            // target recorded before the script last changed
-                            // can reference a character no longer in
-                            // claimOptions (Copilot review finding).
-                            ...(player.actsAs && !claimById.has(player.actsAs)
-                              ? [{ value: player.actsAs, label: player.actsAs }]
+                            // Same "keep an orphaned/off-spec value
+                            // selectable/visible" safeguard as the Claim
+                            // select above — an actsAs target recorded
+                            // before the script last changed, or before this
+                            // team filter existed, can reference a character
+                            // no longer offered by the groups below.
+                            ...(actsAsCurrentOffSpec
+                              ? [
+                                  {
+                                    value: player.actsAs!,
+                                    label:
+                                      claimById.get(player.actsAs!)?.name ??
+                                      player.actsAs!,
+                                  },
+                                ]
                               : []),
-                            ...claimGroups.map((group) => ({
+                            ...actsAsGroups.map((group) => ({
                               label: teamNames[group.team],
                               options: group.characters.map((c) => ({
                                 value: c.id,
