@@ -797,6 +797,12 @@ export function GrimoireBoard({
     onRestoreReminder(removedReminder);
     setRemovedReminder(null);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    // Undo can land while the exit ghost is still mid-fade (issue #220 code
+    // review finding) — without clearing it here too, the restored, live
+    // reminder and its own still-fading ghost would render simultaneously
+    // at the same position until the ghost's timeout catches up.
+    setExitingReminder(null);
+    if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
   }
 
   // Re-circling or hiding the board while a drag is still in progress must
@@ -1133,13 +1139,19 @@ export function GrimoireBoard({
                       </span>
                     )}
                     {player.claim && (
-                      <span key={player.claim} className={styles.claimBadge}>
+                      <span
+                        key={`claim-${player.claim}`}
+                        className={styles.claimBadge}
+                      >
                         Claims{" "}
                         {claimById.get(player.claim)?.name ?? player.claim}
                       </span>
                     )}
                     {actsAsCapable && player.actsAs && (
-                      <span key={player.actsAs} className={styles.claimBadge}>
+                      <span
+                        key={`acts-as-${player.actsAs}`}
+                        className={styles.claimBadge}
+                      >
                         Acts as{" "}
                         {claimById.get(player.actsAs)?.name ?? player.actsAs}
                       </span>
@@ -1454,6 +1466,13 @@ export function GrimoireBoard({
 
         {!hidden && exitingReminder && (
           <div
+            // Keyed on the removed reminder's own id (issue #220 code review
+            // finding): without a key, removing a second reminder while the
+            // first one's ghost is still mid-fade would reuse this same DOM
+            // node instead of remounting it, and chip-out only replays on
+            // insertion — the second ghost would silently skip its own fade
+            // and pick up wherever the first one's animation had gotten to.
+            key={exitingReminder.reminder.id}
             className={styles.reminderGhost}
             data-reminder-ghost
             aria-hidden="true"
