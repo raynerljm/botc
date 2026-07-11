@@ -335,17 +335,21 @@ export function BagBuilder({
   const activeJinxes = computeActiveJinxes(selectedCharacters);
 
   // Scoped to this script's own pool — a Demon not on this script has no
-  // physical token here, so it can't stand in for the Lunatic. Excludes the
-  // Demon(s) actually selected into the bag, same as the Drunk's
-  // availableStandIns excludes selected Townsfolk — the stand-in isn't a
-  // second, independent pick of a character already in play.
-  const availableDemonStandIns = pool.filter(
-    (c) => c.team === "demon" && !selectedIds.has(c.id),
-  );
+  // physical token here, so it can't stand in for the Lunatic. Unlike the
+  // Drunk's availableStandIns, this does NOT exclude the Demon(s) actually
+  // selected into the bag: in a standard game the Lunatic believes they are
+  // the same Demon that is really in play, so that Demon must be choosable
+  // (issue #241).
+  const availableDemonStandIns = pool.filter((c) => c.team === "demon");
   // Unlike the Drunk, the Lunatic always gets a stand-in (advisory, never
-  // blocking — ADR 0003): the first available Demon applies automatically
-  // whenever the storyteller hasn't chosen one.
-  const defaultLunaticStandIn = availableDemonStandIns[0] ?? null;
+  // blocking — ADR 0003): prefer the Demon actually in play (pool order
+  // stands in for seat order here — the bag builder runs before players are
+  // seated, so no seat numbers exist yet to break ties by), falling back to
+  // the first available Demon otherwise.
+  const defaultLunaticStandIn =
+    availableDemonStandIns.find((c) => selectedIds.has(c.id)) ??
+    availableDemonStandIns[0] ??
+    null;
   // Resolved against the current pool, not just "is an id present" — a
   // draft's lunaticStandInId can go stale (e.g. the script changed since it
   // was saved), and treating that stale id as "chosen" would both suppress
@@ -380,9 +384,10 @@ export function BagBuilder({
     );
   }
   // The Lunatic only reaches this same "unfillable seat" warning in the rare
-  // case no Demon stand-in is available at all (e.g. the script's only
-  // Demon is already the one selected into the bag) — otherwise a default
-  // always applies, so no warning is needed.
+  // case no Demon stand-in is available at all (e.g. the script has no
+  // Demon character in its pool) — otherwise a default always applies
+  // (including the in-play Demon itself, issue #241), so no warning is
+  // needed.
   if (selectedIds.has(LUNATIC_ID) && !resolvedLunaticStandIn && !defaultLunaticStandIn) {
     requirementWarnings.push(
       "The Lunatic needs a stand-in Demon available before its seat can be filled.",
@@ -435,10 +440,11 @@ export function BagBuilder({
     }
     if (normalizeCharacterId(character.id) === LUNATIC_ID) {
       setLunaticStandInId(null);
-    } else if (character.id === lunaticStandInId) {
-      // Same reasoning as the Drunk's stand-in above, for the Lunatic.
-      setLunaticStandInId(null);
     }
+    // Unlike the Drunk's stand-in, selecting the chosen Demon "for real"
+    // does NOT clear the Lunatic's stand-in — the Lunatic deliberately
+    // believing they are the in-play Demon is the standard case, not a
+    // conflict to resolve (issue #241).
   }
 
   function targetFor(team: Team): number {
@@ -467,8 +473,8 @@ export function BagBuilder({
     }
     // Randomize can independently claim the character currently chosen as
     // the Drunk's stand-in for a real team slot, same as a direct toggle.
+    // The Lunatic's stand-in has no such guard — see toggleCharacter.
     if (standInId && next.has(standInId)) setStandInId(null);
-    if (lunaticStandInId && next.has(lunaticStandInId)) setLunaticStandInId(null);
   }
 
   function handleContinue() {

@@ -739,7 +739,7 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("excludes a Demon already selected into the bag from the stand-in choices", async () => {
+  it("includes a Demon already selected into the bag among the stand-in choices (issue #241)", async () => {
     const user = userEvent.setup();
     render(<BagBuilder characters={characters("lunatic", "imp", "zombuul")} />);
 
@@ -751,12 +751,28 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
     expect(
       within(listbox).getByRole("option", { name: "Zombuul" }),
     ).toBeInTheDocument();
+    // The in-play Demon is offered too — a standard game has the Lunatic
+    // believe they are the same Demon that's really in play (issue #241).
     expect(
-      within(listbox).queryByRole("option", { name: "Imp" }),
-    ).not.toBeInTheDocument();
+      within(listbox).getByRole("option", { name: "Imp" }),
+    ).toBeInTheDocument();
   });
 
-  it("clears the chosen stand-in once that character is separately selected into the bag", async () => {
+  it("defaults to the in-play Demon rather than merely the first Demon in the script's pool (issue #241)", async () => {
+    const user = userEvent.setup();
+    render(<BagBuilder characters={characters("lunatic", "imp", "pukka")} />);
+
+    // Imp precedes Pukka in the script's pool, but Pukka is the Demon
+    // actually selected into the bag — the default should follow it.
+    await user.click(screen.getByRole("button", { name: /^Pukka/ }));
+    await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
+
+    expect(
+      screen.getByLabelText(/Pick the Lunatic's stand-in/),
+    ).toHaveTextContent(/defaults to pukka/i);
+  });
+
+  it("keeps the chosen stand-in once that character is separately selected into the bag (issue #241)", async () => {
     const user = userEvent.setup();
     render(<BagBuilder characters={characters("lunatic", "imp")} />);
 
@@ -765,11 +781,15 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
     await selectOption(user, standIn, "Imp");
     expect(standIn).toHaveTextContent("Imp");
 
-    // Imp is now claimed as the stand-in; selecting it for real (a plain,
-    // unrestricted action) should give up that stand-in slot.
-    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    // Imp is claimed as the stand-in; selecting it for real is the standard
+    // case (the Lunatic believes they are the in-play Demon) and must not
+    // clear the stand-in choice.
+    const imp = screen.getByRole("button", { name: /^Imp/ });
+    await user.click(imp);
 
-    expect(standIn).toHaveTextContent("Choose a stand-in…");
+    expect(standIn).toHaveTextContent("Imp");
+    expect(imp).toHaveAttribute("aria-pressed", "true");
+    expect(imp).toHaveTextContent(/lunatic's stand-in/i);
   });
 
   it("marks the stand-in's own card as standing in for the Lunatic, not a normal pick", async () => {
@@ -826,15 +846,15 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
     const user = userEvent.setup();
     render(
       <BagBuilder
-        characters={characters("lunatic", "imp")}
+        characters={characters("lunatic")}
         scriptId="tb"
         scriptName="Trouble Brewing"
       />,
     );
 
-    // Imp is the script's only Demon — selecting it for real leaves no
-    // Demon available to default the Lunatic's stand-in to.
-    await user.click(screen.getByRole("button", { name: /^Imp/ }));
+    // This makeshift script has no Demon character at all — since an
+    // in-play Demon is itself now a valid default (issue #241), the only
+    // way to hit "no Demon available" is for the pool to have none.
     await user.click(screen.getByRole("button", { name: /^Lunatic/ }));
 
     expect(screen.getByText(/Lunatic needs a stand-in/i)).toBeInTheDocument();
@@ -850,29 +870,29 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
     saveBagBuilderDraft("tb", {
       playerCount: 5,
       travellerCount: 0,
-      selectedIds: ["lunatic", "imp"],
+      selectedIds: ["lunatic"],
       autoAddedIds: [],
       modifierChoices: {},
       extraCopies: {},
       standInId: null,
-      lunaticStandInId: "zombuul",
+      lunaticStandInId: "imp",
     });
 
     render(
       <BagBuilder
-        characters={characters("lunatic", "imp")}
+        characters={characters("lunatic")}
         scriptId="tb"
         scriptName="Trouble Brewing"
       />,
     );
 
-    // Imp is the script's only Demon and is already selected for real, so
-    // there's no available Demon to fall back to — the warning must still
-    // fire despite the (stale) lunaticStandInId being non-null.
+    // No Demon at all is on this script, so there's no available Demon to
+    // fall back to — the warning must still fire despite the (stale)
+    // lunaticStandInId being non-null.
     expect(screen.getByText(/Lunatic needs a stand-in/i)).toBeInTheDocument();
   });
 
-  it("falls back to the default stand-in when a saved draft's stand-in id is stale but another Demon is available (code review finding)", async () => {
+  it("falls back to the in-play Demon when a saved draft's stand-in id is stale (code review finding)", async () => {
     const user = userEvent.setup();
     saveBagBuilderDraft("tb", {
       playerCount: 5,
@@ -894,8 +914,8 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
       />,
     );
 
-    // No warning: Zombuul is available to default to, even though the
-    // saved stand-in id doesn't resolve.
+    // No warning: Imp, already selected for real, is available to default
+    // to, even though the saved stand-in id doesn't resolve.
     expect(screen.queryByText(/Lunatic needs a stand-in/i)).not.toBeInTheDocument();
 
     await user.click(
@@ -907,7 +927,7 @@ describe("special flow: Lunatic stand-in (issue #163)", () => {
 
     const game = loadGame();
     const standInToken = game!.bag.find((t) => t.isLunaticStandIn);
-    expect(standInToken?.characterId).toBe("zombuul");
+    expect(standInToken?.characterId).toBe("imp");
   });
 });
 
