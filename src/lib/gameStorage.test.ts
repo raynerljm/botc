@@ -294,6 +294,85 @@ describe("rotation migration (issue #192: schemaVersion 21 -> 22, chained after 
   });
 });
 
+describe("homePlayerId migration (issue #213: schemaVersion 22 -> 23)", () => {
+  it("backfills a v22 reminder's homePlayerId from its current anchorPlayerId", () => {
+    const base = makeGame("Pre-#213 Game");
+    const v22 = {
+      ...base,
+      schemaVersion: 22,
+      reminders: [
+        {
+          id: "r1",
+          characterId: null,
+          label: "Poisoned",
+          position: { x: 10, y: 20 },
+          anchorPlayerId: base.players[0].id,
+        },
+      ],
+    } as unknown as Record<string, unknown>;
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: v22.id, games: [v22] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.schemaVersion).toBe(GAME_SCHEMA_VERSION);
+    expect(game.reminders[0].homePlayerId).toBe(base.players[0].id);
+  });
+
+  it("backfills a v22 reminder that was already dragged free with no home, rather than inventing one", () => {
+    const base = makeGame("Pre-#213 Game");
+    const v22 = {
+      ...base,
+      schemaVersion: 22,
+      reminders: [
+        {
+          id: "r1",
+          characterId: null,
+          label: "Poisoned",
+          position: { x: 10, y: 20 },
+          anchorPlayerId: null,
+        },
+      ],
+    } as unknown as Record<string, unknown>;
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: v22.id, games: [v22] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.schemaVersion).toBe(GAME_SCHEMA_VERSION);
+    expect(game.reminders[0].homePlayerId).toBeNull();
+  });
+
+  it("chains a v20 document with reminders all the way to the current schema version", () => {
+    const base = makeGame("Pre-#193 Game");
+    const legacy = {
+      ...base,
+      schemaVersion: 20,
+      notes: "x",
+      reminders: [
+        {
+          id: "r1",
+          characterId: null,
+          label: "Poisoned",
+          position: { x: 10, y: 20 },
+          anchorPlayerId: base.players[0].id,
+        },
+      ],
+    } as unknown as Record<string, unknown>;
+    delete legacy.rotation;
+    window.localStorage.setItem(
+      "botc:games",
+      JSON.stringify({ activeId: legacy.id, games: [legacy] }),
+    );
+
+    const game = loadGame()!;
+    expect(game.schemaVersion).toBe(GAME_SCHEMA_VERSION);
+    expect(game.reminders[0].homePlayerId).toBe(base.players[0].id);
+  });
+});
+
 describe("snapshots (for useSyncExternalStore)", () => {
   it("reflects the active game and the full list in their snapshots", () => {
     const game = makeGame();

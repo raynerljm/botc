@@ -20,6 +20,7 @@ function makeReminder(overrides: Partial<ReminderToken> = {}): ReminderToken {
     label: "Townsfolk",
     position: { x: 60, y: 40 },
     anchorPlayerId: null,
+    homePlayerId: null,
     ...overrides,
   };
 }

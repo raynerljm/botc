@@ -51,8 +51,12 @@ import { normalizeCharacterId } from "./scriptParser";
 // v20 game's `notes` is upgraded in place by gameStorage rather than
 // dropped, since it may carry text the storyteller already wrote (issue
 // #193 AC: "without data loss") — and again for issue #192 (GameDocument
-// gained the required `rotation` field).
-export const GAME_SCHEMA_VERSION = 22;
+// gained the required `rotation` field), and again for issue #213
+// (ReminderToken gained the required `homePlayerId` field, the same
+// no-migration-needed precedent as anchorPlayerId itself: a document saved
+// under the older shape is rejected rather than loaded with it silently
+// undefined).
+export const GAME_SCHEMA_VERSION = 23;
 
 // Demon bluffs are a fixed 3-slot panel (CONTEXT.md: "Exactly three slots,
 // script-wide, not per-player"), not an open-ended list.
@@ -140,6 +144,17 @@ export interface ReminderToken {
   // always detaches it, the same way dragging a player token overrides its
   // computed circle position).
   anchorPlayerId: string | null;
+  // The seat this reminder belongs to, independent of whether it's
+  // *currently* anchored there (issue #213: "Re-circle" re-homes a reminder
+  // even if it was dragged off onto the pad, where anchorPlayerId alone
+  // would have no memory of where it came from). Set alongside
+  // anchorPlayerId whenever a reminder is created or (re)attached anchored;
+  // unlike anchorPlayerId, a manual drag that detaches the reminder leaves
+  // this untouched. Null for a reminder never attached to any seat — those
+  // are left alone by Re-circle. Cleared only when the owning seat itself
+  // is removed from the game, since there's then no token left to re-home
+  // to.
+  homePlayerId: string | null;
 }
 
 // Progress bookkeeping for the post-draw setup walkthrough (issue #26). The
@@ -711,6 +726,7 @@ export function withBackfilledDrunkReminders(
       label: "Drunk",
       position: parkBeside(livePlayerPosition(p.id, players)),
       anchorPlayerId: p.id,
+      homePlayerId: p.id,
     })),
   ];
 }
