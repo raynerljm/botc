@@ -144,6 +144,18 @@ describe("SetupWalkthrough shell", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("closes via a Done button at the bottom of the walkthrough (issue #244)", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderWalkthrough({ steps: [fortuneTellerStep] });
+    await user.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps Done enabled no matter how many steps are unresolved (advisory, ADR 0003)", () => {
+    renderWalkthrough({ steps: [fortuneTellerStep], stepStatuses: {} });
+    expect(screen.getByRole("button", { name: /^done$/i })).toBeEnabled();
+  });
+
   it("renders as a modal dialog, prominent regardless of where it mounts in the page (issue #57)", () => {
     renderWalkthrough({ steps: [fortuneTellerStep] });
     expect(
@@ -156,14 +168,20 @@ describe("SetupWalkthrough shell", () => {
     expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
   });
 
-  it("traps Tab within the dialog's own controls (code review: the page behind the backdrop stays focusable otherwise)", async () => {
+  it("traps Tab within the dialog's own controls, including the footer Done button (code review: the page behind the backdrop stays focusable otherwise; issue #244)", async () => {
     const user = userEvent.setup();
     renderWalkthrough({ steps: [fortuneTellerStep] });
 
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
     within(step).getByRole("button", { name: /skip/i }).focus();
     await user.tab();
+    expect(screen.getByRole("button", { name: /^done$/i })).toHaveFocus();
+
+    await user.tab();
     expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: /^done$/i })).toHaveFocus();
 
     await user.tab({ shift: true });
     expect(within(step).getByRole("button", { name: /skip/i })).toHaveFocus();
@@ -765,7 +783,7 @@ describe("generic step (homebrew fallback)", () => {
     reminderOptions: ["Marked", "Foretold"],
   };
 
-  it("stages a chosen reminder and only resolves once, on Done", async () => {
+  it("stages a chosen reminder and only resolves once, on Confirm", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({ steps: [genericStep] });
 
@@ -773,18 +791,18 @@ describe("generic step (homebrew fallback)", () => {
     await user.click(within(step).getByRole("button", { name: "Marked" }));
     expect(onResolveStep).not.toHaveBeenCalled();
 
-    await user.click(within(step).getByRole("button", { name: /^done$/i }));
+    await user.click(within(step).getByRole("button", { name: /^confirm$/i }));
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: "custom-oracle", label: "Marked" }),
     ]);
   });
 
-  it("marks the step answered via Done, without requiring every reminder placed", async () => {
+  it("marks the step answered via Confirm, without requiring every reminder placed", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({ steps: [genericStep] });
 
     const step = screen.getByRole("group", { name: genericStep.title });
-    await user.click(within(step).getByRole("button", { name: /^done$/i }));
+    await user.click(within(step).getByRole("button", { name: /^confirm$/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
   });

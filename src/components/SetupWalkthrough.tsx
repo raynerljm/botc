@@ -335,7 +335,7 @@ function StepPanel({
           {step.kind === "generic" && (
             <GenericControls
               step={step}
-              onDone={(labels) =>
+              onConfirm={(labels) =>
                 resolve(
                   "answered",
                   labels.map((label) => ({
@@ -621,13 +621,13 @@ function StandInReassignControls({
 
 function GenericControls({
   step,
-  onDone,
+  onConfirm,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "generic" }>;
-  onDone: (labels: string[]) => void;
+  onConfirm: (labels: string[]) => void;
 }) {
   // Staged locally rather than added immediately on each click, so a step
-  // that places several reminders still resolves through one onDone call —
+  // that places several reminders still resolves through one onConfirm call —
   // consistent with every other kind, and what makes Redo able to clean up
   // exactly the set this step last produced.
   const [staged, setStaged] = useState<string[]>([]);
@@ -651,8 +651,12 @@ function GenericControls({
           ))}
         </ul>
       )}
-      <Button variant="primary" onClick={() => onDone(staged)}>
-        Done
+      {/* "Confirm", matching every other step kind's resolve action — not
+          "Done", which would collide with the walkthrough's own footer Done
+          button (issue #244 code review finding) whenever a homebrew step
+          is still open. */}
+      <Button variant="primary" onClick={() => onConfirm(staged)}>
+        Confirm
       </Button>
     </div>
   );
@@ -716,6 +720,15 @@ export function SetupWalkthrough({
             </li>
           ))}
         </ol>
+        {/* Always enabled — the storyteller may handle or skip steps in any
+            order and close when ready (ADR 0003, advisory never blocking).
+            Sticky, so it stays reachable below a long, internally-scrolling
+            step list (issue #244). */}
+        <footer className={styles.footer}>
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </footer>
       </div>
     </div>
   );
