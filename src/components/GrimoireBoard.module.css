@@ -385,16 +385,17 @@
   color: var(--foreground);
 }
 
+/* --surface-raised at rest, matching every sibling control in this menu
+   (.select/.textInput/.claimSelect) — .menuBody itself is --surface, so a
+   --surface disclosure would blend into it instead of reading as a
+   distinct, tappable control. No overflow: hidden, so a keyboard focus
+   ring on .detailSummary or .detailLink isn't clipped by the rounded
+   corners. */
 .detail {
   width: 100%;
-  background: var(--surface);
+  background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.detail[open] {
-  background: var(--surface-raised);
 }
 
 .detailSummary {

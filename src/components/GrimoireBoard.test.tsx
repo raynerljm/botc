@@ -477,6 +477,7 @@ describe("token menu", () => {
 
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
+    expect(link).toHaveClass(styles.detailLink);
   });
 
   it("doesn't render a javascript: almanac link", async () => {
