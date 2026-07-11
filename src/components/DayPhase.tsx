@@ -116,12 +116,15 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   // below), so this is the one roster order needed per render — memoized
   // the same way `playerById` is, since re-sorting every seat on every
   // vote-toggle round-trip is pure waste when `game.players` hasn't changed.
+  // Keyed on the nominee id, not the whole `openNomination` object
+  // (Copilot review finding): `toggleVote` replaces the nomination object
+  // on every vote, which would otherwise bust this memo on every toggle
+  // even though the roster order itself never depends on `votes`.
+  const openNomineeId = openNomination?.nomineeId ?? null;
   const voteRoster = useMemo(
     () =>
-      openNomination
-        ? voteRosterOrder(game.players, openNomination.nomineeId)
-        : [],
-    [game.players, openNomination],
+      openNomineeId ? voteRosterOrder(game.players, openNomineeId) : [],
+    [game.players, openNomineeId],
   );
   const blockNomineeId = computeBlock(game.nominations, game.players);
   const blockNominationId = computeBlockNominationId(
