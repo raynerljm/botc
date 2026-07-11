@@ -209,7 +209,11 @@ function StepPanel({
         <>
           {step.kind === "demonBluffs" && (
             <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
-              <DemonBluffsFields game={game} onChange={onChangeGame} />
+              <DemonBluffsFields
+                game={game}
+                onChange={onChangeGame}
+                showToDemonButton={false}
+              />
             </ConfirmOnlyControls>
           )}
 

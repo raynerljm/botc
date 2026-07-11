@@ -835,65 +835,19 @@ describe("demonBluffs step (issue #155)", () => {
     });
   });
 
-  it("offers 'Show to Demon' once a bluff is set, reusing the same full-screen reveal", async () => {
-    const user = userEvent.setup();
+  it("does not offer 'Show to Demon' in the walkthrough — bluffs are revealed during the first night, not setup (issue #211)", () => {
     renderWalkthrough({
       steps: [demonBluffsStep],
       game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
     });
 
     const step = screen.getByRole("group", { name: "Demon bluffs" });
-    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
-
-    expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
-  });
-
-  it("closes only the 'Show to Demon' reveal on Escape, not the whole walkthrough underneath it (code review finding)", async () => {
-    const user = userEvent.setup();
-    const { onClose } = renderWalkthrough({
-      steps: [demonBluffsStep],
-      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
-    });
-
-    const step = screen.getByRole("group", { name: "Demon bluffs" });
-    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
-    expect(screen.getByRole("dialog", { name: /demon bluffs/i })).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-
-    // Nesting this reveal (its own dialog) inside the walkthrough's own
-    // dialog means two useDialogDismiss instances are mounted at once —
-    // without the dialog stack, both fire on the same Escape and this
-    // outer onClose gets called too, kicking the storyteller out of the
-    // whole walkthrough over a reveal they only meant to dismiss.
-    expect(screen.queryByRole("dialog", { name: /demon bluffs/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Setup walkthrough" })).toBeInTheDocument();
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it("traps Tab inside the 'Show to Demon' reveal, not the outer walkthrough dialog behind it (Copilot review finding)", async () => {
-    const user = userEvent.setup();
-    renderWalkthrough({
-      steps: [demonBluffsStep],
-      game: bluffsGame({ demonBluffs: ["washerwoman", null, null] }),
-    });
-
-    const step = screen.getByRole("group", { name: "Demon bluffs" });
-    await user.click(within(step).getByRole("button", { name: /show to demon/i }));
-
-    // The reveal's only focusable control is its own Close button. The
-    // outer walkthrough dialog's Tab trap scans its whole subtree (no
-    // portal separates the two dialogs), so without deferring to the
-    // topmost dialog entirely, the outer's trap could fight the inner
-    // one over where Tab should wrap.
-    const closeButton = screen.getByRole("dialog", { name: /demon bluffs/i }).querySelector(
-      "button",
-    ) as HTMLElement;
-    expect(document.activeElement).toBe(closeButton);
-    await user.tab();
-    expect(document.activeElement).toBe(closeButton);
-    await user.tab({ shift: true });
-    expect(document.activeElement).toBe(closeButton);
+    expect(
+      within(step).queryByRole("button", { name: /show to demon/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: /demon bluffs/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("resolves answered via Confirm, without producing any reminder", async () => {

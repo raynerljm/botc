@@ -9,12 +9,12 @@ const FOCUSABLE_SELECTOR =
 
 // Every mounted dialog's own token, most-recently-opened last — so only the
 // topmost dialog's Escape-dismiss and Tab-trap ever act on a keypress.
-// Needed since issue #155: the setup walkthrough's Demon bluffs step can
-// open "Show to Demon" as a second dialog nested inside the walkthrough's
-// own (no portal separates them), so both mount this hook and both would
-// otherwise react to the same keydown — Escape closing both at once, or the
-// outer's Tab trap (which scans its whole subtree, including the nested
-// dialog) fighting the inner one for which element Tab should wrap at.
+// Needed since issue #155: a dialog opened from inside another (no portal
+// separates them, e.g. the board's Demon bluffs panel opening "Show to
+// Demon") mounts this hook twice, and both would otherwise react to the
+// same keydown — Escape closing both at once, or the outer's Tab trap
+// (which scans its whole subtree, including the nested dialog) fighting the
+// inner one for which element Tab should wrap at.
 const openDialogs: symbol[] = [];
 
 // Shared accessible-dialog behavior for every overlay in the app
