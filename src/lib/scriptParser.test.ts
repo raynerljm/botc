@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getCharacter } from "./characters";
-import { parseScript, resolveCharacterId } from "./scriptParser";
+import { parseScript, parseScriptMeta, resolveCharacterId } from "./scriptParser";
 
 describe("resolveCharacterId", () => {
   it("resolves an exact id", () => {
@@ -17,6 +17,28 @@ describe("resolveCharacterId", () => {
 
   it("returns undefined for an id not in the dataset", () => {
     expect(resolveCharacterId("not-a-character")).toBeUndefined();
+  });
+});
+
+describe("parseScriptMeta", () => {
+  it("reads _meta even when the rest of the script has an unknown character", () => {
+    const meta = parseScriptMeta(
+      JSON.stringify([{ id: "_meta", name: "My Script" }, "not-a-character"]),
+    );
+    expect(meta).toMatchObject({ name: "My Script" });
+  });
+
+  it("reads _meta from an otherwise-empty script", () => {
+    const meta = parseScriptMeta(JSON.stringify([{ id: "_meta", name: "My Script" }]));
+    expect(meta).toMatchObject({ name: "My Script" });
+  });
+
+  it("returns an empty object for invalid JSON", () => {
+    expect(parseScriptMeta("{not json")).toEqual({});
+  });
+
+  it("returns an empty object when the script has no _meta entry", () => {
+    expect(parseScriptMeta(JSON.stringify(["washerwoman"]))).toEqual({});
   });
 });
 

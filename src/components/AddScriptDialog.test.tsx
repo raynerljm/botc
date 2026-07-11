@@ -73,6 +73,23 @@ describe("AddScriptDialog", () => {
     expect(screen.getByLabelText(/^name/i)).toHaveValue("My Script");
   });
 
+  it("prefills the name field even while the rest of the script is still invalid", async () => {
+    render(<AddScriptDialog onAdded={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByText("Add a script"));
+    fireEvent.change(screen.getByLabelText(/paste script-tool JSON/i), {
+      target: {
+        value: JSON.stringify([
+          { id: "_meta", name: "My Script" },
+          "not-a-character",
+        ]),
+      },
+    });
+
+    expect(screen.getByLabelText(/^name/i)).toHaveValue("My Script");
+  });
+
   it("lets the user edit the prefilled name before saving", async () => {
     render(<AddScriptDialog onAdded={vi.fn()} />);
     const user = userEvent.setup();

@@ -207,6 +207,23 @@ function isMetaEntry(entry: unknown): entry is Record<string, unknown> {
   );
 }
 
+// Reads just the _meta entry, independent of whether the rest of the script
+// validates — callers that only need e.g. the script's name (a live prefill
+// while the storyteller is still pasting/fixing entries) shouldn't have that
+// blocked by an unrelated unknown-character or empty-script error further
+// down in parseScript.
+export function parseScriptMeta(jsonText: string): ScriptMeta {
+  let data: unknown;
+  try {
+    data = JSON.parse(jsonText);
+  } catch {
+    return {};
+  }
+  if (!Array.isArray(data)) return {};
+  const metaRaw = data.find(isMetaEntry);
+  return metaRaw ? parseMeta(metaRaw) : {};
+}
+
 export function parseScript(jsonText: string): ScriptParseResult {
   let data: unknown;
   try {

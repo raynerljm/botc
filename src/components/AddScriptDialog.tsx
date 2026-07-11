@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { saveCustomScript } from "@/lib/customScripts";
-import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
+import {
+  describeScriptParseError,
+  parseScript,
+  parseScriptMeta,
+} from "@/lib/scriptParser";
 
 import styles from "./AddScriptDialog.module.css";
 import { Button } from "./Button";
@@ -34,8 +38,7 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
   function applyText(newText: string) {
     setText(newText);
     if (nameTouchedRef.current) return;
-    const result = parseScript(newText);
-    setName(result.ok ? (result.script.meta.name ?? "") : "");
+    setName(parseScriptMeta(newText).name ?? "");
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
