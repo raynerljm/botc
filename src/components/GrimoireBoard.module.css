@@ -171,7 +171,32 @@
   z-index: 1;
   /* Only plays on mount (a newly-placed reminder) — dragging an existing
      one just updates its left/top style on the same element, no remount. */
-  animation: chip-in 200ms ease;
+  animation: chip-in var(--duration-base) var(--ease-standard);
+}
+
+/* The fading twin of .reminderWrap above (issue #220): rendered in place of
+   a just-removed reminder for its brief exit animation, at the position it
+   held the instant before removal — decorative only (aria-hidden,
+   pointer-events: none), gone from the DOM once handleRemoveReminder's own
+   short timeout clears it. */
+.reminderGhost {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+  pointer-events: none;
+  z-index: 1;
+  animation: chip-out var(--duration-slow) var(--ease-standard) forwards;
+}
+
+@keyframes chip-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
 }
 
 /* `transform` gives every .tokenWrap/.reminderWrap its own stacking
@@ -356,6 +381,10 @@
   color: var(--background);
   background: var(--accent);
   border-radius: 1rem;
+  /* A claim/acts-as badge is keyed on its own value at the render site
+     (issue #220), so setting or changing it — not just the initial mount —
+     remounts this span and replays the animation. */
+  animation: chip-in var(--duration-base) var(--ease-standard);
 }
 
 .menuBody {

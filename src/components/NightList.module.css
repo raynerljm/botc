@@ -38,7 +38,9 @@
   border-radius: 0.5rem;
   transition:
     opacity var(--duration-base) var(--ease-standard),
-    background-color var(--duration-base) var(--ease-standard);
+    background-color var(--duration-base) var(--ease-standard),
+    border-color var(--duration-base) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard);
 }
 
 .entry[data-dead] {
@@ -51,6 +53,16 @@
     var(--accent) 12%,
     var(--surface-raised)
   );
+}
+
+/* Step progress (issue #220): the same "next" entry the glanceable progress
+   line above already names by label gets a matching highlight here, so
+   checking one off visibly advances the highlight to the next li's own
+   border-color/box-shadow transition, rather than only the text above
+   silently jumping to a new name. */
+.entry[data-current] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-ring-soft);
 }
 
 .entry[data-skipped] {

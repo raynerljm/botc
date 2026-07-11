@@ -1453,6 +1453,33 @@ describe("reminders (issue #14)", () => {
     expect(onRestoreReminder).toHaveBeenCalledWith(reminder);
   });
 
+  it("briefly shows a fading ghost of a just-removed reminder at its last board position (issue #220)", async () => {
+    const user = userEvent.setup();
+    const reminder = makeReminder({
+      id: "r1",
+      label: "Townsfolk",
+      position: { x: 60, y: 40 },
+    });
+    const { container } = renderBoard([makePlayer()], {
+      reminders: [reminder],
+    });
+
+    await user.click(
+      within(
+        container.querySelector("[data-reminder-id='r1']") as HTMLElement,
+      ).getByText("Townsfolk"),
+    );
+    await user.click(screen.getByRole("button", { name: "Remove reminder" }));
+
+    const ghost = container.querySelector(
+      "[data-reminder-ghost]",
+    ) as HTMLElement;
+    expect(ghost).toBeInTheDocument();
+    expect(ghost.style.left).toBe("60%");
+    expect(ghost.style.top).toBe("40%");
+    expect(within(ghost).getByText("Townsfolk")).toBeInTheDocument();
+  });
+
   it("hides the undo banner along with the rest of the board when the grimoire is hidden", async () => {
     const user = userEvent.setup();
     const reminder = makeReminder({ id: "r1" });

@@ -216,6 +216,11 @@ export function NightList({ game, characterById, onChange }: NightListProps) {
               data-dead={entry.dead || undefined}
               data-skipped={entry.skipped || undefined}
               data-checked={checkedIds.has(entry.id) || undefined}
+              // The step the progress line (above) already names by label —
+              // highlighted here too so checking it off visibly advances the
+              // highlight to whichever entry becomes `nextEntry` next
+              // (issue #220).
+              data-current={entry.id === nextEntry?.id || undefined}
             >
               <label className={styles.entryMain}>
                 <Checkbox

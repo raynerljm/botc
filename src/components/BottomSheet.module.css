@@ -31,6 +31,25 @@
   border-bottom: none;
   border-radius: 0.75rem 0.75rem 0 0;
   box-shadow: 0 -0.25rem 1rem rgba(0, 0, 0, 0.15);
+  /* Content swap (issue #220): Night list and Day phase each render their
+     own BottomSheet, and swapping between them (issue #195) unmounts one
+     whole tree and mounts the other — so .panel itself remounts exactly on
+     a genuine phase change. Collapsing/expanding the sheet never triggers
+     this: that only toggles CollapsibleSection's children, never .panel
+     itself, so this can't replay on every peek/expand — that animation is
+     issue #212's, not this one's. */
+  animation: sheet-mount-in var(--duration-slow) var(--ease-standard);
+}
+
+@keyframes sheet-mount-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .handle {

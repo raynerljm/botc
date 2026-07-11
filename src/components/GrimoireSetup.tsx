@@ -1348,7 +1348,13 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       )}
 
       {setupComplete ? (
-        <>
+        // Setup→play handoff (issue #220): this whole branch mounts fresh
+        // exactly once, the moment the last seat is filled — everything
+        // inside (circle, sheet, Demon bluffs, walkthrough) stays mounted
+        // afterward regardless of `hidden` toggles (see the comment on
+        // .circleLayout below), so this wrapper's mount animation plays
+        // once for the handoff and never replays after.
+        <div className={styles.boardEnter}>
           {/* No `walkthroughSteps.length > 0` conjunct here — the walkthrough
               always has at least its Demon bluffs step (issue #155), so this
               offer is never conditioned on any character being in play. */}
@@ -1397,6 +1403,18 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               aria-label="Grimoire circle"
               className={styles.circleArea}
             >
+              {/* Day/night phase sweep (issue #220): a brief translucent
+                  wash over the circle whenever the single bottom sheet
+                  swaps between Night list and Day phase — keyed on
+                  sheetPhase so it remounts (replaying the fade) only on an
+                  actual phase change, never on an ordinary re-render.
+                  Decorative only (aria-hidden, pointer-events: none via
+                  CSS) so it never intercepts a token/reminder drag. */}
+              <div
+                key={sheetPhase}
+                className={styles.phaseSweep}
+                aria-hidden="true"
+              />
               <GrimoireBoard
                 players={game.players}
                 characterById={characterById}
@@ -1507,7 +1525,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
               onClose={() => setShowWalkthrough(false)}
             />
           )}
-        </>
+        </div>
       ) : (
         // Hidden for the whole draw session, not just the obscured stages —
         // the choosing stage's own full-screen token grid (issue #158) means
