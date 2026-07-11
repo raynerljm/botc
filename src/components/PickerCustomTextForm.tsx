@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Button } from "./Button";
 import styles from "./PickerCustomTextForm.module.css";
 
 export interface PickerCustomTextFormProps {
@@ -39,9 +40,9 @@ export function PickerCustomTextForm({
           onChange={(event) => setText(event.target.value)}
         />
       </label>
-      <button type="submit" className={styles.submit}>
+      <Button type="submit" className={styles.submit}>
         {submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

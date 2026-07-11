@@ -45,37 +45,17 @@
   touch-action: none;
 }
 
-/* Shared "forward action" convention (Start/End night, Start the next
-   night) — filled accent, composed by NightList.module.css and
-   DayPhase.module.css rather than redefined in each, so the two sheets'
-   forward buttons can't visually drift apart (code review finding: they'd
-   been redefined identically in both files). */
-.forwardAction {
-  padding: 0.6rem 1rem;
-  font: inherit;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: var(--background);
-  cursor: pointer;
-  min-height: 2.75rem;
-}
-
-/* Shared "back/undo" convention (← Back, ← Reopen) — deliberately the
-   inverse of .forwardAction (outline, not filled) so an undo control never
-   reads as another forward action (issue #165 AC: "can't be confused with
-   the forward Start / End actions"). Composed the same way as
-   .forwardAction above.*/
-.backAction {
+/* Forward action (Start/End night, Start the next night) and back/undo
+   action (← Back, ← Reopen) are now the shared Button primitive's primary
+   and ghost tiers (issue #215) — NightList/DayPhase render <Button
+   variant="primary"|"ghost"> directly instead of composing local classes
+   here. .backAlign covers what Button itself doesn't know: the back/undo
+   control sits at the start of the sheet's content rather than centered or
+   full-width like a Button defaults to, and stays visibly smaller than a
+   forward action so it can't be confused with one (issue #165 AC). */
+.backAlign {
   align-self: flex-start;
-  padding: 0.4rem 0.75rem;
-  font: inherit;
-  font-size: 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
   min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
 }

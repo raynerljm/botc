@@ -1,13 +1,3 @@
-.trigger {
-  min-height: 2.75rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border, #ccc);
-  background: var(--surface, #fff);
-  color: var(--foreground, #111);
-  cursor: pointer;
-}
-
 .overlay {
   position: fixed;
   inset: 0;
@@ -15,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--surface-overlay);
   padding: 1rem;
   overflow-y: auto;
 }
@@ -33,43 +23,25 @@
   padding: 1.5rem;
   border-radius: 0.75rem;
   border: none;
-  background: var(--surface, #fff);
-  color: var(--foreground, #111);
+  background: var(--surface);
+  color: var(--foreground);
 }
 
 .close {
   align-self: flex-end;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
-  border: none;
-  background: none;
-  color: var(--foreground, #111);
   font-size: 1.25rem;
   line-height: 1;
-  cursor: pointer;
 }
 
 .warning {
   font-size: 0.875rem;
-  color: var(--team-minion, #92400e);
+  color: var(--team-minion);
   text-align: center;
-}
-
-.copy {
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--border, #ccc);
-  background: var(--surface, #fff);
-  color: var(--foreground, #111);
-  cursor: pointer;
 }
 
 .url {
   font-size: 0.75rem;
   word-break: break-all;
   text-align: center;
-  color: var(--muted, #555);
+  color: var(--muted);
 }

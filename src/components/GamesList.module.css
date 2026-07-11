@@ -49,22 +49,3 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-
-.actions button {
-  padding: 0.5rem 0.85rem;
-  font: inherit;
-  min-height: 2.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface-raised);
-  color: var(--foreground);
-  cursor: pointer;
-}
-
-.resume {
-  font-weight: 600;
-}
-
-.delete {
-  color: var(--evil, #b04040);
-}

@@ -16,6 +16,7 @@ import {
 } from "@/lib/gameDocument";
 import type { SetupWalkthroughStep } from "@/lib/setupWalkthrough";
 
+import { Button } from "./Button";
 import { Checkbox } from "./Checkbox";
 import { DemonBluffsFields } from "./DemonBluffsPanel";
 import { Select } from "./Select";
@@ -199,9 +200,9 @@ function StepPanel({
       {!editing && (
         <p className={styles.statusNote}>
           {status === "answered" ? "Answered" : "Skipped"}
-          <button type="button" onClick={() => setForceEditing(true)}>
+          <Button variant="ghost" onClick={() => setForceEditing(true)}>
             Redo
-          </button>
+          </Button>
         </p>
       )}
 
@@ -348,13 +349,7 @@ function StepPanel({
             />
           )}
 
-          <button
-            type="button"
-            className={styles.skip}
-            onClick={() => resolve("skipped")}
-          >
-            Skip
-          </button>
+          <Button onClick={() => resolve("skipped")}>Skip</Button>
         </>
       )}
     </fieldset>
@@ -374,9 +369,9 @@ function ConfirmOnlyControls({
   return (
     <div className={styles.controls}>
       {children}
-      <button type="button" onClick={onConfirm}>
+      <Button variant="primary" onClick={onConfirm}>
         Confirm
-      </button>
+      </Button>
     </div>
   );
 }
@@ -408,13 +403,13 @@ function PlayerPickControls({
           ]}
         />
       </label>
-      <button
-        type="button"
+      <Button
+        variant="primary"
         disabled={!playerId}
         onClick={() => onConfirm(playerId)}
       >
         Confirm
-      </button>
+      </Button>
     </div>
   );
 }
@@ -520,13 +515,13 @@ function CharacterAndTwoPlayersControls({
           ]}
         />
       </label>
-      <button
-        type="button"
+      <Button
+        variant="primary"
         disabled={!canConfirm}
         onClick={() => character && onConfirm(character, truePlayerId, falsePlayerId)}
       >
         Confirm
-      </button>
+      </Button>
     </div>
   );
 }
@@ -551,9 +546,9 @@ function ReminderToggleControls({
         <Checkbox checked={placeReminder} onChange={setPlaceReminder} />
         {`Place "${reminderLabel}" reminder`}
       </label>
-      <button type="button" onClick={() => onConfirm(placeReminder)}>
+      <Button variant="primary" onClick={() => onConfirm(placeReminder)}>
         Confirm
-      </button>
+      </Button>
     </div>
   );
 }
@@ -613,13 +608,13 @@ function StandInReassignControls({
         />
       </label>
       <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
-      <button
-        type="button"
+      <Button
+        variant="primary"
         disabled={!chosen || chosen.id === currentCharacterId}
         onClick={() => chosen && onConfirm(chosen.id)}
       >
         Change stand-in
-      </button>
+      </Button>
     </div>
   );
 }
@@ -641,13 +636,12 @@ function GenericControls({
     <div className={styles.controls}>
       <div className={styles.reminderOptions}>
         {step.reminderOptions.map((label) => (
-          <button
+          <Button
             key={label}
-            type="button"
             onClick={() => setStaged((current) => [...current, label])}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
       {staged.length > 0 && (
@@ -657,9 +651,9 @@ function GenericControls({
           ))}
         </ul>
       )}
-      <button type="button" onClick={() => onDone(staged)}>
+      <Button variant="primary" onClick={() => onDone(staged)}>
         Done
-      </button>
+      </Button>
     </div>
   );
 }
@@ -702,9 +696,9 @@ export function SetupWalkthrough({
           <p>
             {resolvedCount}/{steps.length} handled
           </p>
-          <button type="button" ref={closeButtonRef} onClick={onClose}>
+          <Button variant="ghost" ref={closeButtonRef} onClick={onClose}>
             Close
-          </button>
+          </Button>
         </header>
         <ol className={styles.steps}>
           {steps.map((step) => (

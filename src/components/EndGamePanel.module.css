@@ -34,23 +34,12 @@
   color: var(--muted);
 }
 
-.actions button {
-  padding: 0.6rem 1rem;
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface-raised);
-  color: var(--foreground);
-  cursor: pointer;
-  min-height: 2.75rem;
-}
-
 .good {
-  border-color: var(--good, #2f6f4f);
+  border-color: var(--good);
 }
 
 .evil {
-  border-color: var(--evil, #8f2f2f);
+  border-color: var(--evil);
 }
 
 .export {

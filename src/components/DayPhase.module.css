@@ -13,10 +13,7 @@
   border-radius: 0.5rem;
 }
 
-/* Shared with the night list's own back/undo button (BottomSheet.module.css:
-   .backAction, issue #195 code review finding). */
 .reopenNight {
-  composes: backAction from "./BottomSheet.module.css";
   margin-bottom: 0.5rem;
 }
 
@@ -157,50 +154,16 @@
   font-size: 0.85rem;
 }
 
-.submit {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.submit:disabled {
-  background: var(--surface-raised);
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
 .note {
   font-size: 0.8rem;
   color: var(--muted);
 }
 
-.lockIn {
-  composes: submit;
-  margin-top: 0.5rem;
-  padding: 0.5rem 1rem;
-}
-
+.lockIn,
 .reopen {
-  min-height: 2.75rem;
   margin-top: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: var(--surface-raised);
-  color: var(--foreground);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
-/* Shared with the night list's own forward actions (BottomSheet.module.css:
-   .forwardAction, issue #195 code review finding) — ending the day and
-   starting the next night is the same kind of forward step. */
 .startNight {
-  composes: forwardAction from "./BottomSheet.module.css";
   margin-top: 0.75rem;
 }

@@ -19,6 +19,7 @@ import {
   subscribeGames,
 } from "@/lib/gameStorage";
 
+import { Button } from "./Button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import styles from "./GamesList.module.css";
 
@@ -101,26 +102,15 @@ export function GamesList() {
                 </span>
               </div>
               <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.resume}
-                  onClick={() => resume(game.id)}
-                >
+                <Button variant="primary" onClick={() => resume(game.id)}>
                   Resume
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadGameSnapshot(game)}
-                >
+                </Button>
+                <Button onClick={() => downloadGameSnapshot(game)}>
                   Export
-                </button>
-                <button
-                  type="button"
-                  className={styles.delete}
-                  onClick={() => remove(game)}
-                >
+                </Button>
+                <Button variant="destructive" onClick={() => remove(game)}>
                   Delete
-                </button>
+                </Button>
               </div>
             </li>
           );

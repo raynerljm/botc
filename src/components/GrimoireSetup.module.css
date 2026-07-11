@@ -10,18 +10,7 @@
 }
 
 .back {
-  display: inline-block;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.95rem;
   padding: 0.5rem 0.5rem 0.5rem 0;
-  cursor: pointer;
-}
-
-.back:hover {
-  color: var(--foreground);
 }
 
 .seats {
@@ -84,43 +73,7 @@
 }
 
 .startDraw {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
   margin-bottom: 1.5rem;
-}
-
-/* "Ready to draw" / "Open the grimoire" — one tap per seat every game, and
-   previously fully unstyled (browser-default button chrome). */
-.drawAction {
-  min-height: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.6rem 1.1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* "Add to the circle" — the traveller-add form's submit. */
-.formSubmit {
-  min-height: 2.75rem;
-  padding: 0.6rem 1.1rem;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .drawFlow {
@@ -226,13 +179,6 @@
 }
 
 .addTraveller {
-  padding: 0.6rem 1.1rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  font-weight: 600;
-  cursor: pointer;
   margin-bottom: 1.5rem;
 }
 
@@ -267,29 +213,6 @@
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-}
-
-.walkthroughStart {
-  padding: 0.6rem 1.1rem;
-  font: inherit;
-  background: var(--accent);
-  color: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 2.75rem;
-}
-
-.walkthroughSkip {
-  padding: 0.6rem 1.1rem;
-  font: inherit;
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--foreground);
-  cursor: pointer;
-  min-height: 2.75rem;
 }
 
 /* max-width (issue #124): a native <select>'s intrinsic content width (e.g.
