@@ -81,7 +81,26 @@ body {
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  /* Atmospheric background (issue #219): a low-contrast candlelit-vignette
+     over the flat --background, not a busy illustration. A warm glow high
+     and off-centre (like a single lamp over the table) fading into a
+     darker vignette at the corners — static, so it never competes with
+     token/reminder legibility or costs a frame of animation. Scrolls with
+     the page (no `background-attachment: fixed`) since that property is
+     unreliable/janky on mobile browsers, which is where this app is mostly
+     used. */
+  background:
+    radial-gradient(
+      ellipse 70% 50% at 50% 0%,
+      color-mix(in srgb, var(--accent) 7%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 120% 90% at 50% 100%,
+      rgb(0 0 0 / 40%),
+      transparent 60%
+    ),
+    var(--background);
   font-family: var(--font-body);
   font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
