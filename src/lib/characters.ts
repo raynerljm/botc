@@ -158,6 +158,12 @@ export const SEAT_HOLDING_TEAMS: Team[] = [
   "demon",
 ];
 
+// "Good" by team, not by a player's tracked alignment (CONTEXT.md:
+// Alignment) — shared by every storyteller-facing "pick a good character"
+// picker (Demon bluffs, Philosopher/Boffin's acts-as target) so the two
+// definitions can't drift apart.
+export const GOOD_TEAMS: ReadonlySet<Team> = new Set(["townsfolk", "outsider"]);
+
 // The "script's characters first, then everything in the dataset" picker
 // pool (issue #15: swap, mid-game add, Fabled) — a script's own characters
 // (including homebrew ones with no vendored entry) take priority so the

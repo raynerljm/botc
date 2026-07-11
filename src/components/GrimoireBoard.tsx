@@ -988,19 +988,26 @@ export function GrimoireBoard({
               ? ACTS_AS_ALLOWED_TEAMS[player.characterId]
               : undefined;
             const actsAsGroups = actsAsAllowedTeams
-              ? claimGroups.filter((group) =>
-                  actsAsAllowedTeams.includes(group.team),
-                )
+              ? claimGroups.filter((group) => actsAsAllowedTeams.has(group.team))
               : claimGroups;
             // A target set before this filter existed (or before the script
             // last changed) can be off-spec-team or altogether missing from
-            // claimOptions — keep it visible/selectable rather than
-            // silently clearing it (same safeguard as the Claim select).
-            const actsAsCurrentOffSpec =
-              player.actsAs !== null &&
-              !actsAsGroups.some((group) =>
-                group.characters.some((c) => c.id === player.actsAs),
-              );
+            // claimOptions — keep it visible/selectable rather than silently
+            // clearing it (same safeguard as the Claim select). Read off
+            // claimById's O(1) team lookup rather than re-scanning
+            // actsAsGroups, and gated on truthy (not just non-null) so a
+            // stray empty-string value doesn't produce a second blank entry
+            // alongside "Not acting as anyone".
+            const actsAsTarget = player.actsAs
+              ? claimById.get(player.actsAs)
+              : undefined;
+            const actsAsOffSpecId =
+              player.actsAs &&
+              (actsAsTarget === undefined ||
+                (actsAsAllowedTeams !== undefined &&
+                  !actsAsAllowedTeams.has(actsAsTarget.team)))
+                ? player.actsAs
+                : null;
             const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
@@ -1223,13 +1230,12 @@ export function GrimoireBoard({
                             // before the script last changed, or before this
                             // team filter existed, can reference a character
                             // no longer offered by the groups below.
-                            ...(actsAsCurrentOffSpec
+                            ...(actsAsOffSpecId
                               ? [
                                   {
-                                    value: player.actsAs!,
+                                    value: actsAsOffSpecId,
                                     label:
-                                      claimById.get(player.actsAs!)?.name ??
-                                      player.actsAs!,
+                                      actsAsTarget?.name ?? actsAsOffSpecId,
                                   },
                                 ]
                               : []),

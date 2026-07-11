@@ -797,6 +797,25 @@ describe("acts-as team constraints (issue #245)", () => {
     expect(options.map((o) => o.value)).toContain("poisoner");
   });
 
+  it("treats an empty-string acts-as (a malformed/hand-edited game document) as no target, not an off-spec one", async () => {
+    const user = userEvent.setup();
+    // A truthy check (matching the sibling Claim select) rather than an
+    // "!== null" check: an empty string must not be flagged off-spec and
+    // duplicated alongside "Not acting as anyone" (code review finding).
+    renderBoard(
+      [makePlayer({ characterId: "philosopher", actsAs: "" })],
+      { claimOptions: teamMixedClaimOptions },
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toEqual(["", "librarian", "recluse"]);
+  });
+
   it("does not hard-block in-play status for the team it does offer (advisory, ADR 0003)", async () => {
     const user = userEvent.setup();
     // "recluse" isn't held by any seated player here — only present via
