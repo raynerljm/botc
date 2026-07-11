@@ -38,6 +38,10 @@ function renderGameNotes(
   );
 }
 
+function precedes(a: Element, b: Element): boolean {
+  return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
 describe("GameNotes", () => {
   it("starts expanded, showing the General section for a fresh game", () => {
     renderGameNotes(makeGame());
@@ -77,7 +81,7 @@ describe("GameNotes", () => {
   });
 
   it("renders sections newest-first: latest phase on top, General last (issue #214)", () => {
-    const { container } = renderGameNotes(
+    renderGameNotes(
       makeGame({
         notes: [
           { id: "general", title: "General", text: "" },
@@ -88,16 +92,14 @@ describe("GameNotes", () => {
       }),
     );
 
-    const text = container.textContent ?? "";
-    const night2Index = text.indexOf("Night 2");
-    const day1Index = text.indexOf("Day 1");
-    const night1Index = text.indexOf("Night 1");
-    const generalIndex = text.indexOf("General");
+    const night2 = screen.getByLabelText("Night 2");
+    const day1 = screen.getByLabelText("Day 1");
+    const night1 = screen.getByLabelText("Night 1");
+    const general = screen.getByLabelText("General");
 
-    expect(night2Index).toBeGreaterThanOrEqual(0);
-    expect(night2Index).toBeLessThan(day1Index);
-    expect(day1Index).toBeLessThan(night1Index);
-    expect(night1Index).toBeLessThan(generalIndex);
+    expect(precedes(night2, day1)).toBe(true);
+    expect(precedes(day1, night1)).toBe(true);
+    expect(precedes(night1, general)).toBe(true);
   });
 
   it("keeps a newly added phase section on top as its phase begins (issue #214)", () => {
@@ -107,7 +109,7 @@ describe("GameNotes", () => {
         { id: "night-1", title: "Night 1", text: "" },
       ],
     });
-    const { container, rerender } = renderGameNotes(game);
+    const { rerender } = renderGameNotes(game);
 
     rerender(
       <GameNotes
@@ -120,9 +122,12 @@ describe("GameNotes", () => {
       />,
     );
 
-    const text = container.textContent ?? "";
-    expect(text.indexOf("Day 1")).toBeLessThan(text.indexOf("Night 1"));
-    expect(text.indexOf("Night 1")).toBeLessThan(text.indexOf("General"));
+    const day1 = screen.getByLabelText("Day 1");
+    const night1 = screen.getByLabelText("Night 1");
+    const general = screen.getByLabelText("General");
+
+    expect(precedes(day1, night1)).toBe(true);
+    expect(precedes(night1, general)).toBe(true);
   });
 
   it("persists a manual collapse toggle via onToggleCollapsed", async () => {
