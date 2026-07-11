@@ -21,9 +21,11 @@
      9-10rem to avoid clipping the heading, so it opts into "roomy" via
      `peekVariant` (issue #216 code review finding: a single bound sized for
      Day's content left Night's much shorter peek with dead space it never
-     asked for). Either way the panel stays a scrollable fallback for the
-     rarer case (e.g. a block holder recorded while the timer is also
-     running) that still doesn't fit. */
+     asked for). `.body` below is the scrollable fallback for the common
+     case (a body/`below` that doesn't fit); `.pinned`'s own scroll (issue
+     #247 code review finding) is the fallback for the rarer one — `above`
+     content alone approaching this same bound, e.g. before issue #216's
+     compact DayTimer variant lands. */
   --sheet-peek-height: clamp(4.5rem, 16vh, 7.5rem);
   --sheet-expanded-height: 45vh;
   display: flex;
@@ -42,8 +44,10 @@
      needs to sit under the sheet. */
   z-index: 15;
   height: var(--sheet-peek-height);
-  overflow-y: auto;
-  padding: 0.5rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  /* Only `.body` below scrolls now (issue #247) — this just keeps the fixed-
+     height clamp's rounded top corners crisp against whatever `.body`'s
+     internal scrollbar does at the edges. */
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom: none;
@@ -85,6 +89,46 @@
    the gesture's duration and re-enabled the instant it ends. */
 .panel[data-dragging] {
   transition: none;
+}
+
+.pinned,
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Drag handle, `above` slot, and the open/close heading (issue #247): pinned
+   at the top of the panel, outside `.body`'s scroll region, so the open/close
+   control is never scrolled out of reach. `.panel` no longer scrolls itself —
+   only `.body` does.
+
+   `flex-shrink: 0` keeps this at its natural height rather than being
+   squeezed by `.body` fighting it for room — but that alone doesn't help if
+   `above`'s content (e.g. Day phase's DayTimer) alone is taller than the
+   panel's own fixed height, since `.panel`'s `overflow: hidden` would then
+   silently clip straight through the heading, re-creating this same issue
+   one level up (code review finding). `max-height` + its own `overflow-y`
+   make this pinned block scrollable in that edge case instead, mirroring
+   the scrollable-fallback role `.panel` itself used to play. */
+.pinned {
+  flex-shrink: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 0.5rem 1.25rem 0;
+}
+
+/* The scrollable body: the collapsible content (hidden while peeking) plus
+   `below`. Mirrors `.panel`'s old top-level layout now that those children
+   render one level deeper — but only when there's something to show, or an
+   empty `.body` would still claim `.panel`'s `gap` against `.pinned` and
+   leave dead space below the heading while peeking with no `below` content
+   (code review finding; see BottomSheet.tsx). */
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 .handle {

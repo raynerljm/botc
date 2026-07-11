@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 
-import { CollapsibleSection } from "./CollapsibleSection";
+import { CollapsibleHeading } from "./CollapsibleSection";
 import styles from "./BottomSheet.module.css";
 
 export interface BottomSheetProps {
@@ -189,28 +189,41 @@ export function BottomSheet({
       data-dragging={liveHeightPx !== null || undefined}
       style={liveHeightPx !== null ? { height: `${liveHeightPx}px` } : undefined}
     >
-      {/* Decorative drag handle — a bottom sheet's standard pointer/touch
-          affordance (issue #194). Screen-reader users still get an
-          accessible expand/collapse control via the heading button below,
-          so this is aria-hidden rather than a second, redundant control. */}
-      <div
-        className={styles.handle}
-        data-handle
-        aria-hidden="true"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-      />
-      {above}
-      <CollapsibleSection
-        title={title}
-        collapsed={collapsed}
-        onToggleCollapsed={onToggleCollapsed}
-      >
-        {children}
-      </CollapsibleSection>
-      {below}
+      {/* The sheet's chrome — drag handle, the always-visible `above` slot,
+          and the open/close heading — is pinned to the top of the panel
+          (issue #247) so it stays reachable no matter how far the body below
+          is scrolled. Only `.body` scrolls; `.panel` itself no longer does. */}
+      <div className={styles.pinned} data-sheet-pinned>
+        {/* Decorative drag handle — a bottom sheet's standard pointer/touch
+            affordance (issue #194). Screen-reader users still get an
+            accessible expand/collapse control via the heading button below,
+            so this is aria-hidden rather than a second, redundant control. */}
+        <div
+          className={styles.handle}
+          data-handle
+          aria-hidden="true"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+        />
+        {above}
+        <CollapsibleHeading
+          title={title}
+          collapsed={collapsed}
+          onToggleCollapsed={onToggleCollapsed}
+        />
+      </div>
+      {/* Skipped entirely when there's nothing to show (peeking with no
+          `below`, code review finding) — an empty div here would still
+          claim `.panel`'s `gap` against `.pinned`, leaving unwanted dead
+          space below the heading. */}
+      {(!collapsed || below) && (
+        <div className={styles.body} data-sheet-body>
+          {!collapsed && children}
+          {below}
+        </div>
+      )}
     </section>
   );
 }

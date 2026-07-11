@@ -16,9 +16,10 @@
   color: var(--muted);
 }
 
-/* No max-height/overflow of its own — the sheet (.panel) is the single
-   scroll region, so scrolling the entries list also keeps "End {phase}"
-   below it reachable rather than trapped in a second nested scrollbar. */
+/* No max-height/overflow of its own — the sheet's scrollable body
+   (BottomSheet.module.css's `.body`, issue #247) is the single scroll
+   region, so scrolling the entries list also keeps "End {phase}" below it
+   reachable rather than trapped in a second nested scrollbar. */
 .entries {
   display: flex;
   flex-direction: column;

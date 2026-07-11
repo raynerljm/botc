@@ -434,3 +434,82 @@ describe("BottomSheet: fixed-height overlay (issue #212, ADR 0004)", () => {
     expect(panel).not.toHaveAttribute("data-dragging");
   });
 });
+
+describe("BottomSheet: pinned chrome, scrollable body (issue #247)", () => {
+  it("keeps the drag handle, `above` slot, and heading outside the scrollable body", () => {
+    const { container } = render(
+      <BottomSheet
+        ariaLabel="Night list"
+        title="Night list"
+        collapsed={false}
+        onToggleCollapsed={() => {}}
+        above={<p>Timer</p>}
+        below={<p>Progress</p>}
+      >
+        <p>Entries</p>
+      </BottomSheet>,
+    );
+
+    const body = container.querySelector("[data-sheet-body]") as HTMLElement;
+    const pinned = container.querySelector(
+      "[data-sheet-pinned]",
+    ) as HTMLElement;
+
+    // The open/close control and the always-visible `above` content must
+    // never end up inside whatever scrolls, or a long body pushes them out
+    // of view (the reported bug) instead of scrolling around them.
+    expect(pinned.querySelector("[data-handle]")).toBeInTheDocument();
+    expect(body.querySelector("[data-handle]")).not.toBeInTheDocument();
+    expect(
+      pinned.querySelector('button[aria-expanded]'),
+    ).toBeInTheDocument();
+    expect(body.querySelector("button")).not.toBeInTheDocument();
+    expect(pinned).toHaveTextContent("Timer");
+    expect(body).not.toHaveTextContent("Timer");
+
+    // The collapsible body and the `below` summary are the part that's
+    // meant to scroll when it overflows the sheet's fixed height.
+    expect(body).toHaveTextContent("Entries");
+    expect(body).toHaveTextContent("Progress");
+    expect(pinned).not.toHaveTextContent("Entries");
+  });
+
+  it("omits the scrollable body entirely while peeking with no `below` content, rather than an empty gap under the heading", () => {
+    const { container } = render(
+      <BottomSheet
+        ariaLabel="Night list"
+        title="Night list"
+        collapsed
+        onToggleCollapsed={() => {}}
+      >
+        <p>Entries</p>
+      </BottomSheet>,
+    );
+
+    // Nothing renders inside `.body` while peeking with no `below` (children
+    // are hidden, `below` is absent) — the empty wrapper itself shouldn't
+    // exist, or `.panel`'s gap still claims space against `.pinned` for
+    // nothing (code review finding).
+    expect(container.querySelector("[data-sheet-body]")).not.toBeInTheDocument();
+  });
+
+  it("keeps the heading reachable in the pinned chrome even while peeking (no body content to scroll)", () => {
+    const { container } = render(
+      <BottomSheet
+        ariaLabel="Night list"
+        title="Night list"
+        collapsed
+        onToggleCollapsed={() => {}}
+      >
+        <p>Entries</p>
+      </BottomSheet>,
+    );
+
+    const pinned = container.querySelector(
+      "[data-sheet-pinned]",
+    ) as HTMLElement;
+    expect(
+      pinned.querySelector('button[aria-expanded="false"]'),
+    ).toBeInTheDocument();
+  });
+});
