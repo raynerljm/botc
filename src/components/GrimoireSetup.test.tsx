@@ -1632,6 +1632,18 @@ describe("reassigning the Lunatic's stand-in from the setup walkthrough (issue #
       standIn: null,
       lunaticStandIn: getCharacter("imp")!,
       extraCopies: {},
+      // The real BagBuilder always passes the full script pool (issue #242:
+      // the stand-in reassignment picker sources from it) — without this,
+      // scriptCharacters defaults to just selectedCharacters, which omits
+      // Imp (the lunaticStandIn) entirely. Named explicitly rather than via
+      // getEditionCharacters("tb") since Zombuul isn't actually on that
+      // script — this scenario's "script" is this test's own fixture.
+      scriptCharacters: [
+        getCharacter("lunatic")!,
+        getCharacter("chef")!,
+        getCharacter("zombuul")!,
+        getCharacter("imp")!,
+      ],
     });
     render(<GrimoireSetup game={game} />);
 
