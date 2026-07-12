@@ -1087,9 +1087,10 @@ describe("rotate the grimoire (issue #192)", () => {
       "[data-reminder-id='r1']",
     ) as HTMLElement;
     // The seat itself rotates to (95, 50); the reminder should still park
-    // directly beside it, not at its pre-rotation offset.
-    expect(parseFloat(reminderWrap.style.left)).toBeCloseTo(95);
-    expect(parseFloat(reminderWrap.style.top)).toBeCloseTo(62);
+    // beside it, offset toward the pad's centre (83, 50), not at its
+    // pre-rotation offset.
+    expect(parseFloat(reminderWrap.style.left)).toBeCloseTo(83);
+    expect(parseFloat(reminderWrap.style.top)).toBeCloseTo(50);
   });
 
   it("stores a seat-anchored reminder's fallback position in the canonical (un-rotated) frame, not the rotated display frame", async () => {
@@ -1758,22 +1759,22 @@ describe("reminder placement (issue #71)", () => {
     );
   });
 
-  it("renders a reminder anchored to a seat below that seat's token, clear of its name label", () => {
+  it("renders a reminder anchored to a seat offset toward the circle's centre, clear of its token", () => {
     const reminder = makeReminder({
       id: "r1",
       anchorPlayerId: "p1",
       position: { x: 1, y: 1 },
     });
     const { container } = renderBoard(
-      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      [makePlayer({ id: "p1", position: { x: 50, y: 30 } })],
       { reminders: [reminder] },
     );
 
     const wrap = container.querySelector(
       "[data-reminder-id='r1']",
     ) as HTMLElement;
-    expect(wrap.style.left).toBe("30%");
-    expect(parseFloat(wrap.style.top)).toBeGreaterThan(40);
+    expect(wrap.style.left).toBe("50%");
+    expect(parseFloat(wrap.style.top)).toBeGreaterThan(30);
   });
 
   it("stacks a second reminder anchored to the same seat further down, not on top of the first", () => {
@@ -1838,11 +1839,12 @@ describe("reminder placement (issue #71)", () => {
       id: "r1",
       anchorPlayerId: "p1",
       // Deliberately stale/unrelated to where the reminder actually renders
-      // (below the seat) — proves the drag doesn't grab-offset against this.
+      // (toward the seat's centre) — proves the drag doesn't grab-offset
+      // against this.
       position: { x: 1, y: 1 },
     });
     const { container, onMoveReminder } = renderBoard(
-      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      [makePlayer({ id: "p1", position: { x: 50, y: 30 } })],
       { reminders: [reminder] },
     );
     mockBoardRect(container);
@@ -1852,32 +1854,34 @@ describe("reminder placement (issue #71)", () => {
     const wrap = container.querySelector(
       "[data-reminder-id='r1']",
     ) as HTMLElement;
-    // Displayed anchored position: same x as the seat (30%), offset below
-    // it in y (30%/52% per anchoredReminderPosition, i.e. (120, 208) on the
-    // 400px board) — not the seat's own centre and not the stored (1, 1).
-    expect(wrap.style.left).toBe("30%");
+    // Displayed anchored position: same x as the seat (50%), offset toward
+    // the pad's centre in y (30%/52% per anchoredReminderPosition — this
+    // seat's toward-centre direction is straight down, so it also carries
+    // the downward-label clearance — i.e. (200, 208) on the 400px board) —
+    // not the seat's own centre and not the stored (1, 1).
+    expect(wrap.style.left).toBe("50%");
     expect(wrap.style.top).toBe("52%");
 
     fireEvent(
       reminderSummary,
-      pointerEvent("pointerdown", { pointerId: 1, clientX: 120, clientY: 208 }),
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 200, clientY: 208 }),
     );
     fireEvent(
       reminderSummary,
-      pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 208 }),
+      pointerEvent("pointermove", { pointerId: 1, clientX: 240, clientY: 208 }),
     );
 
     // Grabbed exactly at the displayed spot and moved 40px (10%) right, so
-    // the reminder should land at 40%/52% — not jump to the raw pointer
+    // the reminder should land at 60%/52% — not jump to the raw pointer
     // position, and not offset against the stale stored (1, 1).
-    expect(wrap.style.left).toBe("40%");
+    expect(wrap.style.left).toBe("60%");
     expect(wrap.style.top).toBe("52%");
 
     fireEvent(
       reminderSummary,
-      pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 208 }),
+      pointerEvent("pointerup", { pointerId: 1, clientX: 240, clientY: 208 }),
     );
-    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 40, y: 52 });
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 60, y: 52 });
   });
 
   it("attaches an existing reminder to a seat by tapping it, without a drag gesture", async () => {
@@ -2069,6 +2073,55 @@ describe("reminder placement (issue #71)", () => {
     ) as HTMLElement;
     fireEvent.click(seatSummary);
     expect(onAttachReminder).not.toHaveBeenCalled();
+  });
+});
+
+describe("token sizing (issue #251)", () => {
+  it("renders larger tokens at low player counts than the previous cap", () => {
+    const players = Array.from({ length: 5 }, (_, i) =>
+      makePlayer({ id: `p${i}`, seat: i + 1 }),
+    );
+    const { container } = renderBoard(players);
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    expect(board.style.getPropertyValue("--token-size")).toBe("4.2rem");
+  });
+
+  it("holds the larger size through more seats before it starts shrinking", () => {
+    const players = Array.from({ length: 8 }, (_, i) =>
+      makePlayer({ id: `p${i}`, seat: i + 1 }),
+    );
+    const { container } = renderBoard(players);
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    expect(board.style.getPropertyValue("--token-size")).toBe("4.2rem");
+  });
+
+  it("still shrinks to the safe floor at 20 players (issue #82 finding: a larger floor overlapped adjacent icons at this count)", () => {
+    const players = Array.from({ length: 20 }, (_, i) =>
+      makePlayer({ id: `p${i}`, seat: i + 1 }),
+    );
+    const { container } = renderBoard(players);
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    expect(board.style.getPropertyValue("--token-size")).toBe("1.9rem");
+  });
+});
+
+describe("token label layout (issue #251)", () => {
+  it("renders status labels in a layer separate from the icon, so a growing label stack can't shift the icon's own box", () => {
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", claim: "monk" }),
+    ]);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const labels = summary.querySelector(`.${styles.tokenLabels}`);
+
+    expect(summary.querySelector(`.${styles.tokenVisual}`)).not.toBeNull();
+    expect(labels).not.toBeNull();
+    expect(labels?.textContent).toContain("Claims");
+    // Only the icon and the labels layer are direct children of .tokenSummary
+    // — every status label lives inside the labels layer, not as a further
+    // flex child alongside the icon that would grow .tokenSummary's own box.
+    expect(summary.children).toHaveLength(2);
   });
 });
 
@@ -2695,20 +2748,20 @@ describe("token menu viewport clamping (issue #124)", () => {
     expect(reminderWrap).toHaveAttribute("data-vside", "bottom");
   });
 
-  it("marks a reminder anchored to an edge seat using its own anchored position, not its own stored position (issue #71's anchoring)", () => {
+  it("marks a reminder anchored to a corner seat using its own anchored position, not its own stored position (issue #71's anchoring)", () => {
     // A reminder's stored .position is stale once anchored — it tracks its
     // anchor seat's position via anchoredReminderPosition instead (see the
-    // reminderWrap render logic). This anchor seat sits at the board's
-    // right edge with no vertical clamp in play, so the reminder parks
-    // beside it without any of anchoredReminderPosition's clearance-recovery
-    // shifting it back toward centre — it should still read as edge-parked.
+    // reminderWrap render logic): a bottom-right corner seat's reminder
+    // parks a little further up and left, toward the pad's centre, and
+    // should still read as bottom-right-parked from that offset position —
+    // not from its stale stored (50, 50), which would read as unmarked.
     const anchoredReminder = makeReminder({
       id: "r1",
       anchorPlayerId: "p1",
       position: { x: 50, y: 50 }, // stale/irrelevant once anchored
     });
     const { container } = renderBoard(
-      [makePlayer({ id: "p1", position: { x: 90, y: 50 } })],
+      [makePlayer({ id: "p1", position: { x: 94, y: 94 } })],
       { reminders: [anchoredReminder] },
     );
     const reminderWrap = container.querySelector(

@@ -298,76 +298,71 @@ describe("nextPadReminderPosition (issue #71)", () => {
   });
 });
 
-describe("anchoredReminderPosition (issue #71)", () => {
-  it("places the first reminder below the seat, clear of its token+name block", () => {
-    const position = anchoredReminderPosition({ x: 50, y: 50 }, 0);
-    expect(position.x).toBe(50);
-    expect(position.y).toBeGreaterThan(50 + 8);
+describe("anchoredReminderPosition (issue #251)", () => {
+  it("places the first reminder along the line from a top seat toward the pad's centre", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 5 }, 0);
+    expect(position.x).toBeCloseTo(50);
+    // 5 + 12pt base offset + 10pt downward-label clearance (this seat's
+    // toward-centre direction is straight down, the same direction its own
+    // name label stacks in).
+    expect(position.y).toBeCloseTo(27);
   });
 
-  it("stacks a second reminder on the same seat further down, not on top of the first", () => {
-    const first = anchoredReminderPosition({ x: 50, y: 50 }, 0);
-    const second = anchoredReminderPosition({ x: 50, y: 50 }, 1);
-    expect(second.y).toBeGreaterThan(first.y);
+  it("gives a top seat's reminder extra clearance past its own name label, since 'toward the centre' there means straight down through it", () => {
+    const topSeat = anchoredReminderPosition({ x: 50, y: 5 }, 0);
+    const sideSeat = anchoredReminderPosition({ x: 94, y: 50 }, 0);
+    const topOffset = Math.hypot(topSeat.x - 50, topSeat.y - 5);
+    const sideOffset = Math.hypot(sideSeat.x - 94, sideSeat.y - 50);
+    expect(topOffset).toBeGreaterThan(sideOffset);
   });
 
-  it("clamps within the pad's bounds for a seat near the bottom edge", () => {
+  it("moves a bottom seat's reminder up toward the centre, not further down off the pad", () => {
     const position = anchoredReminderPosition({ x: 50, y: 94 }, 0);
-    expect(position.y).toBeLessThanOrEqual(96);
+    expect(position.y).toBeLessThan(94);
+    expect(position.y).toBeGreaterThanOrEqual(4);
   });
 
-  it("separates siblings by x when a near-bottom seat clamps every sibling's y to the same edge (code review finding)", () => {
-    const first = anchoredReminderPosition({ x: 50, y: 94 }, 0);
-    const second = anchoredReminderPosition({ x: 50, y: 94 }, 1);
-    expect(first.y).toBe(96);
-    expect(second.y).toBe(96);
-    expect(second.x).not.toBe(first.x);
+  it("moves a right-hand seat's reminder left toward the centre", () => {
+    const position = anchoredReminderPosition({ x: 94, y: 50 }, 0);
+    expect(position.x).toBeLessThan(94);
+    expect(position.y).toBeCloseTo(50);
   });
 
-  it("recovers the vertical clearance a bottom-of-circle seat's clamp ate by pushing the chip sideways instead, so it clears the token rather than landing on it (issue #117)", () => {
-    const anchor = { x: 50, y: 94 };
-    const position = anchoredReminderPosition(anchor, 0);
-    const distanceFromAnchor = Math.hypot(
-      position.x - anchor.x,
-      position.y - anchor.y,
-    );
-    // A non-edge seat gets 12pts of clearance below it (the first test
-    // above); an edge seat whose y clamps must still end up this far from
-    // the token overall, just angled sideways instead of straight down.
-    expect(distanceFromAnchor).toBeGreaterThanOrEqual(11.99);
-  });
-
-  it("fans a second sibling further sideways than the first once y has clamped, preserving the stacking order (issue #117)", () => {
-    const anchor = { x: 50, y: 94 };
+  it("stacks further siblings continuing along the same radial line, up to the fan cap", () => {
+    const anchor = { x: 50, y: 5 };
     const first = anchoredReminderPosition(anchor, 0);
     const second = anchoredReminderPosition(anchor, 1);
-    const firstDistance = Math.hypot(first.x - anchor.x, first.y - anchor.y);
-    const secondDistance = Math.hypot(second.x - anchor.x, second.y - anchor.y);
-    expect(secondDistance).toBeGreaterThan(firstDistance);
+    expect(second.y).toBeGreaterThan(first.y);
+    expect(second.x).toBeCloseTo(first.x);
   });
 
-  it("pushes a clamped chip toward the pad's horizontal centre, not further off the edge, for a bottom-corner seat (issue #117)", () => {
-    const anchor = { x: 94, y: 94 };
-    const position = anchoredReminderPosition(anchor, 0);
-    expect(position.x).toBeLessThan(anchor.x);
-    expect(position.x).toBeGreaterThanOrEqual(4);
+  it("fans siblings beyond the cap sideways instead of continuing toward the centre (constraint: don't pile up at the centre)", () => {
+    const anchor = { x: 50, y: 5 };
+    const capped = anchoredReminderPosition(anchor, 2);
+    const overflow = anchoredReminderPosition(anchor, 3);
+    expect(overflow.y).toBeCloseTo(capped.y);
+    expect(overflow.x).not.toBeCloseTo(capped.x);
   });
 
-  it("keeps several siblings on a clamped seat distinct instead of collapsing them onto the same point (code review finding)", () => {
-    const anchor = { x: 50, y: 94 };
+  it("falls back to straight down when the anchor sits exactly on the pad's centre, where toward-centre is undefined", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 50 }, 0);
+    expect(position.x).toBeCloseTo(50);
+    expect(position.y).toBeGreaterThan(50);
+  });
+
+  it("keeps every position within the pad's clamped bounds even for an anchor outside them, e.g. a legacy or hand-edited position", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 150 }, 0);
+    expect(position.y).toBeLessThanOrEqual(96);
+    expect(position.y).toBeGreaterThanOrEqual(4);
+  });
+
+  it("keeps several siblings on one seat distinct instead of collapsing onto the same point", () => {
+    const anchor = { x: 50, y: 5 };
     const positions = Array.from({ length: 6 }, (_, i) =>
       anchoredReminderPosition(anchor, i),
     );
-    const xs = new Set(positions.map((p) => p.x));
-    expect(xs.size).toBe(positions.length);
-  });
-
-  it("still recovers clearance for an anchor outside the pad's own bounds, e.g. a legacy or hand-edited position (code review finding)", () => {
-    const position = anchoredReminderPosition({ x: 50, y: 150 }, 0);
-    // Treated as clamped to y=96 before computing clearance, same as any
-    // other bottom-of-circle seat — not silently zeroed by a negative
-    // "clearance" from the out-of-range input.
-    expect(position.x).not.toBe(50);
+    const points = new Set(positions.map((p) => `${p.x},${p.y}`));
+    expect(points.size).toBe(positions.length);
   });
 });
 

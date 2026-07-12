@@ -271,11 +271,14 @@
 }
 
 .tokenSummary {
+  /* position: relative anchors .tokenLabels below (issue #251) to the icon
+     alone, not to .tokenWrap's own box — sized only by .tokenVisual (plus
+     the touch-target floor) so it stays a fixed size regardless of how many
+     status labels a seat has. */
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
   /* The clickable element is this <summary>, not just the token icon inside
      it — sized to the touch-target floor directly (issue #82) so a busy
      board's shrinking icon never drags the real tap target under 44px,
@@ -289,6 +292,27 @@
   text-align: center;
   -webkit-user-drag: none;
   user-select: none;
+}
+
+/* Status labels (name, claim, "(actually the X)"...) sit in their own
+   out-of-flow layer directly below the icon (issue #251) instead of being
+   further flex children of .tokenSummary — that used to grow .tokenSummary's
+   own box as labels accumulated, and since .tokenWrap recentres on that box
+   (translate(-50%,-50%)), more labels silently pushed the icon itself away
+   from its anchored point and toward a neighbouring seat. Absolutely
+   positioning this layer lets labels overflow downward freely without
+   affecting .tokenSummary's size or the icon's anchored position. */
+.tokenLabels {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding-top: 0.25rem;
+  width: max-content;
 }
 
 .tokenSummary :global(img) {

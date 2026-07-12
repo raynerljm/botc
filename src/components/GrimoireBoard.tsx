@@ -108,9 +108,19 @@ export interface GrimoireBoardProps {
 // while the icon floor isn't. The real tap target is .tokenSummary, the
 // <summary> wrapping the icon and name text — that's widened to 44px
 // instead (below), leaving the icon's own visual size untouched.
+//
+// MIN_TOKEN_REM (the size at MAX_TOKEN_COUNT) is left exactly at the #82
+// floor — that finding was about adjacent icons at 20 players, a circle
+// geometry this issue doesn't change, so raising it would reproduce the same
+// overlap. MAX_TOKEN_REM and MIN_TOKEN_COUNT both move instead (issue #251,
+// items 9+18): reminders no longer stack outward around the token (they now
+// run in a line toward the circle's centre — see anchoredReminderPosition),
+// which frees the perimeter for a visibly larger icon at low-to-mid player
+// counts, and lets tokens hold that larger size through more seats before
+// they start shrinking toward the same safe floor.
 const MIN_TOKEN_REM = 1.9;
-const MAX_TOKEN_REM = 3.4;
-const MIN_TOKEN_COUNT = 5;
+const MAX_TOKEN_REM = 4.2;
+const MIN_TOKEN_COUNT = 8;
 const MAX_TOKEN_COUNT = 20;
 
 // Interpolates token size down as the pad gets busier, so 20 tokens don't
@@ -1058,51 +1068,64 @@ export function GrimoireBoard({
                           on a second attribute here. */}
                       <span className={styles.shroud} aria-hidden="true" />
                     </span>
-                    {character && (
-                      <span className={styles.characterName}>
-                        {character.name}
+                    {/* Status labels render in their own out-of-flow layer
+                        below the icon, not as further .tokenSummary flex
+                        children — a token accumulating labels (claim, acts
+                        as, ghost vote, "(actually the X)"...) used to grow
+                        .tokenSummary's own box, and since .tokenWrap
+                        recentres on that box (translate(-50%,-50%)), more
+                        labels silently dragged the icon itself away from its
+                        anchor point and toward a neighbouring seat (issue
+                        #251). Anchoring here instead means the icon's
+                        position never depends on how many labels a seat
+                        happens to have. */}
+                    <span className={styles.tokenLabels}>
+                      {character && (
+                        <span className={styles.characterName}>
+                          {character.name}
+                        </span>
+                      )}
+                      <span className={styles.playerName}>
+                        {player.name}
+                        {player.dead && (
+                          <span className={styles.srOnly}> (dead)</span>
+                        )}
                       </span>
-                    )}
-                    <span className={styles.playerName}>
-                      {player.name}
-                      {player.dead && (
-                        <span className={styles.srOnly}> (dead)</span>
+                      {isHiddenLunatic && (
+                        <span className={styles.note}>
+                          (actually the Lunatic)
+                        </span>
+                      )}
+                      {player.isTraveller && (
+                        <span className={styles.noteCapitalized}>
+                          {player.travellerAlignment}
+                        </span>
+                      )}
+                      {player.claim && (
+                        <span
+                          key={`claim-${player.claim}`}
+                          className={styles.claimBadge}
+                        >
+                          Claims{" "}
+                          {claimById.get(player.claim)?.name ?? player.claim}
+                        </span>
+                      )}
+                      {actsAsCapable && player.actsAs && (
+                        <span
+                          key={`acts-as-${player.actsAs}`}
+                          className={styles.claimBadge}
+                        >
+                          Acts as{" "}
+                          {claimById.get(player.actsAs)?.name ?? player.actsAs}
+                        </span>
+                      )}
+                      {nominatorTodayIds?.has(player.id) && (
+                        <span className={styles.note}>Nominator</span>
+                      )}
+                      {nomineeTodayIds?.has(player.id) && (
+                        <span className={styles.note}>Nominee</span>
                       )}
                     </span>
-                    {isHiddenLunatic && (
-                      <span className={styles.note}>
-                        (actually the Lunatic)
-                      </span>
-                    )}
-                    {player.isTraveller && (
-                      <span className={styles.noteCapitalized}>
-                        {player.travellerAlignment}
-                      </span>
-                    )}
-                    {player.claim && (
-                      <span
-                        key={`claim-${player.claim}`}
-                        className={styles.claimBadge}
-                      >
-                        Claims{" "}
-                        {claimById.get(player.claim)?.name ?? player.claim}
-                      </span>
-                    )}
-                    {actsAsCapable && player.actsAs && (
-                      <span
-                        key={`acts-as-${player.actsAs}`}
-                        className={styles.claimBadge}
-                      >
-                        Acts as{" "}
-                        {claimById.get(player.actsAs)?.name ?? player.actsAs}
-                      </span>
-                    )}
-                    {nominatorTodayIds?.has(player.id) && (
-                      <span className={styles.note}>Nominator</span>
-                    )}
-                    {nomineeTodayIds?.has(player.id) && (
-                      <span className={styles.note}>Nominee</span>
-                    )}
                   </summary>
 
                   <div className={styles.menuBody}>
