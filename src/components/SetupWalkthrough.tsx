@@ -715,26 +715,28 @@ export function SetupWalkthrough({
             Close
           </Button>
         </header>
-        <ol className={styles.steps}>
-          {steps.map((step) => (
-            <li key={step.id}>
-              <StepPanel
-                step={step}
-                status={stepStatuses[step.id]}
-                players={players}
-                characterPool={characterPool}
-                game={game}
-                onChangeGame={onChangeGame}
-                onResolveStep={onResolveStep}
-                onReassignStandIn={onReassignStandIn}
-              />
-            </li>
-          ))}
-        </ol>
+        <div className={styles.body} data-walkthrough-body>
+          <ol className={styles.steps}>
+            {steps.map((step) => (
+              <li key={step.id}>
+                <StepPanel
+                  step={step}
+                  status={stepStatuses[step.id]}
+                  players={players}
+                  characterPool={characterPool}
+                  game={game}
+                  onChangeGame={onChangeGame}
+                  onResolveStep={onResolveStep}
+                  onReassignStandIn={onReassignStandIn}
+                />
+              </li>
+            ))}
+          </ol>
+        </div>
         {/* Always enabled — the storyteller may handle or skip steps in any
             order and close when ready (ADR 0003, advisory never blocking).
-            Sticky, so it stays reachable below a long, internally-scrolling
-            step list (issue #244). */}
+            Pinned outside the scrolling body (issue #261), so it stays
+            reachable below a long step list (issue #244). */}
         <footer className={styles.footer}>
           <Button variant="primary" onClick={onClose}>
             Done
