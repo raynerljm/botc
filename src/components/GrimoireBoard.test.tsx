@@ -215,10 +215,10 @@ describe("GrimoireBoard rendering", () => {
     expect(container.querySelectorAll("img")).toHaveLength(2);
   });
 
-  it("doesn't annotate a Drunk stand-in's token with inline copy (issue #186) — a reminder token carries that instead", () => {
+  it("marks a Drunk stand-in as actually the Drunk (issue #252)", () => {
     renderBoard([makePlayer({ isDrunk: true })]);
 
-    expect(screen.queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/actually the Drunk/i)).toBeInTheDocument();
   });
 
   // Capitalize is opt-in (.noteCapitalized) rather than the .note default —
