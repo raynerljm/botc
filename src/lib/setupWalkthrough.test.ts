@@ -272,15 +272,83 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     });
   });
 
-  it("gives the Drunk a review step keyed by the stand-in player, not their apparent character's own step", () => {
-    const game = gameWithCharacters(["drunk", "washerwoman", "imp"], "washerwoman");
+  it("gives the Drunk a review step keyed by the stand-in player, not their apparent character's own plain step", () => {
+    const game = gameWithCharacters(["drunk", "chef", "imp"], "chef");
     const steps = buildSetupWalkthroughSteps(game);
     const drunkPlayer = game.players.find((p) => p.isDrunk)!;
     const drunkSteps = stepsForPlayerId(steps, drunkPlayer.id);
 
     expect(drunkSteps[0]).toMatchObject({ kind: "review", reminderLabel: "Drunk" });
-    // Only one step for that seat — not also a Washerwoman characterAndTwoPlayers step.
+    // Chef has no curated setup step of its own — only the review step.
     expect(drunkSteps).toHaveLength(1);
+  });
+
+  describe("believed-character step for a Drunk (issue #254)", () => {
+    it("also gives the Drunk the stand-in's own curated characterAndTwoPlayers step, framed as fake", () => {
+      const game = gameWithCharacters(["drunk", "washerwoman", "imp"], "washerwoman");
+      const steps = buildSetupWalkthroughSteps(game);
+      const drunkPlayer = game.players.find((p) => p.isDrunk)!;
+      const drunkSteps = stepsForPlayerId(steps, drunkPlayer.id);
+
+      expect(drunkSteps).toHaveLength(2);
+      expect(drunkSteps[0]).toMatchObject({ kind: "review" });
+      expect(drunkSteps[1]).toMatchObject({
+        kind: "characterAndTwoPlayers",
+        characterId: "washerwoman",
+        candidateTeam: "townsfolk",
+        trueLabel: "Townsfolk",
+        falseLabel: "Wrong",
+        disguiseId: "drunk",
+      });
+      expect(drunkSteps[1].title).toMatch(/washerwoman/i);
+      expect(drunkSteps[1].ruleText).toMatch(/believes they are the washerwoman/i);
+    });
+
+    it("also gives the Drunk the stand-in's own curated playerPick step, framed as fake", () => {
+      const game = gameWithCharacters(["drunk", "grandmother", "imp"], "grandmother");
+      const steps = buildSetupWalkthroughSteps(game);
+      const drunkPlayer = game.players.find((p) => p.isDrunk)!;
+      const drunkSteps = stepsForPlayerId(steps, drunkPlayer.id);
+
+      expect(drunkSteps).toHaveLength(2);
+      expect(drunkSteps[1]).toMatchObject({
+        kind: "playerPick",
+        characterId: "grandmother",
+        reminderLabel: "Grandchild",
+        disguiseId: "drunk",
+      });
+      expect(drunkSteps[1].ruleText).toMatch(/believes they are the grandmother/i);
+    });
+
+    it("gives the believed-character step a distinct id from the review step, for the same seat", () => {
+      const game = gameWithCharacters(["drunk", "fortuneteller", "imp"], "fortuneteller");
+      const steps = buildSetupWalkthroughSteps(game);
+      const drunkPlayer = game.players.find((p) => p.isDrunk)!;
+      const drunkSteps = stepsForPlayerId(steps, drunkPlayer.id);
+
+      expect(drunkSteps[0].id).not.toBe(drunkSteps[1].id);
+    });
+
+    it("gives no extra step when the stand-in has no curated setup step (e.g. Chef)", () => {
+      const game = gameWithCharacters(["drunk", "chef", "imp"], "chef");
+      const drunkPlayer = game.players.find((p) => p.isDrunk)!;
+      const drunkSteps = stepsForPlayerId(buildSetupWalkthroughSteps(game), drunkPlayer.id);
+
+      expect(drunkSteps).toHaveLength(1);
+      expect(drunkSteps[0].kind).toBe("review");
+    });
+
+    it("does not give the Lunatic's own believed-Demon step an extra step (out of this issue's scope)", () => {
+      const game = gameWithCharacters(["lunatic", "imp", "chef"], undefined, "imp");
+      const lunaticPlayer = game.players.find((p) => p.isLunatic)!;
+      const lunaticSteps = stepsForPlayerId(
+        buildSetupWalkthroughSteps(game),
+        lunaticPlayer.id,
+      );
+
+      expect(lunaticSteps).toHaveLength(1);
+      expect(lunaticSteps[0].kind).toBe("review");
+    });
   });
 
   it("gives a homebrew character with reminders a generic step", () => {

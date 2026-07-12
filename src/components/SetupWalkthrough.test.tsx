@@ -581,6 +581,138 @@ describe("characterAndTwoPlayers step", () => {
   });
 });
 
+describe("characterAndTwoPlayers step for a Drunk's believed character (issue #254)", () => {
+  const fakeWasherwomanStep: SetupWalkthroughStep = {
+    id: "believed:p1",
+    kind: "characterAndTwoPlayers",
+    characterId: "washerwoman",
+    characterName: "Washerwoman",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Drunk's Washerwoman — character and two players",
+    ruleText:
+      "Alice believes they are the Washerwoman. Pick a Townsfolk character and two players.",
+    candidateTeam: "townsfolk",
+    trueLabel: "Townsfolk",
+    falseLabel: "Wrong",
+    disguiseId: "drunk",
+  };
+
+  it("anchors both reminders to the disguised seat itself, not whichever players were picked (AC: anchors to the Drunk's seat)", async () => {
+    const user = userEvent.setup();
+    // Who the picked true/false players are (Bob/Cara) is irrelevant to the
+    // anchor — it's a fabricated claim with no real ability interaction with
+    // them, so both reminders land on p1 (the disguised seat) regardless.
+    const { onResolveStep } = renderWalkthrough({ steps: [fakeWasherwomanStep] });
+
+    const step = screen.getByRole("group", { name: fakeWasherwomanStep.title });
+    // Grandmother — not held by any default player (p1 Fortune Teller, p2
+    // Imp, p3 Chef) — so this exercises the plain "pick a candidate" path
+    // without also tripping the held-elsewhere exclusion.
+    await selectOption(user, within(step).getByLabelText("Character"), "Grandmother");
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    await selectOption(user, trueSelect, playerNamedMatcher("Bob"));
+    const falseSelect = within(step).getByLabelText(/shown as wrong/i);
+    await selectOption(user, falseSelect, playerNamedMatcher("Cara"));
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    expect(onResolveStep).toHaveBeenCalledWith(
+      "believed:p1",
+      "answered",
+      expect.arrayContaining([
+        expect.objectContaining({ anchorPlayerId: "p1", label: "Townsfolk (Grandmother)" }),
+        expect.objectContaining({ anchorPlayerId: "p1", label: "Wrong (Grandmother)" }),
+      ]),
+    );
+  });
+
+  it("offers the full script's Townsfolk, not just the narrow in-play pool (reusing issue #242's fix)", async () => {
+    const user = userEvent.setup();
+    const narrowCharacterPool = [getCharacter("washerwoman")!, getCharacter("imp")!];
+    renderWalkthrough({
+      steps: [fakeWasherwomanStep],
+      characterPool: narrowCharacterPool,
+      game: makeGame({ scriptCharacters: characterPool }),
+    });
+
+    const step = screen.getByRole("group", { name: fakeWasherwomanStep.title });
+    const options = (
+      await getSelectOptions(user, within(step).getByLabelText("Character"))
+    ).map((o) => o.label);
+
+    // Librarian is on the script (scriptCharacters), isn't held by any
+    // default player, and isn't in the narrow characterPool prop — a
+    // correct fake picker still offers it.
+    expect(options).toContain("Librarian");
+  });
+
+  it("excludes a Townsfolk already held by another seat", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({
+      steps: [fakeWasherwomanStep],
+      players: [
+        makePlayer({
+          id: "p1",
+          seat: 1,
+          name: "Alice",
+          characterId: "washerwoman",
+          isDrunk: true,
+        }),
+        makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "chef" }),
+      ],
+      game: makeGame({ scriptCharacters: characterPool }),
+    });
+
+    const step = screen.getByRole("group", { name: fakeWasherwomanStep.title });
+    const options = (
+      await getSelectOptions(user, within(step).getByLabelText("Character"))
+    ).map((o) => o.label);
+
+    expect(options).not.toContain("Chef");
+    expect(options).toContain("Grandmother");
+  });
+
+  it("has no 'Show all characters' checkbox — the full script is already offered", () => {
+    renderWalkthrough({ steps: [fakeWasherwomanStep] });
+    const step = screen.getByRole("group", { name: fakeWasherwomanStep.title });
+    expect(within(step).queryByText(/show all characters/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("playerPick step for a Drunk's believed character (issue #254)", () => {
+  const fakeGrandmotherStep: SetupWalkthroughStep = {
+    id: "believed:p1",
+    kind: "playerPick",
+    characterId: "grandmother",
+    characterName: "Grandmother",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Drunk's Grandmother — grandchild",
+    ruleText:
+      "Alice believes they are the Grandmother. Pick which player is the Grandmother's grandchild.",
+    reminderLabel: "Grandchild",
+    disguiseId: "drunk",
+  };
+
+  it("anchors the reminder to the disguised seat itself, not the picked grandchild", async () => {
+    const user = userEvent.setup();
+    const { onResolveStep } = renderWalkthrough({ steps: [fakeGrandmotherStep] });
+
+    const step = screen.getByRole("group", { name: fakeGrandmotherStep.title });
+    const playerSelect = within(step).getByLabelText(/player/i);
+    await selectOption(user, playerSelect, playerNamedMatcher("Cara"));
+    await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+    expect(onResolveStep).toHaveBeenCalledWith("believed:p1", "answered", [
+      expect.objectContaining({
+        characterId: "grandmother",
+        label: "Grandchild",
+        anchorPlayerId: "p1",
+      }),
+    ]);
+  });
+});
+
 describe("neighborCheck step (Marionette)", () => {
   const marionetteStep: SetupWalkthroughStep = {
     id: "p1",

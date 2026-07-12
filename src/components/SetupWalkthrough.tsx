@@ -222,16 +222,21 @@ function StepPanel({
             <PlayerPickControls
               otherPlayers={goodOtherPlayers}
               characterById={characterById}
-              onConfirm={(playerId) =>
+              onConfirm={(playerId) => {
+                // A Drunk's believed-character pick is fictional — it has no
+                // real ability interaction with whoever gets picked, so its
+                // reminder anchors to the disguised seat itself rather than
+                // scattering onto an unrelated player's token (issue #254 AC).
+                const anchorId = step.disguiseId ? step.playerId : playerId;
                 resolve("answered", [
                   {
                     characterId: step.characterId,
                     label: step.reminderLabel,
-                    position: anchorPosition(playerId, players),
-                    anchorPlayerId: playerId,
+                    position: anchorPosition(anchorId, players),
+                    anchorPlayerId: anchorId,
                   },
-                ])
-              }
+                ]);
+              }}
             />
           )}
 
@@ -239,9 +244,23 @@ function StepPanel({
             <CharacterAndTwoPlayersControls
               step={step}
               otherPlayers={otherPlayers}
-              characterPool={characterPool}
+              characterPool={
+                // A Drunk's fabricated claim isn't bound to "characters
+                // actually in this bag" the way a real reveal is — offer the
+                // full script pool (minus characters already held elsewhere),
+                // the same corrected pool the stand-in reassignment picker
+                // uses (issue #242), instead of the narrower in-play pool
+                // (issue #254 AC: reuse the corrected candidate pools).
+                step.disguiseId
+                  ? game.scriptCharacters.filter(
+                      (c) => !heldCharacterIds(otherPlayers).has(c.id),
+                    )
+                  : characterPool
+              }
               characterById={characterById}
-              onConfirm={(character, truePlayerId, falsePlayerId) =>
+              onConfirm={(character, truePlayerId, falsePlayerId) => {
+                const trueAnchorId = step.disguiseId ? step.playerId : truePlayerId;
+                const falseAnchorId = step.disguiseId ? step.playerId : falsePlayerId;
                 resolve("answered", [
                   {
                     characterId: step.characterId,
@@ -250,17 +269,17 @@ function StepPanel({
                     // "Chef") was claimed is lost the moment this resolves,
                     // with nothing recording it (code review finding).
                     label: `${step.trueLabel} (${character.name})`,
-                    position: anchorPosition(truePlayerId, players),
-                    anchorPlayerId: truePlayerId,
+                    position: anchorPosition(trueAnchorId, players),
+                    anchorPlayerId: trueAnchorId,
                   },
                   {
                     characterId: step.characterId,
                     label: `${step.falseLabel} (${character.name})`,
-                    position: anchorPosition(falsePlayerId, players),
-                    anchorPlayerId: falsePlayerId,
+                    position: anchorPosition(falseAnchorId, players),
+                    anchorPlayerId: falseAnchorId,
                   },
-                ])
-              }
+                ]);
+              }}
             />
           )}
 
@@ -446,10 +465,19 @@ function CharacterAndTwoPlayersControls({
     falsePlayerId: string,
   ) => void;
 }) {
-  const { list, showAll, setShowAll } = useCandidateCharacters(
+  // A Drunk's believed-character step (issue #254) already receives the full
+  // corrected pool from its caller (characterPool prop above) — narrowing it
+  // again here, or offering a redundant "Show all" toggle on top of an
+  // already-wide pool, would just reintroduce the narrow-pool collapse this
+  // step exists to avoid (issue #242's fix, reused).
+  const isFakeForDrunk = !!step.disguiseId;
+  const { list: scriptedList, showAll, setShowAll } = useCandidateCharacters(
     step.candidateTeam,
     characterPool,
   );
+  const list = isFakeForDrunk
+    ? characterPool.filter((c) => c.team === step.candidateTeam)
+    : scriptedList;
   const [characterId, setCharacterId] = useState("");
   const [truePlayerId, setTruePlayerId] = useState("");
   const [falsePlayerId, setFalsePlayerId] = useState("");
@@ -499,7 +527,9 @@ function CharacterAndTwoPlayersControls({
           ]}
         />
       </label>
-      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
+      {!isFakeForDrunk && (
+        <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
+      )}
       <label>
         {`Shown as ${step.trueLabel}`}
         <Select

@@ -1700,6 +1700,115 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
   });
 });
 
+describe("the Drunk's believed-character step interacting with its own review step (issue #254 code review findings)", () => {
+  async function drunkBoardWithBelievedStep(user: ReturnType<typeof userEvent.setup>) {
+    const selectedCharacters = [
+      getCharacter("drunk")!,
+      getCharacter("chef")!,
+      getCharacter("imp")!,
+    ];
+    const standIn = getCharacter("washerwoman")!;
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 3,
+      selectedCharacters,
+      standIn,
+      extraCopies: {},
+      scriptCharacters: [
+        ...selectedCharacters,
+        standIn,
+        getCharacter("librarian")!,
+        getCharacter("grandmother")!,
+      ],
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await selectOption(user, screen.getByLabelText("Assign seat 1 manually"), "Washerwoman");
+    await selectOption(user, screen.getByLabelText("Assign seat 2 manually"), "Chef");
+    await selectOption(user, screen.getByLabelText("Assign seat 3 manually"), "Imp");
+    await user.click(screen.getByRole("button", { name: /start walkthrough/i }));
+
+    const dialog = screen.getByRole("dialog", { name: "Setup walkthrough" });
+    return { dialog };
+  }
+
+  async function answerBelievedWasherwomanStep(
+    user: ReturnType<typeof userEvent.setup>,
+    dialog: HTMLElement,
+  ) {
+    const believedStep = within(dialog).getByRole("group", {
+      name: /drunk's washerwoman/i,
+    });
+    await selectOption(user, within(believedStep).getByLabelText("Character"), "Librarian");
+    await selectOption(
+      user,
+      within(believedStep).getByLabelText(/shown as townsfolk/i),
+      /^Player 2\b/,
+    );
+    await selectOption(
+      user,
+      within(believedStep).getByLabelText(/shown as wrong/i),
+      /^Player 3\b/,
+    );
+    await user.click(within(believedStep).getByRole("button", { name: /confirm/i }));
+  }
+
+  it("doesn't wipe the believed step's reminders when the review step is answered afterward (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { dialog } = await drunkBoardWithBelievedStep(user);
+    await answerBelievedWasherwomanStep(user, dialog);
+
+    // The review step's own Confirm always passes an empty reminders array
+    // — this used to wipe the believed step's just-placed reminders too,
+    // via a reminder-id prefix ("setupwalkthrough:<playerId>:") that
+    // accidentally matched the believed step's own id
+    // ("<playerId>:believed") as well.
+    const reviewStep = within(dialog).getByRole("group", {
+      name: /drunk — review the stand-in/i,
+    });
+    await user.click(within(reviewStep).getByRole("button", { name: /confirm/i }));
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders.some((r) => r.label.startsWith("Townsfolk"))).toBe(true);
+    expect(reloaded.reminders.some((r) => r.label.startsWith("Wrong"))).toBe(true);
+  });
+
+  it("clears a previously-answered believed step's status and reminders after reassigning the stand-in (code review finding)", async () => {
+    const user = userEvent.setup();
+    const { dialog } = await drunkBoardWithBelievedStep(user);
+    await answerBelievedWasherwomanStep(user, dialog);
+
+    const reviewStep = within(dialog).getByRole("group", {
+      name: /drunk — review the stand-in/i,
+    });
+    await selectOption(
+      user,
+      within(reviewStep).getByLabelText(/new stand-in/i),
+      "Grandmother",
+    );
+    await user.click(
+      within(reviewStep).getByRole("button", { name: /change stand-in/i }),
+    );
+
+    // The believed step is now Grandmother's own (a playerPick step, not
+    // Washerwoman's characterAndTwoPlayers step) — it must render fresh and
+    // editable, not collapsed behind a stale "Answered" carried over from
+    // the old Washerwoman-flavored step under the same id.
+    const newBelievedStep = within(dialog).getByRole("group", {
+      name: /drunk's grandmother/i,
+    });
+    expect(within(newBelievedStep).queryByText(/answered/i)).not.toBeInTheDocument();
+    expect(
+      within(newBelievedStep).getByRole("button", { name: /confirm/i }),
+    ).toBeInTheDocument();
+
+    const reloaded = loadGame() as GameDocument;
+    expect(reloaded.reminders.some((r) => r.label.startsWith("Townsfolk"))).toBe(false);
+    expect(reloaded.reminders.some((r) => r.label.startsWith("Wrong"))).toBe(false);
+  });
+});
+
 describe("reassigning the Lunatic's stand-in from the setup walkthrough (issue #163)", () => {
   async function lunaticBoard(user: ReturnType<typeof userEvent.setup>) {
     const selectedCharacters = [

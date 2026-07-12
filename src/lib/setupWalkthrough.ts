@@ -48,6 +48,12 @@ export interface DemonBluffsStep extends StepShared {
 export interface PlayerPickStep extends StepBase {
   kind: "playerPick";
   reminderLabel: string;
+  // Set only for the fake step generated for a Drunk's believed character
+  // (issue #254) — "drunk", mirroring ReviewStep's own disguiseId. Its
+  // presence tells the UI to anchor this step's reminder to the disguised
+  // seat itself rather than whichever other player was picked, since the
+  // pick is fictional and has no real ability interaction with that player.
+  disguiseId?: string;
 }
 
 export interface CharacterAndTwoPlayersStep extends StepBase {
@@ -55,6 +61,12 @@ export interface CharacterAndTwoPlayersStep extends StepBase {
   candidateTeam: Team;
   trueLabel: string;
   falseLabel: string;
+  // Same meaning as PlayerPickStep.disguiseId above — additionally tells the
+  // UI to offer the full script's candidate characters (like the stand-in
+  // picker's own #242 fix) rather than the narrower in-play pool, since a
+  // fabricated claim isn't bound to "characters actually in this bag" the
+  // way a real reveal is.
+  disguiseId?: string;
 }
 
 export interface NeighborCheckStep extends StepBase {
@@ -155,6 +167,63 @@ function seatSorted(players: Player[]): Player[] {
   return [...players].sort((a, b) => a.seat - b.seat);
 }
 
+// The id prefix a believed-character step's own id is built from — exported
+// so GrimoireSetup.tsx can recognise (and clean up) one without duplicating
+// the format. Prefixed, not suffixed like `${seatId}:believed` would be:
+// GrimoireSetup's resolveWalkthroughStep matches a step's reminders by
+// `id.startsWith("setupwalkthrough:{stepId}:")`, so a believed step's id
+// must not itself start with the review step's own id (`seatId`) followed
+// by ":" — `${seatId}:believed` would, and the review step's own resolve
+// (reminders: []) would then wipe the believed step's just-placed reminders
+// as a false-positive prefix match (code review finding).
+export const BELIEVED_STEP_ID_PREFIX = "believed:";
+
+// A Drunk's ability doesn't function, but the storyteller must still
+// maintain the illusion for whichever character they believe they are
+// (issue #254) — a fake Grandmother still needs a fake grandchild, a fake
+// Washerwoman a fake character + two players, etc. Generates that believed
+// character's own curated step, reframed as fake and keyed by a distinct id
+// so it coexists with the Drunk's own review step for the same seat.
+// Returns undefined when the believed character has no curated step at all
+// (e.g. Chef, Empath) — those seats keep only the review step, as today.
+function believedCharacterStep(
+  base: Pick<StepBase, "characterId" | "characterName" | "playerId" | "playerName">,
+  seatId: string,
+): PlayerPickStep | CharacterAndTwoPlayersStep | undefined {
+  const believedFraming = `${base.playerName} believes they are the ${base.characterName}.`;
+  const id = `${BELIEVED_STEP_ID_PREFIX}${seatId}`;
+
+  const playerPick = PLAYER_PICK_TABLE[base.characterId];
+  if (playerPick) {
+    return {
+      ...base,
+      id,
+      kind: "playerPick",
+      title: `Drunk's ${playerPick.title}`,
+      ruleText: `${believedFraming} ${playerPick.ruleText}`,
+      reminderLabel: playerPick.reminderLabel,
+      disguiseId: DRUNK_ID,
+    };
+  }
+
+  const characterAndTwoPlayers = CHARACTER_AND_TWO_PLAYERS_TABLE[base.characterId];
+  if (characterAndTwoPlayers) {
+    return {
+      ...base,
+      id,
+      kind: "characterAndTwoPlayers",
+      title: `Drunk's ${characterAndTwoPlayers.title}`,
+      ruleText: `${believedFraming} ${characterAndTwoPlayers.ruleText}`,
+      candidateTeam: characterAndTwoPlayers.candidateTeam,
+      trueLabel: characterAndTwoPlayers.trueLabel,
+      falseLabel: characterAndTwoPlayers.falseLabel,
+      disguiseId: DRUNK_ID,
+    };
+  }
+
+  return undefined;
+}
+
 // True when the given player sits immediately beside the game's Demon,
 // wrapping around the circle (issue #26 AC: "Marionette seated-next-to-Demon
 // check"). False (with no crash) when there's no Demon in play or too few
@@ -215,8 +284,11 @@ export function buildSetupWalkthroughSteps(
     };
 
     // A Drunk's apparent character is a fake stand-in — their ability
-    // doesn't function, so they get only the Drunk's own review step, never
-    // that character's curated/generic step.
+    // doesn't function, so they never get that character's plain/generic
+    // step. They do get the Drunk's own review step, plus (issue #254) that
+    // character's curated step reframed as fake, when one exists — the
+    // storyteller still has to maintain the illusion for a fake Grandmother
+    // or Washerwoman, just not run their actual ability.
     if (player.isDrunk) {
       steps.push({
         ...base,
@@ -227,6 +299,8 @@ export function buildSetupWalkthroughSteps(
         disguiseId: DRUNK_ID,
         standInTeam: "townsfolk",
       });
+      const believed = believedCharacterStep(base, player.id);
+      if (believed) steps.push(believed);
       continue;
     }
 
