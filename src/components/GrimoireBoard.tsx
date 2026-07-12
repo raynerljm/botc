@@ -549,6 +549,79 @@ export function GrimoireBoard({
     return map;
   }, [reminders]);
 
+  // Every reminder's live render position, the seat it's anchored to (if
+  // any), and — for anchored reminders — the connector line from that
+  // seat's token to it (issue #255). Computed once per render and shared by
+  // the reminder-render loop below, so both read the exact same displayed
+  // position, including any in-progress drag preview, instead of two
+  // independent computations of it drifting apart. Memoized like the other
+  // seat/reminder maps above (positionByPlayerId, reminderStackIndexById) so
+  // a re-render unrelated to reminders (a name-field keystroke, an
+  // unrelated menu toggling) doesn't rebuild it from scratch.
+  const { reminderDisplayById, connectors } = useMemo(() => {
+    const displayById = new Map<
+      string,
+      {
+        position: PlayerPosition;
+        restingPosition: PlayerPosition;
+        anchorPosition: PlayerPosition | undefined;
+      }
+    >();
+    const lines: { id: string; from: PlayerPosition; to: PlayerPosition }[] =
+      [];
+    for (const reminder of reminders) {
+      // Anchored (parked beside a still-present seat) reminders track that
+      // seat's live position every render — including mid-drag — rather
+      // than the last position stored on the reminder itself, so they read
+      // as physically attached to it (issue #71). A reminder whose anchor
+      // was removed, or that was never anchored (dragged free, or added
+      // generically from the pad), falls back to its own stored position.
+      const anchorPosition = reminder.anchorPlayerId
+        ? positionByPlayerId.get(reminder.anchorPlayerId)
+        : undefined;
+      const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
+      // anchorPosition already carries the rotation (from
+      // positionByPlayerId), so an anchored reminder's offset rotates along
+      // with its seat for free; a free-standing one needs the same rotation
+      // applied directly to its own stored position (issue #192).
+      // rotatePosition already clamps its own output (the same [4,96]
+      // guarantee a free-standing reminder's stored position isn't
+      // guaranteed to have for legacy/hand-edited documents), so
+      // pre-clamping the un-rotated input here as well would just distort a
+      // legitimately-out-of-range *canonical* value — one a rotated drag can
+      // produce even from an in-bounds drop, since un-rotating doesn't
+      // commute with a per-axis clamp except at multiples of 90 degrees —
+      // before it ever gets rotated back into display space (Copilot review
+      // finding).
+      const restingPosition = anchorPosition
+        ? anchoredReminderPosition(anchorPosition, siblingIndex)
+        : rotatePosition(reminder.position, rotation);
+      const position =
+        liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
+          ? liveDrag.position
+          : restingPosition;
+      displayById.set(reminder.id, {
+        position,
+        restingPosition,
+        anchorPosition,
+      });
+      // A thin line from each anchored reminder to the token it belongs to
+      // (issue #255), so ownership reads at a glance — only a reminder
+      // currently anchored to a still-present seat gets one; a
+      // free-standing/pad reminder has no owner to point at.
+      if (anchorPosition) {
+        lines.push({ id: reminder.id, from: anchorPosition, to: position });
+      }
+    }
+    return { reminderDisplayById: displayById, connectors: lines };
+  }, [
+    reminders,
+    positionByPlayerId,
+    reminderStackIndexById,
+    liveDrag,
+    rotation,
+  ]);
+
   function handlePointerDown(
     event: ReactPointerEvent<HTMLElement>,
     kind: TokenKind,
@@ -958,6 +1031,33 @@ export function GrimoireBoard({
         data-hidden={hidden}
         style={{ "--token-size": `${tokenSize}rem` } as React.CSSProperties}
       >
+        {!hidden && connectors.length > 0 && (
+          // Painted first among .board's children — plain z-index:auto
+          // stacking then keeps every token/reminder (rendered after it
+          // below) on top of it, without needing an explicit z-index of its
+          // own (code review finding: this previously rendered *between*
+          // the token and reminder loops, so DOM-order stacking painted it
+          // over the tokens instead of behind them).
+          <svg
+            className={styles.connectors}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            {connectors.map((connector) => (
+              <line
+                key={connector.id}
+                data-connector-id={connector.id}
+                className={styles.connectorLine}
+                x1={connector.from.x}
+                y1={connector.from.y}
+                x2={connector.to.x}
+                y2={connector.to.y}
+              />
+            ))}
+          </svg>
+        )}
+
         {!hidden &&
           sorted.map((player, index) => {
             const character = player.characterId
@@ -1362,37 +1462,9 @@ export function GrimoireBoard({
             const character = reminder.characterId
               ? characterById.get(reminder.characterId)
               : undefined;
-            // Anchored (parked beside a still-present seat) reminders track
-            // that seat's live position every render — including mid-drag —
-            // rather than the last position stored on the reminder itself,
-            // so they read as physically attached to it (issue #71). A
-            // reminder whose anchor was removed, or that was never anchored
-            // (dragged free, or added generically from the pad), falls back
-            // to its own stored position.
-            const anchorSeatPosition = reminder.anchorPlayerId
-              ? positionByPlayerId.get(reminder.anchorPlayerId)
-              : undefined;
-            const siblingIndex = reminderStackIndexById.get(reminder.id) ?? 0;
-            // anchorSeatPosition already carries the rotation (from
-            // positionByPlayerId), so an anchored reminder's offset rotates
-            // along with its seat for free; a free-standing one needs the
-            // same rotation applied directly to its own stored position
-            // (issue #192). rotatePosition already clamps its own output
-            // (the same [4,96] guarantee a free-standing reminder's stored
-            // position isn't guaranteed to have for legacy/hand-edited
-            // documents), so pre-clamping the un-rotated input here as well
-            // would just distort a legitimately-out-of-range *canonical*
-            // value — one a rotated drag can produce even from an in-bounds
-            // drop, since un-rotating doesn't commute with a per-axis clamp
-            // except at multiples of 90 degrees — before it ever gets
-            // rotated back into display space (Copilot review finding).
-            const restingPosition = anchorSeatPosition
-              ? anchoredReminderPosition(anchorSeatPosition, siblingIndex)
-              : rotatePosition(reminder.position, rotation);
-            const position =
-              liveDrag?.kind === "reminder" && liveDrag.id === reminder.id
-                ? liveDrag.position
-                : restingPosition;
+            const { position, restingPosition } = reminderDisplayById.get(
+              reminder.id,
+            )!;
 
             const menuOpen = isMenuOpenFor("reminder", reminder.id);
 
