@@ -138,6 +138,28 @@ describe("SetupWalkthrough shell", () => {
     expect(screen.getByText(fortuneTellerStep.ruleText)).toBeInTheDocument();
   });
 
+  it("keeps the header and footer outside the scrolling step list (issue #261)", () => {
+    // Chromium has a `position: sticky` + flex + `overflow-y: auto` bug
+    // where, near the end of scroll, a sticky header's clip briefly shrinks
+    // and lets scrolled content paint above it and above the card's own top
+    // border. Pinning the header/footer outside a dedicated scroll region
+    // (rather than making them sticky inside one shared scroll container)
+    // sidesteps the bug structurally — this locks in that structure so it
+    // can't regress back to a shared scroll container.
+    const { container } = renderWalkthrough({ steps: [fortuneTellerStep] });
+
+    const body = container.querySelector("[data-walkthrough-body]") as HTMLElement;
+    const header = screen.getByText("Setup walkthrough").closest("header") as HTMLElement;
+    const footer = screen.getByRole("button", { name: /^done$/i }).closest(
+      "footer",
+    ) as HTMLElement;
+
+    expect(body).toBeInTheDocument();
+    expect(body.contains(header)).toBe(false);
+    expect(body.contains(footer)).toBe(false);
+    expect(body).toHaveTextContent(fortuneTellerStep.title);
+  });
+
   it("closes via the Close button", async () => {
     const user = userEvent.setup();
     const { onClose } = renderWalkthrough({ steps: [fortuneTellerStep] });
