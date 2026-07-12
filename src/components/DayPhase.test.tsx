@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getCharacter, type Character } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
@@ -39,13 +39,6 @@ function renderDayPhase(
 ) {
   return render(<DayPhase game={game} onChange={onChange} />);
 }
-
-// A failed assertion between useFakeTimers()/useRealTimers() would otherwise
-// leave fake timers active for a later test, hanging userEvent (which relies
-// on real timers) — same guard DayTimer.test.tsx uses for the same reason.
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 // DayPhase no longer guards on "before the first night ends" or "while a
 // night is open" — GrimoireSetup only ever mounts it once the game phase is
@@ -555,64 +548,6 @@ describe("Day phase: collapsing the panel (issue #168)", () => {
     expect(screen.getByRole("button", { name: "Day 1" })).toBeInTheDocument();
   });
 
-  it("shows a compact countdown with no preset/pause/reset controls while collapsed and the timer is running (issue #216)", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
-    const game = gameWith(["washerwoman", "imp"], {
-      nightListCollapsed: true,
-      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
-    });
-    renderDayPhase(game);
-
-    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
-    expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "2 min" })).not.toBeInTheDocument();
-  });
-
-  it("shows the full interactive timer widget once expanded", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
-    const game = gameWith(["washerwoman", "imp"], {
-      nightListCollapsed: false,
-      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
-    });
-    renderDayPhase(game);
-
-    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
-    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
-  });
-
-  it("shows the compact countdown and the block status together while collapsed, rather than one hiding the other (issue #216)", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
-    const game = gameWith(["washerwoman", "imp", "recluse", "baron"], {
-      nightListCollapsed: true,
-      dayTimer: { status: "running", endAt: "2026-07-10T12:02:00.000Z", remainingMs: 120_000 },
-    });
-    const [nominator, nominee, voter1, voter2] = game.players;
-    const withBlock: GameDocument = {
-      ...game,
-      nominations: [
-        {
-          id: "n1",
-          nominatorId: nominator.id,
-          nomineeId: nominee.id,
-          votes: [voter1.id, voter2.id],
-          threshold: 2,
-          isExile: false,
-          lockedIn: false,
-          ghostVoteSpenderIds: [],
-        },
-      ],
-    };
-    renderDayPhase(withBlock);
-
-    expect(screen.getByRole("timer")).toHaveTextContent("2:00");
-    expect(
-      screen.getByText(`On the block: ${nominee.name}`),
-    ).toBeInTheDocument();
-  });
-
   it("toggles the persisted collapsed state via the heading", async () => {
     const user = userEvent.setup();
     const game = gameWith(["washerwoman", "imp"]);
@@ -704,6 +639,97 @@ describe("Day phase: vote tally and threshold", () => {
     // 5 players total -> exile threshold 3, snapshotted onto the nomination.
     expect(latest.nominations[0].nomineeId).toBe("traveller-1");
     expect(latest.nominations[0].threshold).toBe(3);
+  });
+});
+
+describe("Day phase: vote roster order (issue #248)", () => {
+  it("lists voters starting with the seat clockwise of the nominee, wrapping around so the nominee votes last", async () => {
+    const user = userEvent.setup();
+    const game = gameWith([
+      "washerwoman",
+      "imp",
+      "recluse",
+      "baron",
+      "empath",
+    ]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [seat1, seat2, seat3, seat4, seat5] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), seat1.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), seat3.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const names = screen
+      .getAllByRole("checkbox")
+      .map((checkbox) => checkbox.closest("label")?.textContent);
+    expect(names).toEqual([
+      seat4.name,
+      seat5.name,
+      seat1.name,
+      seat2.name,
+      seat3.name,
+    ]);
+  });
+
+  it("derives the roster order from seat number, not player array order, so it's correct after a reseat", async () => {
+    const user = userEvent.setup();
+    const base = gameWith(["washerwoman", "imp", "recluse"]);
+    // Array order intentionally does NOT match seat order, the way a reseat
+    // or insertion can leave it (CONTEXT.md: Seat) — a fix that merely reads
+    // `game.players` in array order would still pass the happy-path test
+    // above by coincidence, since that one's array already happens to sit in
+    // seat order.
+    const reseated: Player[] = [
+      { ...base.players[0], seat: 1 },
+      { ...base.players[1], seat: 3 },
+      { ...base.players[2], seat: 2 },
+    ];
+    const game: GameDocument = { ...base, players: reseated };
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [firstSeat, thirdSeat, secondSeat] = reseated;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), firstSeat.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), secondSeat.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const names = screen
+      .getAllByRole("checkbox")
+      .map((checkbox) => checkbox.closest("label")?.textContent);
+    // Nominee is seat 2 -> clockwise order is seat 3, seat 1, seat 2 (last).
+    expect(names).toEqual([thirdSeat.name, firstSeat.name, secondSeat.name]);
+  });
+
+  it("still records a vote against the right player once the roster is reordered", async () => {
+    const user = userEvent.setup();
+    const game = gameWith([
+      "washerwoman",
+      "imp",
+      "recluse",
+      "baron",
+      "empath",
+    ]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [seat1, , seat3, seat4] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), seat1.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), seat3.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    await user.click(screen.getByRole("checkbox", { name: seat4.name }));
+
+    expect(latest.nominations[0].votes).toEqual([seat4.id]);
   });
 });
 

@@ -190,7 +190,7 @@ function StepPanel({
           currentCharacterId={step.characterId}
           currentCharacterName={step.characterName}
           heldElsewhereIds={heldCharacterIds(otherPlayers)}
-          characterPool={characterPool}
+          scriptCharacters={game.scriptCharacters}
           onConfirm={(characterId) =>
             onReassignStandIn(step.playerId, characterId)
           }
@@ -335,7 +335,7 @@ function StepPanel({
           {step.kind === "generic" && (
             <GenericControls
               step={step}
-              onDone={(labels) =>
+              onConfirm={(labels) =>
                 resolve(
                   "answered",
                   labels.map((label) => ({
@@ -563,7 +563,7 @@ function StandInReassignControls({
   currentCharacterId,
   currentCharacterName,
   heldElsewhereIds,
-  characterPool,
+  scriptCharacters,
   onConfirm,
 }: {
   // townsfolk for the Drunk, demon for the Lunatic.
@@ -574,23 +574,20 @@ function StandInReassignControls({
   // excluded from the picker (issue #52 AC: "not already in play as another
   // character").
   heldElsewhereIds: Set<string>;
-  characterPool: Character[];
+  // The full script's characters (game.scriptCharacters), not the narrower
+  // characterPool (already-selected/built characters only) — sourcing from
+  // characterPool collapsed this picker to just the current stand-in, since
+  // every other selected character of this team is already held by a seat
+  // (issue #242). The bag builder's own stand-in picker already sources from
+  // the full script pool for the same reason.
+  scriptCharacters: Character[];
   onConfirm: (characterId: string) => void;
 }) {
-  const { list, showAll, setShowAll } = useCandidateCharacters(
-    team,
-    characterPool,
+  const candidates = scriptCharacters.filter(
+    (c) => c.team === team && !heldElsewhereIds.has(c.id),
   );
-  const candidates = list.filter((c) => !heldElsewhereIds.has(c.id));
   const [characterId, setCharacterId] = useState("");
   const chosen = candidates.find((c) => c.id === characterId);
-
-  function handleShowAllChange(next: boolean) {
-    setShowAll(next);
-    if (!next && characterId && !characterPool.some((c) => c.id === characterId)) {
-      setCharacterId("");
-    }
-  }
 
   return (
     <div className={styles.controls}>
@@ -607,7 +604,6 @@ function StandInReassignControls({
           ]}
         />
       </label>
-      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <Button
         variant="primary"
         disabled={!chosen || chosen.id === currentCharacterId}
@@ -621,13 +617,13 @@ function StandInReassignControls({
 
 function GenericControls({
   step,
-  onDone,
+  onConfirm,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "generic" }>;
-  onDone: (labels: string[]) => void;
+  onConfirm: (labels: string[]) => void;
 }) {
   // Staged locally rather than added immediately on each click, so a step
-  // that places several reminders still resolves through one onDone call —
+  // that places several reminders still resolves through one onConfirm call —
   // consistent with every other kind, and what makes Redo able to clean up
   // exactly the set this step last produced.
   const [staged, setStaged] = useState<string[]>([]);
@@ -651,8 +647,12 @@ function GenericControls({
           ))}
         </ul>
       )}
-      <Button variant="primary" onClick={() => onDone(staged)}>
-        Done
+      {/* "Confirm", matching every other step kind's resolve action — not
+          "Done", which would collide with the walkthrough's own footer Done
+          button (issue #244 code review finding) whenever a homebrew step
+          is still open. */}
+      <Button variant="primary" onClick={() => onConfirm(staged)}>
+        Confirm
       </Button>
     </div>
   );
@@ -716,6 +716,15 @@ export function SetupWalkthrough({
             </li>
           ))}
         </ol>
+        {/* Always enabled — the storyteller may handle or skip steps in any
+            order and close when ready (ADR 0003, advisory never blocking).
+            Sticky, so it stays reachable below a long, internally-scrolling
+            step list (issue #244). */}
+        <footer className={styles.footer}>
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </footer>
       </div>
     </div>
   );

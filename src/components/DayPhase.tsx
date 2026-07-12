@@ -11,6 +11,7 @@ import {
   hasNominatedToday,
   hasSpentGhostVoteElsewhereToday,
   nominationThreshold,
+  voteRosterOrder,
   wasNominatedToday,
 } from "@/lib/dayPhase";
 import { pauseDayTimer } from "@/lib/dayTimer";
@@ -111,6 +112,20 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   // last nomination recorded: reopening an earlier, already-locked one to
   // fix a mistake makes it the open one again, wherever it sits in the day.
   const openNomination = game.nominations.find((n) => !n.lockedIn) ?? null;
+  // Only the open nomination ever renders the voters fieldset (`isOpen &&`
+  // below), so this is the one roster order needed per render — memoized
+  // the same way `playerById` is, since re-sorting every seat on every
+  // vote-toggle round-trip is pure waste when `game.players` hasn't changed.
+  // Keyed on the nominee id, not the whole `openNomination` object
+  // (Copilot review finding): `toggleVote` replaces the nomination object
+  // on every vote, which would otherwise bust this memo on every toggle
+  // even though the roster order itself never depends on `votes`.
+  const openNomineeId = openNomination?.nomineeId ?? null;
+  const voteRoster = useMemo(
+    () =>
+      openNomineeId ? voteRosterOrder(game.players, openNomineeId) : [],
+    [game.players, openNomineeId],
+  );
   const blockNomineeId = computeBlock(game.nominations, game.players);
   const blockNominationId = computeBlockNominationId(
     game.nominations,
@@ -267,48 +282,27 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
       title={`Day ${day}`}
       collapsed={game.nightListCollapsed}
       onToggleCollapsed={toggleCollapsed}
-      // Above the collapsible body — the full interactive timer while
-      // expanded (issue #190). While peeking, `above` sits unused: the
-      // fixed peek band (ADR 0004) doesn't have room for the full widget
-      // alongside the heading and the block status, so both glanceable
-      // pieces of peek info move into one combined row in `below` instead
-      // (issue #216) rather than one displacing the other.
-      above={
-        game.nightListCollapsed ? null : <DayTimer game={game} onChange={onChange} />
-      }
+      // Above the collapsible body, like the block-holder status below — a
+      // glanceable storyteller aid (issue #190) that must stay visible even
+      // while the sheet is peeking (issue #168).
+      above={<DayTimer game={game} onChange={onChange} />}
+      // The timer's full-size Pause/Resume/Reset controls need more peek
+      // headroom than Night's own content, so this is the one BottomSheet
+      // call site that opts into the roomier bound (issue #216 code review
+      // finding) rather than that bound becoming everyone's default.
+      peekVariant="roomy"
       // Below the collapsible body, unlike the nomination form/history
       // itself — a storyteller peeking the sheet to reclaim circle width
       // (issue #168) still needs this glanceable status without expanding
       // the whole nomination record (code review finding). Also keeps issue
       // #125's fix intact: it was moved after the (now collapsible) list
       // specifically so it can never shift a voter checkbox down mid-tap —
-      // rendering it outside the list entirely preserves that. While
-      // peeking, this is the sheet's one glanceable info row (issue #216):
-      // a compact countdown and the block status side by side, sized to
-      // actually fit the fixed peek band, rather than the full timer
-      // widget above pushing the block status below the fold. DayTimer is
-      // rendered unconditionally here (not gated on the timer being
-      // active) so it stays mounted and its ticking effect keeps running
-      // regardless of whether a block holder comes and goes — compact
-      // idle already renders null on its own.
+      // rendering it outside the list entirely preserves that.
       below={
-        game.nightListCollapsed ? (
-          (blockHolder || game.dayTimer.status !== "idle") && (
-            <div className={styles.peekRow}>
-              <DayTimer game={game} onChange={onChange} compact />
-              {blockHolder && (
-                <span className={styles.blockPeek} role="status">
-                  On the block: {blockHolder.name}
-                </span>
-              )}
-            </div>
-          )
-        ) : (
-          blockHolder && (
-            <p className={styles.block} role="status">
-              On the block: {blockHolder.name}
-            </p>
-          )
+        blockHolder && (
+          <p className={styles.block} role="status">
+            On the block: {blockHolder.name}
+          </p>
         )
       }
     >
@@ -426,7 +420,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               {isOpen && (
                 <fieldset className={styles.voters}>
                   <legend>Record votes</legend>
-                  {game.players.map((player) => {
+                  {voteRoster.map((player) => {
                     const voted = nomination.votes.includes(player.id);
                     // Advisory only (ADR 0003) — never disables the
                     // checkbox, just labels a dead voter whose ghost vote

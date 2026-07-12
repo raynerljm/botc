@@ -51,18 +51,3 @@
   display: flex;
   gap: 0.5rem;
 }
-
-/* Compact (peek) rendering — a single glanceable line, sized to actually fit
-   the sheet's fixed peek band (ADR 0004) alongside its heading and the
-   block-holder status below it (issue #216), unlike the full widget's
-   1.5rem countdown plus preset/pause/reset rows. */
-.peek {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.peek[data-expired] {
-  color: var(--accent);
-}

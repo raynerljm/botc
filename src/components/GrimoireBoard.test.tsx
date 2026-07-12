@@ -97,6 +97,7 @@ function makeHandlers() {
     onRenameCommit: vi.fn(),
     onMove: vi.fn(),
     onReCircle: vi.fn(),
+    onReorderSeat: vi.fn(),
     onRotate: vi.fn(),
     onToggleDead: vi.fn(),
     onToggleGhostVote: vi.fn(),
@@ -739,6 +740,102 @@ describe("acts-as (issue #17)", () => {
   });
 });
 
+describe("acts-as team constraints (issue #245)", () => {
+  // Deliberately includes one character from each of the four seat-holding
+  // teams, distinct from this file's other fixtures.
+  const teamMixedClaimOptions = [
+    getCharacter("librarian")!, // townsfolk
+    getCharacter("recluse")!, // outsider
+    getCharacter("poisoner")!, // minion
+    getCharacter("imp")!, // demon
+  ];
+
+  it.each(["philosopher", "boffin"])(
+    "offers %s's acts-as picker only good characters (Townsfolk/Outsider)",
+    async (characterId) => {
+      const user = userEvent.setup();
+      renderBoard([makePlayer({ characterId })], {
+        claimOptions: teamMixedClaimOptions,
+      });
+
+      await user.click(screen.getByText("Alice"));
+      const options = await getSelectOptions(
+        user,
+        screen.getByLabelText(/acts as/i),
+      );
+
+      expect(options.map((o) => o.value)).toEqual(["", "librarian", "recluse"]);
+    },
+  );
+
+  it("offers alchemist's acts-as picker only Minions", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ characterId: "alchemist" })], {
+      claimOptions: teamMixedClaimOptions,
+    });
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toEqual(["", "poisoner"]);
+  });
+
+  it("keeps an already-set off-spec-team acts-as target visible/selectable instead of silently clearing it", async () => {
+    const user = userEvent.setup();
+    renderBoard(
+      [makePlayer({ characterId: "philosopher", actsAs: "poisoner" })],
+      { claimOptions: teamMixedClaimOptions },
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const select = screen.getByLabelText(/acts as/i);
+
+    expect(select.dataset.value).toBe("poisoner");
+    const options = await getSelectOptions(user, select);
+    expect(options.map((o) => o.value)).toContain("poisoner");
+  });
+
+  it("treats an empty-string acts-as (a malformed/hand-edited game document) as no target, not an off-spec one", async () => {
+    const user = userEvent.setup();
+    // A truthy check (matching the sibling Claim select) rather than an
+    // "!== null" check: an empty string must not be flagged off-spec and
+    // duplicated alongside "Not acting as anyone" (code review finding).
+    renderBoard(
+      [makePlayer({ characterId: "philosopher", actsAs: "" })],
+      { claimOptions: teamMixedClaimOptions },
+    );
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toEqual(["", "librarian", "recluse"]);
+  });
+
+  it("does not hard-block in-play status for the team it does offer (advisory, ADR 0003)", async () => {
+    const user = userEvent.setup();
+    // "recluse" isn't held by any seated player here — only present via
+    // claimOptions (script-wide) — so the team filter must not also
+    // require the target to already be in play.
+    renderBoard([makePlayer({ characterId: "philosopher" })], {
+      claimOptions: teamMixedClaimOptions,
+    });
+
+    await user.click(screen.getByText("Alice"));
+    const options = await getSelectOptions(
+      user,
+      screen.getByLabelText(/acts as/i),
+    );
+
+    expect(options.map((o) => o.value)).toContain("recluse");
+  });
+});
+
 describe("ghost votes", () => {
   it("shows a spent/unspent ghost vote marker only for dead players, toggleable with one tap", async () => {
     const user = userEvent.setup();
@@ -761,8 +858,26 @@ describe("ghost votes", () => {
   });
 });
 
-describe("seat reordering (issue #188)", () => {
-  it("offers no 'Move seat earlier'/'Move seat later' controls — dragging is the only reorder gesture", async () => {
+describe("seat reordering (issue #249)", () => {
+  it("moves a seat earlier or later from its token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([
+      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
+      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+    ]);
+
+    await user.click(screen.getByText("Bob"));
+    const bobWrap = handlers.container.querySelector(
+      "[data-player-id='p2']",
+    ) as HTMLElement;
+    await user.click(
+      within(bobWrap).getByRole("button", { name: /move seat earlier/i }),
+    );
+
+    expect(handlers.onReorderSeat).toHaveBeenCalledWith("p2", "earlier");
+  });
+
+  it("disables moving the first seat earlier and the last seat later", async () => {
     const user = userEvent.setup();
     const { container } = renderBoard([
       makePlayer({ id: "p1", seat: 1, name: "Alice" }),
@@ -777,13 +892,58 @@ describe("seat reordering (issue #188)", () => {
 
     await user.click(screen.getByText("Alice"));
     expect(
-      within(aliceWrap).queryByRole("button", { name: /move seat/i }),
-    ).not.toBeInTheDocument();
+      within(aliceWrap).getByRole("button", { name: /move seat earlier/i }),
+    ).toBeDisabled();
 
     await user.click(screen.getByText("Bob"));
     expect(
-      within(bobWrap).queryByRole("button", { name: /move seat/i }),
-    ).not.toBeInTheDocument();
+      within(bobWrap).getByRole("button", { name: /move seat later/i }),
+    ).toBeDisabled();
+  });
+
+  it("dragging a token moves only that token — no other seat's number changes", async () => {
+    const handlers = renderBoard([
+      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
+      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+      makePlayer({ id: "p3", seat: 3, name: "Cara" }),
+    ]);
+    const board = handlers.container.querySelector(
+      "[data-board]",
+    ) as HTMLElement;
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 400,
+      right: 400,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+    const aliceWrap = handlers.container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
+    const summary = aliceWrap.querySelector("summary") as HTMLElement;
+
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 190, clientY: 370 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 190, clientY: 370 }),
+    );
+
+    expect(handlers.onMove).toHaveBeenCalledWith(
+      "p1",
+      expect.any(Object),
+    );
+    expect(handlers.onReorderSeat).not.toHaveBeenCalled();
   });
 });
 
@@ -2098,7 +2258,7 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     // Scoped to the Info tokens dialog — the board's own "Swap character"
     // <select> also has a Demons <optgroup> (an implicit role="group" too),
     // which would otherwise collide with this picker's fieldset.
@@ -2110,7 +2270,7 @@ describe("info tokens (issue #19)", () => {
     expect(
       screen.queryByRole("dialog", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
-    const showMode = screen.getByRole("dialog", { name: "This is the Demon" });
+    const showMode = screen.getByRole("dialog", { name: "You are" });
     expect(within(showMode).getByText("Imp")).toBeInTheDocument();
   });
 
@@ -2124,8 +2284,9 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
+    // "This is the Demon" doesn't need a character attached (issue #246),
+    // so it goes straight to the reveal with no intervening "Show" step.
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
-    await user.click(screen.getByRole("button", { name: "Show" }));
 
     expect(screen.queryByText("Alice")).not.toBeInTheDocument();
     expect(
@@ -2141,10 +2302,11 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
+    // "Did you nominate today?" doesn't need a character attached (issue
+    // #246), so it goes straight to the reveal.
     await user.click(
       screen.getByRole("button", { name: "Did you nominate today?" }),
     );
-    await user.click(screen.getByRole("button", { name: "Show" }));
     await user.click(screen.getByRole("button", { name: "Done" }));
 
     expect(
@@ -2176,10 +2338,11 @@ describe("info tokens (issue #19)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
+    // "Did you nominate today?" doesn't need a character attached (issue
+    // #246), so it goes straight to the reveal.
     await user.click(
       screen.getByRole("button", { name: "Did you nominate today?" }),
     );
-    await user.click(screen.getByRole("button", { name: "Show" }));
     await user.click(screen.getByRole("button", { name: "Done" }));
 
     expect(onMove).not.toHaveBeenCalled();
@@ -2851,7 +3014,7 @@ describe("board sizing (issue #78)", () => {
     await user.click(
       within(controls).getByRole("button", { name: "Info tokens" }),
     );
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     const dialog = screen.getByRole("dialog", { name: "Info tokens" });
     const group = within(dialog).getByRole("group", { name: "Demons" });
     await user.click(within(group).getByRole("button", { name: "Imp" }));

@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 
-import { CollapsibleSection } from "./CollapsibleSection";
+import { CollapsibleHeading } from "./CollapsibleSection";
 import styles from "./BottomSheet.module.css";
 
 export interface BottomSheetProps {
@@ -10,20 +10,22 @@ export interface BottomSheetProps {
   title: string;
   collapsed: boolean;
   onToggleCollapsed: (collapsed: boolean) => void;
-  // Rendered above the heading. Unlike `children`, never hidden by
-  // CollapsibleSection when collapsed — but the sheet's peek band is a
-  // fixed height (ADR 0004), so content that doesn't fit within it is
-  // still visually clipped; a caller with peek-band content heavier than a
-  // short glanceable line (e.g. Day phase's timer, issue #216) may need to
-  // pass a lighter peek-specific rendering, or nothing at all, while
-  // collapsed rather than relying on this prop alone to guarantee
-  // visibility.
+  // Rendered above the heading, always visible regardless of collapsed
+  // state — e.g. the day timer, which must stay reachable even while the
+  // sheet is peeking (issue #190).
   above?: ReactNode;
-  // Rendered after the collapsible content. Same caveat as `above`: never
-  // hidden by collapsing, but still bound by the fixed peek band's height
-  // — e.g. the night list's progress line or Day phase's block-holder
-  // status, both sized to actually fit while peeking (issues #194, #216).
+  // Rendered after the collapsible content, always visible regardless of
+  // collapsed state — e.g. the night list's progress line or Day phase's
+  // block-holder status, both glanceable-while-peeking summaries (issue
+  // #194).
   below?: ReactNode;
+  // "compact" (default) fits Night's own peek content (handle, heading, a
+  // one-line progress status). Day phase opts into "roomy" (issue #216 code
+  // review finding) because its `above` slot (DayTimer, with full-size
+  // Pause/Resume/Reset tap targets) needs more room — a shared bound sized
+  // for Day's content would otherwise leave Night's much shorter peek with
+  // dead space it never asked for.
+  peekVariant?: "compact" | "roomy";
   children: ReactNode;
 }
 
@@ -34,28 +36,37 @@ export interface BottomSheetProps {
 const SHEET_DRAG_THRESHOLD_PX = 10;
 
 // Mirrors BottomSheet.module.css's `--sheet-peek-height`/`--sheet-expanded-
-// height` clamps. Kept in sync by hand: a CSS custom property can only be
-// read back as its raw declaration text (e.g. "clamp(4.5rem, 16vh, 7.5rem)"),
-// not a resolved pixel value, so live-drag clamping (issue #212 AC: "dragging
-// the handle follows the finger") recomputes the same bounds in JS instead.
-// The rem bounds are converted using the *actual* root font size (code review
-// finding: a hardcoded 16px-per-rem assumption drifts from the real rendered
-// CSS under a browser text-zoom/accessibility font-size setting, and the
-// drag would visibly snap the instant the inline override is cleared) — same
-// pattern GrimoireBoard.tsx already uses for its own board-sizing math.
+// height` clamps (one pair per `peekVariant`). Kept in sync by hand: a CSS
+// custom property can only be read back as its raw declaration text (e.g.
+// "clamp(4.5rem, 16vh, 7.5rem)"), not a resolved pixel value, so live-drag
+// clamping (issue #212 AC: "dragging the handle follows the finger")
+// recomputes the same bounds in JS instead. The rem bounds are converted
+// using the *actual* root font size (code review finding: a hardcoded
+// 16px-per-rem assumption drifts from the real rendered CSS under a browser
+// text-zoom/accessibility font-size setting, and the drag would visibly snap
+// the instant the inline override is cleared) — same pattern
+// GrimoireBoard.tsx already uses for its own board-sizing math.
 const PEEK_MIN_REM = 4.5;
-const PEEK_MAX_REM = 7.5;
-const PEEK_VIEWPORT_FRACTION = 0.16;
+const PEEK_BOUNDS_BY_VARIANT = {
+  compact: { maxRem: 7.5, viewportFraction: 0.16 },
+  roomy: { maxRem: 10, viewportFraction: 0.2 },
+} as const;
 const EXPANDED_VIEWPORT_FRACTION = 0.45;
 
 function readRootFontSizePx(): number {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 }
 
-function peekHeightPx(viewportHeightPx: number, rootFontSizePx: number): number {
+function peekHeightPx(
+  viewportHeightPx: number,
+  rootFontSizePx: number,
+  peekVariant: BottomSheetProps["peekVariant"],
+): number {
+  const { maxRem, viewportFraction } =
+    PEEK_BOUNDS_BY_VARIANT[peekVariant ?? "compact"];
   return Math.min(
-    PEEK_MAX_REM * rootFontSizePx,
-    Math.max(PEEK_MIN_REM * rootFontSizePx, viewportHeightPx * PEEK_VIEWPORT_FRACTION),
+    maxRem * rootFontSizePx,
+    Math.max(PEEK_MIN_REM * rootFontSizePx, viewportHeightPx * viewportFraction),
   );
 }
 
@@ -85,6 +96,7 @@ export function BottomSheet({
   onToggleCollapsed,
   above,
   below,
+  peekVariant,
   children,
 }: BottomSheetProps) {
   const dragRef = useRef<HandleDrag | null>(null);
@@ -113,7 +125,7 @@ export function BottomSheet({
     dragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
-      minHeightPx: peekHeightPx(viewportHeightPx, readRootFontSizePx()),
+      minHeightPx: peekHeightPx(viewportHeightPx, readRootFontSizePx(), peekVariant),
       maxHeightPx: expandedHeightPx(viewportHeightPx),
     };
   }
@@ -163,6 +175,10 @@ export function BottomSheet({
       className={styles.panel}
       aria-label={ariaLabel}
       data-bottom-sheet
+      // Selects the matching CSS peek-height clamp below (issue #216 code
+      // review finding) — only ever "roomy" for Day phase's taller `above`
+      // content, so Night's own peek stays at its original, tighter bound.
+      data-peek-variant={peekVariant ?? "compact"}
       // Drives the fixed peek/expanded heights in CSS (ADR 0004: a fixed
       // ~45vh when expanded, content scrolling internally, never resizing
       // the grimoire circle behind it).
@@ -173,28 +189,41 @@ export function BottomSheet({
       data-dragging={liveHeightPx !== null || undefined}
       style={liveHeightPx !== null ? { height: `${liveHeightPx}px` } : undefined}
     >
-      {/* Decorative drag handle — a bottom sheet's standard pointer/touch
-          affordance (issue #194). Screen-reader users still get an
-          accessible expand/collapse control via the heading button below,
-          so this is aria-hidden rather than a second, redundant control. */}
-      <div
-        className={styles.handle}
-        data-handle
-        aria-hidden="true"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-      />
-      {above}
-      <CollapsibleSection
-        title={title}
-        collapsed={collapsed}
-        onToggleCollapsed={onToggleCollapsed}
-      >
-        {children}
-      </CollapsibleSection>
-      {below}
+      {/* The sheet's chrome — drag handle, the always-visible `above` slot,
+          and the open/close heading — is pinned to the top of the panel
+          (issue #247) so it stays reachable no matter how far the body below
+          is scrolled. Only `.body` scrolls; `.panel` itself no longer does. */}
+      <div className={styles.pinned} data-sheet-pinned>
+        {/* Decorative drag handle — a bottom sheet's standard pointer/touch
+            affordance (issue #194). Screen-reader users still get an
+            accessible expand/collapse control via the heading button below,
+            so this is aria-hidden rather than a second, redundant control. */}
+        <div
+          className={styles.handle}
+          data-handle
+          aria-hidden="true"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+        />
+        {above}
+        <CollapsibleHeading
+          title={title}
+          collapsed={collapsed}
+          onToggleCollapsed={onToggleCollapsed}
+        />
+      </div>
+      {/* Skipped entirely when there's nothing to show (peeking with no
+          `below`, code review finding) — an empty div here would still
+          claim `.panel`'s `gap` against `.pinned`, leaving unwanted dead
+          space below the heading. */}
+      {(!collapsed || below) && (
+        <div className={styles.body} data-sheet-body>
+          {!collapsed && children}
+          {below}
+        </div>
+      )}
     </section>
   );
 }

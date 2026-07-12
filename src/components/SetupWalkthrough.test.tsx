@@ -73,6 +73,7 @@ function renderWalkthrough(
     players: Player[];
     stepStatuses: Record<string, "answered" | "skipped">;
     game: GameDocument;
+    characterPool: typeof characterPool;
     onChangeGame: ReturnType<typeof vi.fn>;
     onResolveStep: ReturnType<typeof vi.fn>;
     onReassignStandIn: ReturnType<typeof vi.fn>;
@@ -83,7 +84,7 @@ function renderWalkthrough(
   const onReassignStandIn = overrides.onReassignStandIn ?? vi.fn();
   const onClose = overrides.onClose ?? vi.fn();
   const onChangeGame = overrides.onChangeGame ?? vi.fn();
-  const game = overrides.game ?? makeGame();
+  const game = overrides.game ?? makeGame({ scriptCharacters: characterPool });
   const players = overrides.players ?? [
     makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "fortuneteller" }),
     makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
@@ -96,7 +97,7 @@ function renderWalkthrough(
       steps={steps}
       stepStatuses={overrides.stepStatuses ?? {}}
       players={players}
-      characterPool={characterPool}
+      characterPool={overrides.characterPool ?? characterPool}
       game={game}
       onChangeGame={onChangeGame}
       onResolveStep={onResolveStep}
@@ -144,6 +145,18 @@ describe("SetupWalkthrough shell", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("closes via a Done button at the bottom of the walkthrough (issue #244)", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderWalkthrough({ steps: [fortuneTellerStep] });
+    await user.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps Done enabled no matter how many steps are unresolved (advisory, ADR 0003)", () => {
+    renderWalkthrough({ steps: [fortuneTellerStep], stepStatuses: {} });
+    expect(screen.getByRole("button", { name: /^done$/i })).toBeEnabled();
+  });
+
   it("renders as a modal dialog, prominent regardless of where it mounts in the page (issue #57)", () => {
     renderWalkthrough({ steps: [fortuneTellerStep] });
     expect(
@@ -156,14 +169,20 @@ describe("SetupWalkthrough shell", () => {
     expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
   });
 
-  it("traps Tab within the dialog's own controls (code review: the page behind the backdrop stays focusable otherwise)", async () => {
+  it("traps Tab within the dialog's own controls, including the footer Done button (code review: the page behind the backdrop stays focusable otherwise; issue #244)", async () => {
     const user = userEvent.setup();
     renderWalkthrough({ steps: [fortuneTellerStep] });
 
     const step = screen.getByRole("group", { name: fortuneTellerStep.title });
     within(step).getByRole("button", { name: /skip/i }).focus();
     await user.tab();
+    expect(screen.getByRole("button", { name: /^done$/i })).toHaveFocus();
+
+    await user.tab();
     expect(screen.getByRole("button", { name: /close/i })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: /^done$/i })).toHaveFocus();
 
     await user.tab({ shift: true });
     expect(within(step).getByRole("button", { name: /skip/i })).toHaveFocus();
@@ -656,6 +675,49 @@ describe("review step (Drunk)", () => {
     expect(optionText).toContain("Washerwoman");
   });
 
+  // Issue #242: the picker used to source candidates from the narrow
+  // `characterPool` prop (already-selected/built characters only), which in
+  // a fully-seated game collapses to just the current stand-in — every
+  // other selected Townsfolk is already held by some other seat. Sourcing
+  // from game.scriptCharacters (the full script) instead, like the bag
+  // builder's own stand-in picker, is what this test locks in.
+  it("offers the full script's Townsfolk, not just the narrow in-play pool (issue #242)", async () => {
+    const user = userEvent.setup();
+    // Mirrors production: the characterPool prop only holds what's already
+    // selected/built into the bag (gameDocument.ts), which in a
+    // fully-seated game is entirely accounted for by held seats — the bug
+    // this issue fixes. game.scriptCharacters (the module-level
+    // characterPool fixture, the full script) is wider — named distinctly
+    // here so the two pools' identifiers can't be confused with each other.
+    const narrowCharacterPool = [getCharacter("washerwoman")!, getCharacter("imp")!];
+    renderWalkthrough({
+      steps: [drunkStep],
+      characterPool: narrowCharacterPool,
+      players: [
+        makePlayer({ id: "p1", seat: 1, name: "Alice", characterId: "washerwoman" }),
+        makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+      ],
+      game: makeGame({ scriptCharacters: characterPool }),
+    });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    const optionText = (
+      await getSelectOptions(user, within(step).getByLabelText(/new stand-in/i))
+    ).map((o) => o.label);
+
+    // Librarian is on the script (scriptCharacters), isn't held by any seat,
+    // and isn't the current stand-in — a correct picker offers it even
+    // though it isn't in the narrow characterPool prop.
+    expect(optionText).toContain("Librarian");
+  });
+
+  it("has no 'Show all characters' checkbox (issue #242 — the full script is always offered)", () => {
+    renderWalkthrough({ steps: [drunkStep] });
+
+    const step = screen.getByRole("group", { name: drunkStep.title });
+    expect(within(step).queryByText(/show all characters/i)).not.toBeInTheDocument();
+  });
+
   it("disables the change button until a different character is chosen", async () => {
     renderWalkthrough({ steps: [drunkStep] });
 
@@ -765,7 +827,7 @@ describe("generic step (homebrew fallback)", () => {
     reminderOptions: ["Marked", "Foretold"],
   };
 
-  it("stages a chosen reminder and only resolves once, on Done", async () => {
+  it("stages a chosen reminder and only resolves once, on Confirm", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({ steps: [genericStep] });
 
@@ -773,18 +835,18 @@ describe("generic step (homebrew fallback)", () => {
     await user.click(within(step).getByRole("button", { name: "Marked" }));
     expect(onResolveStep).not.toHaveBeenCalled();
 
-    await user.click(within(step).getByRole("button", { name: /^done$/i }));
+    await user.click(within(step).getByRole("button", { name: /^confirm$/i }));
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", [
       expect.objectContaining({ characterId: "custom-oracle", label: "Marked" }),
     ]);
   });
 
-  it("marks the step answered via Done, without requiring every reminder placed", async () => {
+  it("marks the step answered via Confirm, without requiring every reminder placed", async () => {
     const user = userEvent.setup();
     const { onResolveStep } = renderWalkthrough({ steps: [genericStep] });
 
     const step = screen.getByRole("group", { name: genericStep.title });
-    await user.click(within(step).getByRole("button", { name: /^done$/i }));
+    await user.click(within(step).getByRole("button", { name: /^confirm$/i }));
 
     expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
   });

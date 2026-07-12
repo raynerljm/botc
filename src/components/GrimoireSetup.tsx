@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import {
+  ACTS_AS_CAPABLE_IDS,
   characterPickerPool,
   getCharacter,
   SEAT_HOLDING_TEAMS,
@@ -17,8 +18,8 @@ import {
 } from "@/lib/characters";
 import { currentDay, executionNominations } from "@/lib/dayPhase";
 import {
-  ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
+  clampPct,
   defaultPlayerName,
   DRUNK_ID,
   drunkStandInReminderId,
@@ -26,7 +27,6 @@ import {
   insertAtSeat,
   livePlayerPosition,
   parkBeside,
-  reorderSeatsAfterMove,
   resumeDrawSession,
   shuffleTokens,
   withBackfilledDrunkReminders,
@@ -344,13 +344,58 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     renamePlayer(playerId, normalized);
   }
 
-  // Dragging a token is the seat-reorder gesture (issue #188): where it's
-  // dropped determines the new clockwise seat order for everyone, not just
-  // the moved seat's own position.
+  // Dragging a token repositions only that token (issue #249) — seat
+  // numbers never change as a side effect of a drag. Reordering seats is a
+  // deliberate, separate gesture (reorderSeat below).
+  //
+  // `position` arrives unrotated but NOT re-clamped (GrimoireBoard.tsx's
+  // unrotatePosition is deliberately unclamped, by design — see its own
+  // comment in gameDocument.ts), so a corner drag under a non-90-degree
+  // rotation can hand this an out-of-[4,96] value. GrimoireBoard's own
+  // render loop re-clamps a stored position every time it's displayed, but
+  // nothing else does — an export, or a reminder anchored via
+  // livePlayerPosition, would otherwise persist/read that out-of-range
+  // value verbatim (the exact class of bug issue #167 fixed) — so this is
+  // the one point of use that must clamp before it's ever stored.
+  //
+  // Builds off gameRef.current (not the `game` this render closed over) —
+  // a drag can run long enough for other state (e.g. a live day timer tick)
+  // to update gameRef.current between this render and pointerup, the same
+  // stale-snapshot defense every other multi-moment handler in this file
+  // uses (Copilot review finding).
   function movePlayer(playerId: string, position: PlayerPosition) {
+    const clamped = { x: clampPct(position.x), y: clampPct(position.y) };
+    const currentGame = gameRef.current;
     update({
-      ...game,
-      players: reorderSeatsAfterMove(game.players, playerId, position),
+      ...currentGame,
+      players: currentGame.players.map((player) =>
+        player.id === playerId ? { ...player, position: clamped } : player,
+      ),
+    });
+  }
+
+  // Reordering only swaps the two seats' numbers — the players array itself
+  // stays in whatever order it was already in, since GrimoireBoard sorts by
+  // seat before rendering. Builds off gameRef.current, same stale-snapshot
+  // defense as movePlayer above (Copilot review finding).
+  function reorderSeat(playerId: string, direction: "earlier" | "later") {
+    const currentGame = gameRef.current;
+    const bySeat = [...currentGame.players].sort((a, b) => a.seat - b.seat);
+    const index = bySeat.findIndex((p) => p.id === playerId);
+    const swapIndex = direction === "earlier" ? index - 1 : index + 1;
+    if (index === -1 || swapIndex < 0 || swapIndex >= bySeat.length) return;
+
+    const current = bySeat[index];
+    const swapWith = bySeat[swapIndex];
+    update({
+      ...currentGame,
+      players: currentGame.players.map((player) => {
+        if (player.id === current.id)
+          return { ...player, seat: swapWith.seat };
+        if (player.id === swapWith.id)
+          return { ...player, seat: current.seat };
+        return player;
+      }),
     });
   }
 
@@ -1353,6 +1398,9 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
           <Button type="submit" variant="primary">
             Add to the circle
           </Button>
+          <Button variant="ghost" onClick={() => setTravellerFormOpen(false)}>
+            Cancel
+          </Button>
         </form>
       )}
 
@@ -1476,6 +1524,7 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                 onRenameCommit={commitPlayerName}
                 onMove={movePlayer}
                 onReCircle={reCircle}
+                onReorderSeat={reorderSeat}
                 rotation={game.rotation}
                 onRotate={rotate}
                 onToggleDead={toggleDead}

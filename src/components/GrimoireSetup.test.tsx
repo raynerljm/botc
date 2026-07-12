@@ -1224,6 +1224,47 @@ describe("travellers addable at setup with alignment", () => {
     ).toBeInTheDocument();
   });
 
+  it("cancels the 'Add a traveller' form without adding a traveller, opened pre-setup (issue #243)", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await selectOption(
+      user,
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Add to the circle" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
+    expect(loadGame()).toBeNull();
+  });
+
+  it("reseeds the 'Add a traveller' form's fields on reopen after cancelling", async () => {
+    const user = userEvent.setup();
+    render(<GrimoireSetup game={gameWithTraveller()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    const before = screen.getByLabelText("Traveller character").textContent;
+    await selectOption(
+      user,
+      screen.getByLabelText("Traveller character"),
+      "Bureaucrat",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+
+    expect(screen.getByLabelText("Traveller character").textContent).toBe(
+      before,
+    );
+  });
+
   it("offers a homebrew script's own traveller even in a 0-traveller game, not just vendored ones (code review finding)", async () => {
     const user = userEvent.setup();
     // Not in the vendored dataset — characterPool alone (which only holds
@@ -1530,17 +1571,25 @@ describe("Lunatic seat display (stand-in identity + actually the Lunatic, issue 
 
 describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52)", () => {
   async function drunkBoard(user: ReturnType<typeof userEvent.setup>) {
+    const selectedCharacters = [
+      getCharacter("drunk")!,
+      getCharacter("chef")!,
+      getCharacter("grandmother")!,
+    ];
+    const standIn = getCharacter("washerwoman")!;
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
       playerCount: 2,
-      selectedCharacters: [
-        getCharacter("drunk")!,
-        getCharacter("chef")!,
-        getCharacter("grandmother")!,
-      ],
-      standIn: getCharacter("washerwoman")!,
+      selectedCharacters,
+      standIn,
       extraCopies: {},
+      // The real BagBuilder always passes the full script pool (issue #242)
+      // — without this, scriptCharacters defaults to just
+      // selectedCharacters, which omits the stand-in itself (Washerwoman)
+      // and any not-selected Townsfolk (Librarian) the picker should still
+      // offer.
+      scriptCharacters: [...selectedCharacters, standIn, getCharacter("librarian")!],
     });
     render(<GrimoireSetup game={game} />);
 
@@ -1615,23 +1664,36 @@ describe("reassigning the Drunk's stand-in from the setup walkthrough (issue #52
 
     expect(options).not.toContain("Chef");
     expect(options).toContain("Grandmother");
+    // Issue #242: Librarian is on the script but never selected into the
+    // bag — the narrow-pool bug excluded it entirely, collapsing the
+    // picker to just the current stand-in.
+    expect(options).toContain("Librarian");
   });
 });
 
 describe("reassigning the Lunatic's stand-in from the setup walkthrough (issue #163)", () => {
   async function lunaticBoard(user: ReturnType<typeof userEvent.setup>) {
+    const selectedCharacters = [
+      getCharacter("lunatic")!,
+      getCharacter("chef")!,
+      getCharacter("zombuul")!,
+    ];
     const game = createGame({
       scriptId: "tb",
       scriptName: "Trouble Brewing",
       playerCount: 2,
-      selectedCharacters: [
-        getCharacter("lunatic")!,
-        getCharacter("chef")!,
-        getCharacter("zombuul")!,
-      ],
+      selectedCharacters,
       standIn: null,
       lunaticStandIn: getCharacter("imp")!,
       extraCopies: {},
+      // The real BagBuilder always passes the full script pool (issue #242:
+      // the stand-in reassignment picker sources from it) — without this,
+      // scriptCharacters defaults to just selectedCharacters, which omits
+      // Imp (the lunaticStandIn) entirely. Derived from selectedCharacters
+      // rather than via getEditionCharacters("tb") since Zombuul isn't
+      // actually on that script — this scenario's "script" is this test's
+      // own fixture.
+      scriptCharacters: [...selectedCharacters, getCharacter("imp")!],
     });
     render(<GrimoireSetup game={game} />);
 
@@ -2165,6 +2227,34 @@ describe("mid-game token management (issue #15)", () => {
     const reloaded = loadGame()!;
     expect(reloaded.players).toHaveLength(2);
     expect(reloaded.players.some((p) => p.characterId === "baron")).toBe(false);
+  });
+
+  it("cancels the 'Add a traveller' form without adding a traveller, opened post-setup from the board menu (issue #243)", async () => {
+    const { user } = await completeSetup(2, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("scapegoat")!,
+    ]);
+
+    await openBoardMenu(user);
+    await user.click(screen.getByRole("button", { name: "Add traveller" }));
+    await selectOption(
+      user,
+      screen.getByLabelText("Traveller character"),
+      "Scapegoat",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Add to the circle" }),
+    ).not.toBeInTheDocument();
+    await openBoardMenu(user);
+    expect(
+      screen.getByRole("button", { name: "Add traveller" }),
+    ).toBeInTheDocument();
+    const reloaded = loadGame()!;
+    expect(reloaded.players).toHaveLength(2);
+    expect(reloaded.players.some((p) => p.isTraveller)).toBe(false);
   });
 
   it("computes 'At the end' from the highest seat number, not the player count, once a removal has left a gap", async () => {
@@ -2959,7 +3049,7 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
   });
 });
 
-describe("seat reordering by drag (issue #188)", () => {
+describe("seat reordering (issue #249)", () => {
   function mockBoardRect(circle: HTMLElement) {
     const board = circle.querySelector("[data-board]") as HTMLElement;
     vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
@@ -2975,8 +3065,8 @@ describe("seat reordering by drag (issue #188)", () => {
     });
   }
 
-  it("renumbers every seat to match the new clockwise order once a dragged token is dropped, with no 'Move seat' buttons left to do it by hand", async () => {
-    const { user, circle } = await completeSetup(4, [
+  it("dragging a token repositions only that token — no seat number changes", async () => {
+    const { circle } = await completeSetup(4, [
       getCharacter("washerwoman")!,
       getCharacter("imp")!,
       getCharacter("empath")!,
@@ -2986,10 +3076,10 @@ describe("seat reordering by drag (issue #188)", () => {
 
     const wraps = circle.querySelectorAll("[data-player-id]");
     const seat1Wrap = wraps[0] as HTMLElement; // top
-    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!; // right
     const seat1Id = seat1Wrap.dataset.playerId!;
-    const seat3Id = (wraps[2] as HTMLElement).dataset.playerId!; // bottom
-    const seat4Id = (wraps[3] as HTMLElement).dataset.playerId!; // left
+    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!;
+    const seat3Id = (wraps[2] as HTMLElement).dataset.playerId!;
+    const seat4Id = (wraps[3] as HTMLElement).dataset.playerId!;
 
     // Drag seat 1 (top, 50%/5%) clockwise past seat 2 (right, 95%/50%) to
     // land between it and seat 3 (bottom, 50%/95%), i.e. 72.5%/72.5%.
@@ -3009,17 +3099,100 @@ describe("seat reordering by drag (issue #188)", () => {
 
     const reloaded = loadGame() as GameDocument;
     const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
-    expect(seatById.get(seat2Id)).toBe(1);
-    expect(seatById.get(seat1Id)).toBe(2);
+    // Every seat keeps its own number — only the dragged token's on-screen
+    // position changed.
+    expect(seatById.get(seat1Id)).toBe(1);
+    expect(seatById.get(seat2Id)).toBe(2);
     expect(seatById.get(seat3Id)).toBe(3);
     expect(seatById.get(seat4Id)).toBe(4);
-    // Contiguous and unique.
-    expect([...seatById.values()].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+    const movedPlayer = reloaded.players.find((p) => p.id === seat1Id)!;
+    expect(movedPlayer.position).toEqual({ x: 72.5, y: 72.5 });
+  });
+
+  it("reorders a seat earlier/later from its token menu's explicit control", async () => {
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+    ]);
+
+    const wraps = circle.querySelectorAll("[data-player-id]");
+    const seat2Wrap = wraps[1] as HTMLElement;
+    const seat1Id = (wraps[0] as HTMLElement).dataset.playerId!;
+    const seat2Id = seat2Wrap.dataset.playerId!;
+
+    await user.click(within(seat2Wrap).getByText("Player 2"));
+    await user.click(
+      within(seat2Wrap).getByRole("button", { name: /move seat earlier/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
+    expect(seatById.get(seat2Id)).toBe(1);
+    expect(seatById.get(seat1Id)).toBe(2);
+  });
+
+  it("reorders a seat later too, not just earlier", async () => {
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+    ]);
+
+    const wraps = circle.querySelectorAll("[data-player-id]");
+    const seat1Wrap = wraps[0] as HTMLElement;
+    const seat1Id = seat1Wrap.dataset.playerId!;
+    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!;
 
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    expect(
-      within(seat1Wrap).queryByRole("button", { name: /move seat/i }),
-    ).not.toBeInTheDocument();
+    await user.click(
+      within(seat1Wrap).getByRole("button", { name: /move seat later/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
+    expect(seatById.get(seat1Id)).toBe(2);
+    expect(seatById.get(seat2Id)).toBe(1);
+  });
+
+  it("clamps a dragged token's position to the pad's bounds before persisting it, even under a non-90-degree rotation", async () => {
+    const { user, circle } = await completeSetup(2, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+    ]);
+    mockBoardRect(circle);
+
+    await openBoardMenu(user);
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+
+    const seat1Wrap = circle.querySelector(
+      "[data-player-id]",
+    ) as HTMLElement;
+    const seat1Id = seat1Wrap.dataset.playerId!;
+    const summary = seat1Wrap.querySelector("summary") as HTMLElement;
+
+    // Drag far past the corner — under a 45-degree rotation, unrotating a
+    // clamped-at-the-corner drop point lands well outside [4,96] unless the
+    // consumer re-clamps it before persisting (issue #167 class bug).
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 200, clientY: 200 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 384, clientY: 384 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 384, clientY: 384 }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const movedPlayer = reloaded.players.find((p) => p.id === seat1Id)!;
+    expect(movedPlayer.position!.x).toBeGreaterThanOrEqual(4);
+    expect(movedPlayer.position!.x).toBeLessThanOrEqual(96);
+    expect(movedPlayer.position!.y).toBeGreaterThanOrEqual(4);
+    expect(movedPlayer.position!.y).toBeLessThanOrEqual(96);
   });
 });
 

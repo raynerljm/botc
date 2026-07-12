@@ -10,6 +10,8 @@ import {
 } from "react";
 
 import {
+  ACTS_AS_ALLOWED_TEAMS,
+  ACTS_AS_CAPABLE_IDS,
   characterPickerPool,
   getCharacter,
   groupByTeam,
@@ -20,7 +22,6 @@ import {
   type Character,
 } from "@/lib/characters";
 import {
-  ACTS_AS_CAPABLE_IDS,
   anchoredReminderPosition,
   circlePosition,
   clampPct,
@@ -65,6 +66,7 @@ export interface GrimoireBoardProps {
   onRenameCommit: (playerId: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
+  onReorderSeat: (playerId: string, direction: "earlier" | "later") => void;
   // Current orientation of the whole grimoire circle, in degrees clockwise
   // from its default layout (issue #192). Applied to every token's position
   // at render time only — never baked into a stored position.
@@ -219,6 +221,7 @@ export function GrimoireBoard({
   onRenameCommit,
   onMove,
   onReCircle,
+  onReorderSeat,
   rotation,
   onRotate,
   onToggleDead,
@@ -948,7 +951,7 @@ export function GrimoireBoard({
         style={{ "--token-size": `${tokenSize}rem` } as React.CSSProperties}
       >
         {!hidden &&
-          sorted.map((player) => {
+          sorted.map((player, index) => {
             const character = player.characterId
               ? characterById.get(player.characterId)
               : undefined;
@@ -980,6 +983,33 @@ export function GrimoireBoard({
             const actsAsCapable = player.characterId
               ? ACTS_AS_CAPABLE_IDS.has(player.characterId)
               : false;
+            // Each acts-as-capable role only resolves one team's ability
+            // (Philosopher/Boffin: good, Alchemist: Minion) — scope the
+            // picker's groups accordingly (issue #245).
+            const actsAsAllowedTeams = player.characterId
+              ? ACTS_AS_ALLOWED_TEAMS[player.characterId]
+              : undefined;
+            const actsAsGroups = actsAsAllowedTeams
+              ? claimGroups.filter((group) => actsAsAllowedTeams.has(group.team))
+              : claimGroups;
+            // A target set before this filter existed (or before the script
+            // last changed) can be off-spec-team or altogether missing from
+            // claimOptions — keep it visible/selectable rather than silently
+            // clearing it (same safeguard as the Claim select). Read off
+            // claimById's O(1) team lookup rather than re-scanning
+            // actsAsGroups, and gated on truthy (not just non-null) so a
+            // stray empty-string value doesn't produce a second blank entry
+            // alongside "Not acting as anyone".
+            const actsAsTarget = player.actsAs
+              ? claimById.get(player.actsAs)
+              : undefined;
+            const actsAsOffSpecId =
+              player.actsAs &&
+              (actsAsTarget === undefined ||
+                (actsAsAllowedTeams !== undefined &&
+                  !actsAsAllowedTeams.has(actsAsTarget.team)))
+                ? player.actsAs
+                : null;
             const menuOpen = isMenuOpenFor("player", player.id);
 
             return (
@@ -1118,6 +1148,26 @@ export function GrimoireBoard({
                       />
                     </label>
 
+                    {/* Bounds check against `index`/`total` (position in
+                        seat-sorted order), not `player.seat` directly —
+                        seat numbers can have gaps after a mid-game removal
+                        (removePlayer never renumbers survivors), so seat
+                        1/N isn't reliably first/last once that's happened. */}
+                    <div className={styles.seatControls}>
+                      <Button
+                        disabled={index === 0}
+                        onClick={() => onReorderSeat(player.id, "earlier")}
+                      >
+                        Move seat earlier
+                      </Button>
+                      <Button
+                        disabled={index === total - 1}
+                        onClick={() => onReorderSeat(player.id, "later")}
+                      >
+                        Move seat later
+                      </Button>
+                    </div>
+
                     {isHiddenDrunk && (
                       <Button onClick={() => onRevealDrunk(player.id)}>
                         Reveal Drunk
@@ -1196,15 +1246,22 @@ export function GrimoireBoard({
                           }
                           entries={[
                             { value: "", label: "Not acting as anyone" },
-                            // Same "keep an orphaned value selectable/visible"
-                            // safeguard as the Claim select above — an actsAs
-                            // target recorded before the script last changed
-                            // can reference a character no longer in
-                            // claimOptions (Copilot review finding).
-                            ...(player.actsAs && !claimById.has(player.actsAs)
-                              ? [{ value: player.actsAs, label: player.actsAs }]
+                            // Same "keep an orphaned/off-spec value
+                            // selectable/visible" safeguard as the Claim
+                            // select above — an actsAs target recorded
+                            // before the script last changed, or before this
+                            // team filter existed, can reference a character
+                            // no longer offered by the groups below.
+                            ...(actsAsOffSpecId
+                              ? [
+                                  {
+                                    value: actsAsOffSpecId,
+                                    label:
+                                      actsAsTarget?.name ?? actsAsOffSpecId,
+                                  },
+                                ]
                               : []),
-                            ...claimGroups.map((group) => ({
+                            ...actsAsGroups.map((group) => ({
                               label: teamNames[group.team],
                               options: group.characters.map((c) => ({
                                 value: c.id,

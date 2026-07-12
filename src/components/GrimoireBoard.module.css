@@ -488,6 +488,11 @@
   color: var(--foreground);
 }
 
+.seatControls {
+  display: flex;
+  gap: 0.5rem;
+}
+
 /* --surface-raised at rest, matching every sibling control in this menu
    (.select/.textInput/.claimSelect) — .menuBody itself is --surface, so a
    --surface disclosure would blend into it instead of reading as a

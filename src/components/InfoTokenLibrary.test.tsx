@@ -50,7 +50,7 @@ describe("InfoTokenLibrary", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("picking a standard card moves to the attach step, then shows it with no tokens attached", async () => {
+  it("picking a card that doesn't need a character shows it immediately, with no attach step", async () => {
     const user = userEvent.setup();
     const onShow = vi.fn();
     render(
@@ -63,16 +63,36 @@ describe("InfoTokenLibrary", () => {
 
     await user.click(screen.getByRole("button", { name: "This is the Demon" }));
 
-    expect(screen.getByText("This is the Demon")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Show" }));
-
     expect(onShow).toHaveBeenCalledWith({
       text: "This is the Demon",
       characterIds: [],
     });
+    expect(screen.queryByRole("button", { name: "Show" })).not.toBeInTheDocument();
   });
 
-  it("lets the storyteller pick the token(s) before showing a 'You are' style card", async () => {
+  it("picking 'You are' moves to the attach step, then shows it with no tokens attached", async () => {
+    const user = userEvent.setup();
+    const onShow = vi.fn();
+    render(
+      <InfoTokenLibrary
+        characterById={characterById([])}
+        onShow={onShow}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "You are" }));
+
+    expect(screen.getByText("You are")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show" }));
+
+    expect(onShow).toHaveBeenCalledWith({
+      text: "You are",
+      characterIds: [],
+    });
+  });
+
+  it("lets the storyteller pick the token(s) before showing a 'You are' card", async () => {
     const user = userEvent.setup();
     const onShow = vi.fn();
     const imp = getCharacter("imp")!;
@@ -84,13 +104,13 @@ describe("InfoTokenLibrary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     const group = within(screen.getByRole("group", { name: "Demons" }));
     await user.click(group.getByRole("button", { name: "Imp" }));
     await user.click(screen.getByRole("button", { name: "Show" }));
 
     expect(onShow).toHaveBeenCalledWith({
-      text: "This is the Demon",
+      text: "You are",
       characterIds: [imp.id],
     });
   });
@@ -157,7 +177,7 @@ describe("InfoTokenLibrary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     await user.click(screen.getByRole("button", { name: "Back" }));
 
     expect(
@@ -165,7 +185,7 @@ describe("InfoTokenLibrary", () => {
     ).toBeInTheDocument();
   });
 
-  it("supports a custom free-text info token for the unscripted moments", async () => {
+  it("supports a custom free-text info token for the unscripted moments, with no forced attach step", async () => {
     const user = userEvent.setup();
     const onShow = vi.fn();
     render(
@@ -181,12 +201,12 @@ describe("InfoTokenLibrary", () => {
       "The Grandmother is in play",
     );
     await user.click(screen.getByRole("button", { name: "Use this text" }));
-    await user.click(screen.getByRole("button", { name: "Show" }));
 
     expect(onShow).toHaveBeenCalledWith({
       text: "The Grandmother is in play",
       characterIds: [],
     });
+    expect(screen.queryByRole("button", { name: "Show" })).not.toBeInTheDocument();
   });
 });
 
@@ -205,7 +225,7 @@ describe("dialog dismiss behavior (issue #122)", () => {
     // from null to a string) — if focus falls through to <body>, the shared
     // hook's Tab trap (which only intercepts Tab at the container's
     // first/last focusable) never engages again for the rest of this mount.
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
 
     const dialog = screen.getByRole("dialog", { name: "Info tokens" });
     expect(document.activeElement).not.toBe(document.body);
@@ -222,7 +242,7 @@ describe("dialog dismiss behavior (issue #122)", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "This is the Demon" }));
+    await user.click(screen.getByRole("button", { name: "You are" }));
     await user.click(screen.getByRole("button", { name: "Back" }));
 
     const dialog = screen.getByRole("dialog", { name: "Info tokens" });

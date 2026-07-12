@@ -13,23 +13,6 @@
   border-radius: 0.5rem;
 }
 
-/* Peeking (issue #216): the sheet's one glanceable info row, sized to
-   actually fit the fixed peek band (ADR 0004) alongside the heading —
-   the compact timer line and the block status sit side by side rather
-   than the bordered `.block` badge's own row, which (with the full timer
-   widget above it) is what overflowed the peek band in the first place. */
-.peekRow {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.blockPeek {
-  margin: 0;
-  font-weight: 600;
-}
-
 .reopenNight {
   margin-bottom: 0.5rem;
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
-import { groupByTeam, teamNames, type Character } from "@/lib/characters";
+import { GOOD_TEAMS, groupByTeam, teamNames, type Character } from "@/lib/characters";
 import { DEMON_BLUFF_SLOTS, heldCharacterIds, type GameDocument } from "@/lib/gameDocument";
 
 import { Button } from "./Button";
@@ -29,8 +29,6 @@ export interface DemonBluffsPanelProps {
   // reveal button unless a caller deliberately opts out.
   showToDemonButton?: boolean;
 }
-
-const GOOD_TEAMS = new Set<Character["team"]>(["townsfolk", "outsider"]);
 
 export function DemonBluffsPanel({
   game,

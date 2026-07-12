@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { saveCustomScript } from "@/lib/customScripts";
-import { describeScriptParseError, parseScript } from "@/lib/scriptParser";
+import {
+  describeScriptParseError,
+  parseScript,
+  parseScriptMeta,
+} from "@/lib/scriptParser";
 
 import styles from "./AddScriptDialog.module.css";
 import { Button } from "./Button";
@@ -25,15 +29,23 @@ export interface AddScriptDialogProps {
 
 export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
   const [text, setText] = useState("");
+  const [name, setName] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const nameTouchedRef = useRef(false);
   const router = useRouter();
+
+  function applyText(newText: string) {
+    setText(newText);
+    if (nameTouchedRef.current) return;
+    setName(parseScriptMeta(newText).name ?? "");
+  }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      setText(await readFileAsText(file));
+      applyText(await readFileAsText(file));
     } catch {
       setErrors([
         "Couldn't read that file. Try a different file or paste the JSON instead.",
@@ -51,10 +63,12 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
     setErrors([]);
     const saved = saveCustomScript({
       rawText: text,
-      name: result.script.meta.name ?? "Untitled script",
+      name: name.trim() || "Untitled script",
       author: result.script.meta.author,
     });
     setText("");
+    setName("");
+    nameTouchedRef.current = false;
     if (detailsRef.current) detailsRef.current.open = false;
     onAdded(saved.id);
     router.push(`/scripts/custom?id=${saved.id}`);
@@ -79,7 +93,21 @@ export function AddScriptDialog({ onAdded }: AddScriptDialogProps) {
             className={styles.textarea}
             rows={6}
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => applyText(event.target.value)}
+          />
+        </label>
+        <label htmlFor="script-name" className={styles.field}>
+          Name (optional)
+          <input
+            id="script-name"
+            type="text"
+            className={styles.control}
+            value={name}
+            onChange={(event) => {
+              nameTouchedRef.current = true;
+              setName(event.target.value);
+            }}
+            placeholder="Untitled script"
           />
         </label>
         {errors.length > 0 && (
