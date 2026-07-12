@@ -350,7 +350,11 @@ describe("anchoredReminderPosition (issue #251)", () => {
   });
 
   it("curves later siblings around the capped point instead of piling them on the same spot", () => {
-    const positions = Array.from({ length: 10 }, (_, i) =>
+    // 40, not 10: a fixed arc step that evenly divides 360° wraps back to an
+    // angle it's already used well before 40 overflow siblings (Copilot
+    // review finding on an earlier version of this function) — a short run
+    // wouldn't have caught it.
+    const positions = Array.from({ length: 40 }, (_, i) =>
       anchoredReminderPosition(leftOfCentre, i),
     );
     const key = (p: { x: number; y: number }) =>

@@ -570,10 +570,6 @@ const ANCHOR_RADIAL_STEP = 5;
 // centre and, past that, keep going and start overlapping the far side of
 // the circle.
 const ANCHOR_RADIAL_MAX = 24;
-// Once the radial cap is hit, further siblings fan out at this angle around
-// the capped point (alternating sides, widening every second one) instead
-// of continuing inward and piling up on the same spot at the centre.
-const ANCHOR_ARC_STEP_DEG = 24;
 
 const CIRCLE_CENTRE: PlayerPosition = { x: 50, y: 50 };
 
@@ -601,9 +597,12 @@ export function anchoredReminderPosition(
     0,
     Math.ceil((rawDistance - ANCHOR_RADIAL_MAX) / ANCHOR_RADIAL_STEP),
   );
-  const pairIndex = Math.ceil(overflowSteps / 2);
-  const arcSide = overflowSteps % 2 === 1 ? 1 : -1;
-  const arcDeg = overflowSteps === 0 ? 0 : arcSide * pairIndex * ANCHOR_ARC_STEP_DEG;
+  // Fanned by the same golden angle as the pad spiral above (never a clean
+  // divisor of 360°) rather than a fixed step — a fixed step that *does*
+  // divide 360° evenly (24°, say) eventually wraps back to an angle it's
+  // already used, landing two different overflow siblings on the exact same
+  // point (Copilot review finding).
+  const arcDeg = overflowSteps * PAD_SPIRAL_GOLDEN_ANGLE_DEG;
   const arcRad = (arcDeg * Math.PI) / 180;
   const fannedX = dirX * Math.cos(arcRad) - dirY * Math.sin(arcRad);
   const fannedY = dirX * Math.sin(arcRad) + dirY * Math.cos(arcRad);
