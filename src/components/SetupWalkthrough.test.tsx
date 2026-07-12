@@ -139,13 +139,9 @@ describe("SetupWalkthrough shell", () => {
   });
 
   it("keeps the header and footer outside the scrolling step list (issue #261)", () => {
-    // Chromium has a `position: sticky` + flex + `overflow-y: auto` bug
-    // where, near the end of scroll, a sticky header's clip briefly shrinks
-    // and lets scrolled content paint above it and above the card's own top
-    // border. Pinning the header/footer outside a dedicated scroll region
-    // (rather than making them sticky inside one shared scroll container)
-    // sidesteps the bug structurally — this locks in that structure so it
-    // can't regress back to a shared scroll container.
+    // Locks in the pinned-chrome-outside-the-scroll-region structure (see
+    // SetupWalkthrough.module.css's `.walkthrough` comment for why) so it
+    // can't regress back to a shared, sticky-inside-scroll-container card.
     const { container } = renderWalkthrough({ steps: [fortuneTellerStep] });
 
     const body = container.querySelector("[data-walkthrough-body]") as HTMLElement;
