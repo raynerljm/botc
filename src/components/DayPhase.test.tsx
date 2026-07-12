@@ -642,6 +642,97 @@ describe("Day phase: vote tally and threshold", () => {
   });
 });
 
+describe("Day phase: vote roster order (issue #248)", () => {
+  it("lists voters starting with the seat clockwise of the nominee, wrapping around so the nominee votes last", async () => {
+    const user = userEvent.setup();
+    const game = gameWith([
+      "washerwoman",
+      "imp",
+      "recluse",
+      "baron",
+      "empath",
+    ]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [seat1, seat2, seat3, seat4, seat5] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), seat1.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), seat3.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const names = screen
+      .getAllByRole("checkbox")
+      .map((checkbox) => checkbox.closest("label")?.textContent);
+    expect(names).toEqual([
+      seat4.name,
+      seat5.name,
+      seat1.name,
+      seat2.name,
+      seat3.name,
+    ]);
+  });
+
+  it("derives the roster order from seat number, not player array order, so it's correct after a reseat", async () => {
+    const user = userEvent.setup();
+    const base = gameWith(["washerwoman", "imp", "recluse"]);
+    // Array order intentionally does NOT match seat order, the way a reseat
+    // or insertion can leave it (CONTEXT.md: Seat) — a fix that merely reads
+    // `game.players` in array order would still pass the happy-path test
+    // above by coincidence, since that one's array already happens to sit in
+    // seat order.
+    const reseated: Player[] = [
+      { ...base.players[0], seat: 1 },
+      { ...base.players[1], seat: 3 },
+      { ...base.players[2], seat: 2 },
+    ];
+    const game: GameDocument = { ...base, players: reseated };
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [firstSeat, thirdSeat, secondSeat] = reseated;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), firstSeat.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), secondSeat.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    const names = screen
+      .getAllByRole("checkbox")
+      .map((checkbox) => checkbox.closest("label")?.textContent);
+    // Nominee is seat 2 -> clockwise order is seat 3, seat 1, seat 2 (last).
+    expect(names).toEqual([thirdSeat.name, firstSeat.name, secondSeat.name]);
+  });
+
+  it("still records a vote against the right player once the roster is reordered", async () => {
+    const user = userEvent.setup();
+    const game = gameWith([
+      "washerwoman",
+      "imp",
+      "recluse",
+      "baron",
+      "empath",
+    ]);
+    let latest = game;
+    const { rerender } = renderDayPhase(game, (next) => {
+      latest = next;
+    });
+    const [seat1, , seat3, seat4] = game.players;
+
+    await selectOption(user, screen.getByLabelText("Nominator"), seat1.id);
+    await selectOption(user, screen.getByLabelText("Nominee"), seat3.id);
+    await user.click(screen.getByRole("button", { name: "Record nomination" }));
+    rerender(<DayPhase game={latest} onChange={(next) => (latest = next)} />);
+
+    await user.click(screen.getByRole("checkbox", { name: seat4.name }));
+
+    expect(latest.nominations[0].votes).toEqual([seat4.id]);
+  });
+});
+
 describe("Day phase: distinguishing open vs. locked-in nominations in the record (issue #191)", () => {
   it("labels the open nomination as accepting votes, and locks it in once votes are locked in, before a second can be recorded", async () => {
     const user = userEvent.setup();

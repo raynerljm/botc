@@ -11,6 +11,7 @@ import {
   hasNominatedToday,
   hasSpentGhostVoteElsewhereToday,
   nominationThreshold,
+  voteRosterOrder,
   wasNominatedToday,
 } from "@/lib/dayPhase";
 import { pauseDayTimer } from "@/lib/dayTimer";
@@ -111,6 +112,20 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
   // last nomination recorded: reopening an earlier, already-locked one to
   // fix a mistake makes it the open one again, wherever it sits in the day.
   const openNomination = game.nominations.find((n) => !n.lockedIn) ?? null;
+  // Only the open nomination ever renders the voters fieldset (`isOpen &&`
+  // below), so this is the one roster order needed per render — memoized
+  // the same way `playerById` is, since re-sorting every seat on every
+  // vote-toggle round-trip is pure waste when `game.players` hasn't changed.
+  // Keyed on the nominee id, not the whole `openNomination` object
+  // (Copilot review finding): `toggleVote` replaces the nomination object
+  // on every vote, which would otherwise bust this memo on every toggle
+  // even though the roster order itself never depends on `votes`.
+  const openNomineeId = openNomination?.nomineeId ?? null;
+  const voteRoster = useMemo(
+    () =>
+      openNomineeId ? voteRosterOrder(game.players, openNomineeId) : [],
+    [game.players, openNomineeId],
+  );
   const blockNomineeId = computeBlock(game.nominations, game.players);
   const blockNominationId = computeBlockNominationId(
     game.nominations,
@@ -405,7 +420,7 @@ export function DayPhase({ game, onChange }: DayPhaseProps) {
               {isOpen && (
                 <fieldset className={styles.voters}>
                   <legend>Record votes</legend>
-                  {game.players.map((player) => {
+                  {voteRoster.map((player) => {
                     const voted = nomination.votes.includes(player.id);
                     // Advisory only (ADR 0003) — never disables the
                     // checkbox, just labels a dead voter whose ghost vote
