@@ -97,6 +97,7 @@ function makeHandlers() {
     onRenameCommit: vi.fn(),
     onMove: vi.fn(),
     onReCircle: vi.fn(),
+    onReorderSeat: vi.fn(),
     onRotate: vi.fn(),
     onToggleDead: vi.fn(),
     onToggleGhostVote: vi.fn(),
@@ -857,8 +858,26 @@ describe("ghost votes", () => {
   });
 });
 
-describe("seat reordering (issue #188)", () => {
-  it("offers no 'Move seat earlier'/'Move seat later' controls — dragging is the only reorder gesture", async () => {
+describe("seat reordering (issue #249)", () => {
+  it("moves a seat earlier or later from its token menu", async () => {
+    const user = userEvent.setup();
+    const handlers = renderBoard([
+      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
+      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+    ]);
+
+    await user.click(screen.getByText("Bob"));
+    const bobWrap = handlers.container.querySelector(
+      "[data-player-id='p2']",
+    ) as HTMLElement;
+    await user.click(
+      within(bobWrap).getByRole("button", { name: /move seat earlier/i }),
+    );
+
+    expect(handlers.onReorderSeat).toHaveBeenCalledWith("p2", "earlier");
+  });
+
+  it("disables moving the first seat earlier and the last seat later", async () => {
     const user = userEvent.setup();
     const { container } = renderBoard([
       makePlayer({ id: "p1", seat: 1, name: "Alice" }),
@@ -873,13 +892,58 @@ describe("seat reordering (issue #188)", () => {
 
     await user.click(screen.getByText("Alice"));
     expect(
-      within(aliceWrap).queryByRole("button", { name: /move seat/i }),
-    ).not.toBeInTheDocument();
+      within(aliceWrap).getByRole("button", { name: /move seat earlier/i }),
+    ).toBeDisabled();
 
     await user.click(screen.getByText("Bob"));
     expect(
-      within(bobWrap).queryByRole("button", { name: /move seat/i }),
-    ).not.toBeInTheDocument();
+      within(bobWrap).getByRole("button", { name: /move seat later/i }),
+    ).toBeDisabled();
+  });
+
+  it("dragging a token moves only that token — no other seat's number changes", async () => {
+    const handlers = renderBoard([
+      makePlayer({ id: "p1", seat: 1, name: "Alice" }),
+      makePlayer({ id: "p2", seat: 2, name: "Bob", characterId: "imp" }),
+      makePlayer({ id: "p3", seat: 3, name: "Cara" }),
+    ]);
+    const board = handlers.container.querySelector(
+      "[data-board]",
+    ) as HTMLElement;
+    vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 400,
+      right: 400,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+    const aliceWrap = handlers.container.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
+    const summary = aliceWrap.querySelector("summary") as HTMLElement;
+
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 190, clientY: 370 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 190, clientY: 370 }),
+    );
+
+    expect(handlers.onMove).toHaveBeenCalledWith(
+      "p1",
+      expect.any(Object),
+    );
+    expect(handlers.onReorderSeat).not.toHaveBeenCalled();
   });
 });
 
