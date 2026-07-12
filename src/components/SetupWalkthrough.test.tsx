@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getCharacter, getEditionCharacters } from "@/lib/characters";
 import { createGame, type GameDocument, type Player } from "@/lib/gameDocument";
-import { DEMON_BLUFFS_STEP_ID, type SetupWalkthroughStep } from "@/lib/setupWalkthrough";
+import {
+  buildSetupWalkthroughSteps,
+  DEMON_BLUFFS_STEP_ID,
+  type SetupWalkthroughStep,
+} from "@/lib/setupWalkthrough";
 import { getSelectOptions, selectOption } from "@/testUtils/selectOption";
 
 import { SetupWalkthrough } from "./SetupWalkthrough";
@@ -697,6 +701,101 @@ describe("characterAndTwoPlayers step", () => {
 
     const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
     expect(trueSelect.dataset.value).toBe("");
+  });
+
+  describe("with no candidates in play (issue #262, e.g. no Outsiders for the Librarian)", () => {
+    const librarianStep: SetupWalkthroughStep = {
+      id: "p1",
+      kind: "characterAndTwoPlayers",
+      characterId: "librarian",
+      characterName: "Librarian",
+      playerId: "p1",
+      playerName: "Alice",
+      title: "Librarian — character and two players",
+      ruleText: "Pick an Outsider character and two players; one of them holds it (or confirm there are none in play).",
+      candidateTeam: "outsider",
+      trueLabel: "Outsider",
+      falseLabel: "Wrong",
+      noCandidatesInPlay: true,
+    };
+
+    it("offers a shown-0 confirmation instead of character/player pickers", () => {
+      renderWalkthrough({ steps: [librarianStep] });
+      const step = screen.getByRole("group", { name: librarianStep.title });
+
+      expect(
+        within(step).getByText(/no outsider characters are in play/i),
+      ).toBeInTheDocument();
+      expect(within(step).queryByLabelText("Character")).not.toBeInTheDocument();
+      expect(within(step).queryByLabelText(/shown as/i)).not.toBeInTheDocument();
+    });
+
+    it("resolves as answered with no reminders on confirm — nothing misleading gets placed", async () => {
+      const user = userEvent.setup();
+      const { onResolveStep } = renderWalkthrough({ steps: [librarianStep] });
+      const step = screen.getByRole("group", { name: librarianStep.title });
+
+      await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+      expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
+    });
+
+    // "Townsfolk" is already plural on its own — a naive `${trueLabel}s`
+    // template would render the ungrammatical "Townsfolks" here, unlike
+    // "Outsiders"/"Minions" above where a bare "s" suffix happens to read
+    // correctly and would have masked the bug (code review finding).
+    it("phrases the confirmation correctly for a trueLabel that's already plural (e.g. Townsfolk)", () => {
+      const step = { ...librarianStep, trueLabel: "Townsfolk", characterName: "Washerwoman" };
+      renderWalkthrough({ steps: [step] });
+      const group = screen.getByRole("group", { name: step.title });
+
+      expect(
+        within(group).getByText(/no townsfolk characters are in play/i),
+      ).toBeInTheDocument();
+      expect(within(group).queryByText(/townsfolks/i)).not.toBeInTheDocument();
+    });
+
+    // Every other test in this describe block hand-builds a
+    // CharacterAndTwoPlayersStep with noCandidatesInPlay set directly — a
+    // real game wired through the actual builder closes the gap that would
+    // let the field name/type drift apart from what buildSetupWalkthroughSteps
+    // computes while both test suites still pass in isolation (code review
+    // finding).
+    it("renders the shown-0 confirmation end-to-end for a real zero-Outsider game (issue #262)", () => {
+      const game = createGame({
+        scriptId: "custom",
+        scriptName: "Test script",
+        playerCount: 5,
+        selectedCharacters: [
+          getCharacter("librarian")!,
+          getCharacter("washerwoman")!,
+          getCharacter("chef")!,
+          getCharacter("poisoner")!,
+          getCharacter("imp")!,
+        ],
+        standIn: null,
+        extraCopies: {},
+      });
+      const ids = ["librarian", "washerwoman", "chef", "poisoner", "imp"];
+      const players = game.players.map((p, i) => ({ ...p, characterId: ids[i] }));
+      const gameWithPlayers = { ...game, players };
+      const steps = buildSetupWalkthroughSteps(gameWithPlayers);
+
+      renderWalkthrough({
+        steps,
+        players,
+        game: gameWithPlayers,
+        characterPool: gameWithPlayers.characterPool,
+      });
+      const librarianStepPanel = screen.getByRole("group", {
+        name: "Librarian — character and two players",
+      });
+
+      expect(
+        within(librarianStepPanel).getByText(/no outsider characters are in play/i),
+      ).toBeInTheDocument();
+      expect(within(librarianStepPanel).queryByLabelText("Character")).not.toBeInTheDocument();
+    });
   });
 });
 

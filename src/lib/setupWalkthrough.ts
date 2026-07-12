@@ -67,6 +67,18 @@ export interface CharacterAndTwoPlayersStep extends StepBase {
   // fabricated claim isn't bound to "characters actually in this bag" the
   // way a real reveal is.
   disguiseId?: string;
+  // True when nothing of candidateTeam is in game.characterPool at all
+  // (issue #262: the Librarian shown "0" when there are no Outsiders in
+  // play) — the step then just confirms that, with no character or players
+  // to choose. characterPool is broader than "currently seated" (it's
+  // append-only — see GrimoireSetup.tsx's withCharacterInPool — so a
+  // character swapped off a seat still lingers), the same characteristic the
+  // walkthrough's own character picker already relies on; this flag is only
+  // ever as fresh as that. Only buildSetupWalkthroughSteps' real-character
+  // branch computes this — a fabricated believedCharacterStep (above) never
+  // sets it, so it automatically keeps the full picker regardless of what's
+  // actually in play, with no special-casing needed here.
+  noCandidatesInPlay?: boolean;
 }
 
 export interface NeighborCheckStep extends StepBase {
@@ -141,7 +153,7 @@ const CHARACTER_AND_TWO_PLAYERS_TABLE: Record<
   washerwoman: {
     title: "Washerwoman — character and two players",
     ruleText:
-      "Pick a Townsfolk character and two players; one of them holds it.",
+      "Pick a Townsfolk character and two players; one of them holds it (or confirm there are none in play).",
     candidateTeam: "townsfolk",
     trueLabel: "Townsfolk",
     falseLabel: "Wrong",
@@ -156,7 +168,8 @@ const CHARACTER_AND_TWO_PLAYERS_TABLE: Record<
   },
   investigator: {
     title: "Investigator — character and two players",
-    ruleText: "Pick a Minion character and two players; one of them holds it.",
+    ruleText:
+      "Pick a Minion character and two players; one of them holds it (or confirm there are none in play).",
     candidateTeam: "minion",
     trueLabel: "Minion",
     falseLabel: "Wrong",
@@ -332,6 +345,9 @@ export function buildSetupWalkthroughSteps(
         ...base,
         kind: "characterAndTwoPlayers",
         ...characterAndTwoPlayers,
+        noCandidatesInPlay: !game.characterPool.some(
+          (c) => c.team === characterAndTwoPlayers.candidateTeam,
+        ),
       });
       continue;
     }

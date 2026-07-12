@@ -249,7 +249,24 @@ function StepPanel({
             />
           )}
 
-          {step.kind === "characterAndTwoPlayers" && (
+          {/* No candidates of this team are in the bag at all (issue #262,
+              e.g. no Outsiders for the Librarian) — the character/two-player
+              pick has nothing to offer, so this just confirms "shown 0" and
+              produces no reminders, rather than forcing a pick that would be
+              meaningless (or misleading, if made anyway). */}
+          {step.kind === "characterAndTwoPlayers" && step.noCandidatesInPlay && (
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+              <p>
+                {/* "characters" (not a bare "s" suffix on trueLabel) keeps
+                    this grammatical for every table entry — "Townsfolk" is
+                    already plural on its own, so "Townsfolks" would read
+                    wrong the one time this branch is reachable for it. */}
+                {`No ${step.trueLabel} characters are in play — ${step.characterName} is shown "0". No character or players to choose.`}
+              </p>
+            </ConfirmOnlyControls>
+          )}
+
+          {step.kind === "characterAndTwoPlayers" && !step.noCandidatesInPlay && (
             <CharacterAndTwoPlayersControls
               step={step}
               otherPlayers={otherPlayers}

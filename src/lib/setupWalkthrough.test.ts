@@ -161,6 +161,26 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     });
   });
 
+  it("flags the Librarian's step as having no candidates in play when there are no Outsiders in the bag (issue #262)", () => {
+    const game = gameWithCharacters(["librarian", "imp", "chef"]);
+    const step = stepFor(game, "librarian");
+
+    expect(step).toMatchObject({
+      kind: "characterAndTwoPlayers",
+      noCandidatesInPlay: true,
+    });
+  });
+
+  it("does not flag the Librarian's step as having no candidates when an Outsider is in the bag", () => {
+    const game = gameWithCharacters(["librarian", "recluse", "imp", "chef"]);
+    const step = stepFor(game, "librarian");
+
+    expect(step).toMatchObject({
+      kind: "characterAndTwoPlayers",
+      noCandidatesInPlay: false,
+    });
+  });
+
   it("gives the Investigator a characterAndTwoPlayers step over Minions", () => {
     const game = gameWithCharacters(["investigator", "imp", "chef"]);
     const step = stepFor(game, "investigator");
@@ -171,6 +191,32 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
       candidateTeam: "minion",
       trueLabel: "Minion",
       falseLabel: "Wrong",
+    });
+  });
+
+  // Unlike the Washerwoman (whose own character is always a Townsfolk, so
+  // "no Townsfolk in play" can never actually happen while her step exists),
+  // the Investigator's own team (townsfolk) differs from her candidateTeam
+  // (minion) — a bag with no Minion at all is a real, reachable case the
+  // same noCandidatesInPlay mechanism must also flag correctly (issue #262
+  // generalises the check across the whole table, not just the Librarian).
+  it("flags the Investigator's step as having no candidates in play when there are no Minions in the bag", () => {
+    const game = gameWithCharacters(["investigator", "chef", "librarian"]);
+    const step = stepFor(game, "investigator");
+
+    expect(step).toMatchObject({
+      kind: "characterAndTwoPlayers",
+      noCandidatesInPlay: true,
+    });
+  });
+
+  it("does not flag the Investigator's step as having no candidates when a Minion is in the bag", () => {
+    const game = gameWithCharacters(["investigator", "poisoner", "imp", "chef"]);
+    const step = stepFor(game, "investigator");
+
+    expect(step).toMatchObject({
+      kind: "characterAndTwoPlayers",
+      noCandidatesInPlay: false,
     });
   });
 
