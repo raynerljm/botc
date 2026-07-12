@@ -505,6 +505,62 @@ describe("characterAndTwoPlayers step", () => {
     const select = within(step).getByLabelText("Character");
     expect(select.dataset.value).toBe("");
   });
+
+  it("auto-selects the true-player dropdown to whoever holds the picked character (issue #253)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({ steps: [washerwomanStep] });
+    const step = screen.getByRole("group", { name: washerwomanStep.title });
+
+    // Cara (p3) holds Chef in the default renderWalkthrough roster.
+    await selectOption(user, within(step).getByLabelText("Character"), "Chef");
+
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    expect(trueSelect.dataset.value).toBe("p3");
+  });
+
+  it("still lets the storyteller change the auto-filled true player (issue #253)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({ steps: [washerwomanStep] });
+    const step = screen.getByRole("group", { name: washerwomanStep.title });
+
+    await selectOption(user, within(step).getByLabelText("Character"), "Chef");
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    expect(trueSelect.dataset.value).toBe("p3");
+
+    await selectOption(user, trueSelect, playerNamedMatcher("Bob"));
+    expect(trueSelect.dataset.value).toBe("p2");
+  });
+
+  it("doesn't clobber a manually-overridden true player when the same character is reselected (issue #253)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({ steps: [washerwomanStep] });
+    const step = screen.getByRole("group", { name: washerwomanStep.title });
+
+    await selectOption(user, within(step).getByLabelText("Character"), "Chef");
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    expect(trueSelect.dataset.value).toBe("p3");
+
+    await selectOption(user, trueSelect, playerNamedMatcher("Bob"));
+    expect(trueSelect.dataset.value).toBe("p2");
+
+    // Re-picking the same already-selected character (e.g. reopening the
+    // dropdown to double-check) must not silently revert the override.
+    await selectOption(user, within(step).getByLabelText("Character"), "Chef");
+    expect(trueSelect.dataset.value).toBe("p2");
+  });
+
+  it("leaves the true-player dropdown unset when no seated player holds the picked character (issue #253)", async () => {
+    const user = userEvent.setup();
+    renderWalkthrough({ steps: [washerwomanStep] });
+    const step = screen.getByRole("group", { name: washerwomanStep.title });
+
+    // No seated player holds Empath in the default roster.
+    await user.click(within(step).getByRole("checkbox", { name: /show all/i }));
+    await selectOption(user, within(step).getByLabelText("Character"), "Empath");
+
+    const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
+    expect(trueSelect.dataset.value).toBe("");
+  });
 });
 
 describe("neighborCheck step (Marionette)", () => {
