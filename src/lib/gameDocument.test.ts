@@ -359,6 +359,24 @@ describe("anchoredReminderPosition (issue #251)", () => {
     expect(distinct.size).toBe(positions.length);
   });
 
+  it("keeps neighbouring seats' first reminders from crowding together even at the maximum 20-player count", () => {
+    // Every seat's line points at the same centre, so more seats sharing
+    // one radius narrows the gap between neighbours' reminders as they all
+    // step inward — this locks in a floor for that gap so a larger base
+    // offset doesn't silently shrink it to where reminders touch.
+    const seatCount = 20;
+    const reminders = Array.from({ length: seatCount }, (_, i) =>
+      anchoredReminderPosition(circlePosition(i, seatCount), 0),
+    );
+    let minGap = Infinity;
+    for (let i = 0; i < seatCount; i++) {
+      const next = reminders[(i + 1) % seatCount];
+      const gap = Math.hypot(reminders[i].x - next.x, reminders[i].y - next.y);
+      minGap = Math.min(minGap, gap);
+    }
+    expect(minGap).toBeGreaterThan(6);
+  });
+
   it("stays within the pad's bounds for a seat near the edge", () => {
     const position = anchoredReminderPosition({ x: 50, y: 94 }, 0);
     expect(position.y).toBeLessThanOrEqual(96);

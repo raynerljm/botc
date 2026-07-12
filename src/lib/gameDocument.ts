@@ -552,19 +552,24 @@ export function nextPadReminderPosition(
 // (ADR 0004) instead of stacking deeper into it. A second/third reminder on
 // the same seat steps further along that line, so it never overlaps the
 // first.
-// Sized to clear the larger #251 token plus its name label — a top-of-circle
-// seat's "toward the centre" direction is straight down, the same direction
-// its own character/player name already grows in, so too small a base
-// offset lands the first reminder right on top of that seat's own label
-// (caught visually while demoing this issue; the old, smaller straight-down
-// offset dates from before tokens grew).
+//
+// A top-of-circle seat's "toward the centre" direction is straight down —
+// the same direction its own character/player name already grows in — so
+// the base offset has to clear the token plus its name label, not just the
+// token. Every seat's line points at the same centre point, though, so a
+// larger base offset also narrows the gap between *neighbouring* seats'
+// first reminders as player count climbs (their shared destination is a
+// single point; more seats sharing one radius means less room between the
+// lines converging on it). Kept short — MAX well short of the centre, STEP
+// modest — so this stays a genuine trade-off at the 18-20 player extreme
+// rather than the reminders actually touching.
 const ANCHOR_RADIAL_OFFSET = 18;
-const ANCHOR_RADIAL_STEP = 8;
+const ANCHOR_RADIAL_STEP = 5;
 // Caps how far a seat's reminders reach toward the centre — without this,
 // a seat with enough reminders would eventually plant one exactly on the
 // centre and, past that, keep going and start overlapping the far side of
 // the circle.
-const ANCHOR_RADIAL_MAX = 34;
+const ANCHOR_RADIAL_MAX = 24;
 // Once the radial cap is hit, further siblings fan out at this angle around
 // the capped point (alternating sides, widening every second one) instead
 // of continuing inward and piling up on the same spot at the centre.
