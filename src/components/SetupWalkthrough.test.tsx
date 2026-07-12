@@ -662,7 +662,12 @@ describe("characterAndTwoPlayers step", () => {
       const gameWithPlayers = { ...game, players };
       const steps = buildSetupWalkthroughSteps(gameWithPlayers);
 
-      renderWalkthrough({ steps, players, characterPool: gameWithPlayers.characterPool });
+      renderWalkthrough({
+        steps,
+        players,
+        game: gameWithPlayers,
+        characterPool: gameWithPlayers.characterPool,
+      });
       const librarianStepPanel = screen.getByRole("group", {
         name: "Librarian — character and two players",
       });
