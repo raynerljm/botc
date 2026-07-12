@@ -72,7 +72,15 @@ export function DayTimer({ game, onChange, compact = false }: DayTimerProps) {
       // role="timer" is implicitly aria-live="off", same reasoning as the
       // full widget's countdown below — a running per-second update must not
       // spam a screen reader while the storyteller is just peeking the sheet.
-      <p className={styles.peek} role="timer" data-expired={expired || undefined}>
+      // aria-label makes up for the full widget's surrounding
+      // aria-label="Discussion timer" group, which this standalone element
+      // has no equivalent of (Copilot review finding).
+      <p
+        className={styles.peek}
+        role="timer"
+        aria-label="Discussion timer"
+        data-expired={expired || undefined}
+      >
         {timeText}
       </p>
     );
