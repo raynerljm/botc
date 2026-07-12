@@ -255,7 +255,7 @@ function StepPanel({
               produces no reminders, rather than forcing a pick that would be
               meaningless (or misleading, if made anyway). */}
           {step.kind === "characterAndTwoPlayers" && step.noCandidatesInPlay && (
-            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")} onSkip={onSkip}>
               <p>
                 {/* "characters" (not a bare "s" suffix on trueLabel) keeps
                     this grammatical for every table entry — "Townsfolk" is
