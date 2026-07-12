@@ -284,8 +284,11 @@ export function buildSetupWalkthroughSteps(
     };
 
     // A Drunk's apparent character is a fake stand-in — their ability
-    // doesn't function, so they get only the Drunk's own review step, never
-    // that character's curated/generic step.
+    // doesn't function, so they never get that character's plain/generic
+    // step. They do get the Drunk's own review step, plus (issue #254) that
+    // character's curated step reframed as fake, when one exists — the
+    // storyteller still has to maintain the illusion for a fake Grandmother
+    // or Washerwoman, just not run their actual ability.
     if (player.isDrunk) {
       steps.push({
         ...base,
