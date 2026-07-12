@@ -1163,10 +1163,11 @@ export function GrimoireBoard({
                             { value: "", label: "Not acting as anyone" },
                             // Same "keep an orphaned/off-spec value
                             // selectable/visible" safeguard as the Claim
-                            // select above — an actsAs target recorded
-                            // before the script last changed, or before this
-                            // team filter existed, can reference a character
-                            // no longer offered by the groups below.
+                            // select elsewhere in this menu — an actsAs
+                            // target recorded before the script last
+                            // changed, or before this team filter existed,
+                            // can reference a character no longer offered
+                            // by the groups below.
                             ...(actsAsOffSpecId
                               ? [
                                   {
@@ -1256,12 +1257,19 @@ export function GrimoireBoard({
 
                     {character && (
                       <Button
-                        onClick={() =>
+                        onClick={() => {
+                          // Show mode replaces the whole board (see the
+                          // early return above) — same drag/menu cleanup as
+                          // Hide grimoire/Re-circle/the info token library's
+                          // own onShow, so a still-captured pointer or a
+                          // stale openMenu doesn't survive the remount
+                          // (issue #70 code review).
+                          cancelActiveDrag();
                           setInfoTokenShowing({
                             characterIds: [character.id],
                             ability: character.ability,
-                          })
-                        }
+                          });
+                        }}
                       >
                         Show token
                       </Button>

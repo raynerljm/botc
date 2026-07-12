@@ -26,7 +26,10 @@ export function InfoTokenShowMode({
   ability,
   onClose,
 }: InfoTokenShowModeProps) {
-  const label = text ?? characters[0]?.name ?? "";
+  // A stale/off-script character id would leave both text and characters
+  // empty — an unlabeled dialog is a silent a11y regression, so this never
+  // falls all the way through to "".
+  const label = text ?? characters[0]?.name ?? "Character token";
 
   return (
     <div className={styles.overlay} role="dialog" aria-label={label} aria-modal="true">

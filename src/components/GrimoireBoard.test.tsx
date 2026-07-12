@@ -2456,6 +2456,88 @@ describe("show token (issue #250)", () => {
     expect(screen.queryByRole("dialog", { name: "Imp" })).not.toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
+
+  it("doesn't leave the seat's own menu stuck open on return (code review: matches Hide grimoire/Re-circle/info tokens' own cancelActiveDrag cleanup)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", name: "Alice", characterId: "imp" }),
+    ]);
+
+    // The menu is open (that's how "Show token" is reached) when the board
+    // is replaced by the full-screen view — without the same cleanup every
+    // other board-replacing action performs, the closed-by-remount menu's
+    // stale `openMenu` state reopens it unprompted once back (issue #70).
+    // "Done" is fired via fireEvent, not userEvent — userEvent's click also
+    // synthesizes a pointerdown, which the pre-existing outside-tap-close
+    // effect would itself treat as "outside" the (now-stale) menu ref and
+    // close it independently of this fix; a bare click (matching a real
+    // keyboard/Enter activation, which fires no pointerdown) isolates what
+    // cancelActiveDrag's own closeMenu() is actually responsible for.
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    const details = container.querySelector(
+      "[data-player-id='p1'] details",
+    ) as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+  });
+
+  it("discards an in-progress drag before showing, so dragging isn't permanently stuck once back on the board", async () => {
+    const user = userEvent.setup();
+    const { container, onMove } = renderBoard([
+      makePlayer({ id: "p1", name: "Alice", characterId: "imp" }),
+      makePlayer({ id: "p2", name: "Bob", characterId: "empath" }),
+    ]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    // A drag is left mid-gesture on p1 (pointerdown + move, no pointerup) —
+    // e.g. a second finger opens p2's own menu and taps "Show token" while
+    // the first is still holding p1's token (same multi-touch risk issue
+    // #19's info token library already guards against). A distinct
+    // pointerId (9, not userEvent's default mouse pointerId of 1) models a
+    // genuine second touch — reusing 1 here would let the later
+    // `user.click` calls' own synthetic pointerup complete *this* drag by
+    // pointerId match alone, a test artifact no real multi-touch gesture
+    // could produce.
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 9, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 9, clientX: 140, clientY: 180 }),
+    );
+
+    await user.click(screen.getByText("Bob"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(onMove).not.toHaveBeenCalled();
+    // The interrupted gesture's pointerId must have been released — a fresh
+    // drag with a new pointerId on p1 has to still work, not silently no-op
+    // against a dragRef stuck on the unmounted gesture.
+    mockBoardRect(container);
+    const summaryAfter = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }),
+    );
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 60, y: 25 });
+  });
 });
 
 describe("swap character", () => {

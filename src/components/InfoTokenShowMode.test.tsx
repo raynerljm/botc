@@ -72,4 +72,10 @@ describe("InfoTokenShowMode", () => {
 
     expect(screen.getByRole("dialog", { name: "Imp" })).toBeInTheDocument();
   });
+
+  it("never renders an unlabeled dialog, even with neither headline text nor a resolvable character", () => {
+    render(<InfoTokenShowMode characters={[]} onClose={vi.fn()} />);
+
+    expect(screen.getByRole("dialog").getAttribute("aria-label")).toBeTruthy();
+  });
 });
