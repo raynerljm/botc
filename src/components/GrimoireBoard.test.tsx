@@ -2129,6 +2129,155 @@ describe("reminder placement (issue #71)", () => {
   });
 });
 
+describe("reminder connector line (issue #255)", () => {
+  it("draws a connector from an anchored reminder to its owning token", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "p1" });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+
+    const line = container.querySelector(
+      "[data-connector-id='r1']",
+    ) as SVGLineElement | null;
+    const reminderWrap = container.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+
+    expect(line).not.toBeNull();
+    expect(line!.getAttribute("x1")).toBe("30");
+    expect(line!.getAttribute("y1")).toBe("40");
+    expect(line!.getAttribute("x2")).toBe(
+      String(parseFloat(reminderWrap.style.left)),
+    );
+    expect(line!.getAttribute("y2")).toBe(
+      String(parseFloat(reminderWrap.style.top)),
+    );
+  });
+
+  it("renders the connector layer before every token/reminder, so plain DOM-order stacking paints it underneath them (code review finding)", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "p1" });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+
+    const board = container.querySelector("[data-board]") as HTMLElement;
+    const svg = board.querySelector("svg") as SVGSVGElement;
+    const tokenWrap = board.querySelector(
+      "[data-player-id='p1']",
+    ) as HTMLElement;
+    const reminderWrap = board.querySelector(
+      "[data-reminder-id='r1']",
+    ) as HTMLElement;
+
+    // DOCUMENT_POSITION_FOLLOWING (4) means the argument comes after `svg`.
+    expect(
+      svg.compareDocumentPosition(tokenWrap) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      svg.compareDocumentPosition(reminderWrap) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("draws no connector for an unanchored (pad) reminder", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: null });
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      reminders: [reminder],
+    });
+
+    expect(
+      container.querySelector("[data-connector-id='r1']"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("draws no connector for a reminder anchored to a seat that's since been removed", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "gone" });
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      reminders: [reminder],
+    });
+
+    expect(
+      container.querySelector("[data-connector-id='r1']"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the connector layer with pointer-events disabled so it never blocks token/reminder interaction", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "p1" });
+    const { container } = renderBoard([makePlayer({ id: "p1" })], {
+      reminders: [reminder],
+    });
+
+    const svg = container.querySelector("svg") as SVGSVGElement;
+    expect(svg).toHaveClass(styles.connectors);
+  });
+
+  it("tracks the reminder's live position while it's being dragged", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "p1" });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+    const reminderSummary = container.querySelector(
+      "[data-reminder-id='r1'] summary",
+    ) as HTMLElement;
+    const startLine = container.querySelector(
+      "[data-connector-id='r1']",
+    ) as SVGLineElement;
+    const startX2 = startLine.getAttribute("x2");
+
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      reminderSummary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 100 }),
+    );
+
+    const draggedLine = container.querySelector(
+      "[data-connector-id='r1']",
+    ) as SVGLineElement;
+    expect(draggedLine.getAttribute("x2")).not.toBe(startX2);
+    // The anchor end stays pinned to the seat throughout the drag.
+    expect(draggedLine.getAttribute("x1")).toBe("30");
+    expect(draggedLine.getAttribute("y1")).toBe("40");
+  });
+
+  it("tracks the anchor seat's live position while the seat itself is being dragged", () => {
+    const reminder = makeReminder({ id: "r1", anchorPlayerId: "p1" });
+    const { container } = renderBoard(
+      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      { reminders: [reminder] },
+    );
+    mockBoardRect(container);
+    const seatSummary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    const startLine = container.querySelector(
+      "[data-connector-id='r1']",
+    ) as SVGLineElement;
+    const startX1 = startLine.getAttribute("x1");
+
+    fireEvent(
+      seatSummary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      seatSummary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 180, clientY: 100 }),
+    );
+
+    const draggedLine = container.querySelector(
+      "[data-connector-id='r1']",
+    ) as SVGLineElement;
+    expect(draggedLine.getAttribute("x1")).not.toBe(startX1);
+  });
+});
+
 describe("setup walkthrough reopen button (issue #26)", () => {
   it("renders the button in the board's overflow menu when a handler is provided", async () => {
     const user = userEvent.setup();

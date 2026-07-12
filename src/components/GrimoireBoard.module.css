@@ -173,6 +173,25 @@
   touch-action: none;
 }
 
+/* Thin lines from each anchored reminder to its owning token (issue #255) —
+   purely decorative, so pointer-events: none keeps it from ever intercepting
+   a token/reminder drag or tap. Sized to exactly overlay .board's own
+   coordinate space (viewBox="0 0 100 100" in the markup matches the same
+   0-100 percentage frame every left/top style in this file already uses),
+   so a line's endpoints are just a token/reminder's own x/y. */
+.connectors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.connectorLine {
+  stroke: var(--accent-ring-soft);
+  stroke-width: 0.3;
+}
+
 .reminderWrap {
   position: absolute;
   transform: translate(-50%, -50%);
