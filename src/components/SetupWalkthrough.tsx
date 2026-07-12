@@ -470,6 +470,21 @@ function CharacterAndTwoPlayersControls({
     }
   }
 
+  // The storyteller almost always means to point at whoever really holds
+  // the revealed character (issue #253) — auto-fill it on pick, but leave it
+  // freely editable via its own Select for the cases where they don't (a
+  // different player entirely, or the true holder is a Drunk stand-in).
+  // Re-syncing only on an actual change — not every commit — matters because
+  // Select's option onClick fires unconditionally: re-opening the dropdown
+  // and clicking the already-selected character would otherwise silently
+  // clobber a manual override back to the default holder.
+  function handleCharacterChange(nextCharacterId: string) {
+    if (nextCharacterId === characterId) return;
+    setCharacterId(nextCharacterId);
+    const holder = otherPlayers.find((p) => p.characterId === nextCharacterId);
+    setTruePlayerId(holder?.id ?? "");
+  }
+
   return (
     <div className={styles.controls}>
       <label>
@@ -477,7 +492,7 @@ function CharacterAndTwoPlayersControls({
         <Select
           aria-label="Character"
           value={characterId}
-          onChange={setCharacterId}
+          onChange={handleCharacterChange}
           entries={[
             { value: "", label: "Choose a character…" },
             ...list.map((c) => ({ value: c.id, label: c.name })),
