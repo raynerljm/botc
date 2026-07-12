@@ -69,6 +69,33 @@ describe("Select", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
+  it("closes the popup on option click even when rendered inside a <label>, not just in isolation (issue #259)", async () => {
+    // Most real callers render this trigger inside a wrapping <label>
+    // (e.g. `<label>Character<Select .../></label>`) — the option div isn't
+    // itself an interactive element, so a real browser's default action for
+    // an unhandled click inside a label is to re-dispatch a second click at
+    // the label's implicit control (this trigger button). That forwarded
+    // click used to land after commit() had already set open=false, and
+    // read the fresh state to reopen the list — reproduced only with the
+    // <label> wrapper present, not on a bare Select (the test above). A
+    // handful of callers associate a <label> by htmlFor/id instead of
+    // wrapping (e.g. BagBuilder.tsx's stand-in selects) and were never
+    // affected, since the click never bubbles through the label there.
+    const user = userEvent.setup();
+    render(
+      <label>
+        Claim
+        <Harness initial="washerwoman" />
+      </label>,
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Claim" }));
+    await user.click(screen.getByRole("option", { name: "Imp" }));
+
+    expect(screen.getByRole("combobox", { name: "Claim" })).toHaveTextContent("Imp");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
   it("groups options under a labelled group, matching the native optgroup shape", async () => {
     const user = userEvent.setup();
     render(<Harness entries={GROUPED_ENTRIES} />);
