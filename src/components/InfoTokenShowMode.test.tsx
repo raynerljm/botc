@@ -46,4 +46,30 @@ describe("InfoTokenShowMode", () => {
 
     expect(screen.getByText("Imp")).toBeInTheDocument();
   });
+
+  it("renders a character's ability when given one, e.g. for a player's own 'Show token' (issue #250)", () => {
+    const imp = getCharacter("imp")!;
+    render(
+      <InfoTokenShowMode
+        characters={[imp]}
+        ability={imp.ability}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(imp.ability)).toBeInTheDocument();
+  });
+
+  it("falls back to the character's name for the dialog label when no headline text is given", () => {
+    const imp = getCharacter("imp")!;
+    render(
+      <InfoTokenShowMode
+        characters={[imp]}
+        ability={imp.ability}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Imp" })).toBeInTheDocument();
+  });
 });

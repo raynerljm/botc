@@ -2843,11 +2843,28 @@ describe("the first visible grimoire (issue #12)", () => {
     // already on-token), and the custom Select's closed trigger itself
     // displays the currently-selected option's text too — so text matches
     // inside a combobox trigger (or a still-open listbox's <option>-role
-    // items) must be filtered out to stay unambiguous.
+    // items) must be filtered out to stay unambiguous. Each seat's own
+    // token menu also repeats the character's name in its (closed by
+    // default) character-detail header (issue #250) — a closed native
+    // <details>'s non-summary content is invisible, but its <summary> stays
+    // visible regardless, so walk up looking for whichever comes first.
+    const hiddenInClosedDetails = (el: Element) => {
+      for (let node: Element | null = el; node; node = node.parentElement) {
+        if (node.tagName === "SUMMARY") return false;
+        if (node.tagName === "DETAILS" && !node.hasAttribute("open")) {
+          return true;
+        }
+      }
+      return false;
+    };
     const named = (text: string) => {
       const matches = within(circle)
         .getAllByText(text)
-        .filter((el) => !el.closest("[role='combobox'], [role='option']"));
+        .filter(
+          (el) =>
+            !el.closest("[role='combobox'], [role='option']") &&
+            !hiddenInClosedDetails(el),
+        );
       expect(matches).toHaveLength(1);
       return matches[0];
     };

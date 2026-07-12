@@ -495,10 +495,8 @@
 
 /* --surface-raised at rest, matching every sibling control in this menu
    (.select/.textInput/.claimSelect) — .menuBody itself is --surface, so a
-   --surface disclosure would blend into it instead of reading as a
-   distinct, tappable control. No overflow: hidden, so a keyboard focus
-   ring on .detailSummary or .detailLink isn't clipped by the rounded
-   corners. */
+   --surface block would blend into it instead of reading as the popup's
+   promoted, always-visible header (issue #250). */
 .detail {
   width: 100%;
   background: var(--surface-raised);
@@ -506,36 +504,15 @@
   border-radius: 0.5rem;
 }
 
-.detailSummary {
-  min-height: 2.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  color: var(--foreground);
-  cursor: pointer;
-  list-style: none;
-}
-
-.detailSummary::-webkit-details-marker {
-  display: none;
-}
-
-.detailChevron {
-  font-size: 0.7rem;
-  color: var(--muted);
-  transition: transform var(--duration-fast) var(--ease-standard);
-}
-
-.detail[open] .detailChevron {
-  transform: rotate(90deg);
-}
-
 .detailBody {
-  padding: 0 0.75rem 0.75rem;
+  padding: 0.75rem;
   display: grid;
   gap: 0.5rem;
+}
+
+.detailName {
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .detailAbility {
@@ -552,20 +529,6 @@
 
 .detailLink:hover {
   text-decoration: underline;
-}
-
-.ghostVote {
-  /* Always-visible for a dead player, regardless of whether their token
-     menu is open — .menuBody (above) now floats via position: absolute
-     rather than pushing this sibling down in the flow, so it needs its own
-     stacking position above .menuBody's z-index or an open menu paints over
-     it (issue #70 code review). */
-  position: relative;
-  z-index: 6;
-  min-height: unset;
-  margin-top: 0.35rem;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.7rem;
 }
 
 .ghostVote[aria-pressed="true"] {

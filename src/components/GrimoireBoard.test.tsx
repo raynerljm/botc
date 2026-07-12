@@ -437,12 +437,11 @@ describe("token menu", () => {
     expect(summary).not.toHaveAttribute("data-dead");
   });
 
-  it("opens the character detail popover with ability text and an official wiki link", async () => {
+  it("shows character detail — name, ability, and an official wiki link — always visible at the top, no disclosure tap needed", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer({ characterId: "washerwoman" })]);
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     expect(
       screen.getByText(getCharacter("washerwoman")!.ability),
@@ -452,6 +451,7 @@ describe("token menu", () => {
       "href",
       expect.stringContaining("wiki.bloodontheclocktower.com"),
     );
+    expect(link).toHaveAttribute("target", "_blank");
   });
 
   it("links homebrew characters to the script's almanac instead of the wiki", async () => {
@@ -475,7 +475,6 @@ describe("token menu", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
@@ -503,7 +502,6 @@ describe("token menu", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
@@ -532,33 +530,36 @@ describe("token menu", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     expect(screen.getByText(reskinned.ability)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
   });
 
-  it("styles the character-detail disclosure with a chevron affordance, not a bare native control", async () => {
+  it("styles the character detail block as the popup's promoted header, first in the menu", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer({ characterId: "washerwoman" })]);
 
     await user.click(screen.getByText("Alice"));
-    const summary = screen.getByText(/character detail/i);
 
-    expect(summary).toHaveClass(styles.detailSummary);
-    const chevron = summary.querySelector("[aria-hidden='true']");
-    expect(chevron).toBeInTheDocument();
-    expect(chevron).toHaveClass(styles.detailChevron);
-
-    await user.click(summary);
-
+    // The character name also renders in the (always-mounted) token
+    // summary, so disambiguate by picking the one inside the detail block.
+    const nameEls = screen.getAllByText(getCharacter("washerwoman")!.name);
+    const detailName = nameEls.find((el) =>
+      el.classList.contains(styles.detailName),
+    );
+    expect(detailName).toBeDefined();
     expect(screen.getByText(getCharacter("washerwoman")!.ability)).toHaveClass(
       styles.detailAbility,
     );
     expect(screen.getByRole("link", { name: /wiki/i })).toHaveClass(
       styles.detailLink,
     );
+
+    // Character detail is always first in the popup hierarchy (issue #250).
+    const detailBlock = detailName!.closest(`.${styles.detail}`) as HTMLElement;
+    const menuBody = detailBlock.parentElement as HTMLElement;
+    expect(menuBody.firstElementChild).toBe(detailBlock);
   });
 });
 
@@ -837,21 +838,45 @@ describe("acts-as team constraints (issue #245)", () => {
 });
 
 describe("ghost votes", () => {
-  it("shows a spent/unspent ghost vote marker only for dead players, toggleable with one tap", async () => {
+  it("shows a used/unused ghost vote toggle only for dead players, below Add reminder, toggleable with one tap", async () => {
     const user = userEvent.setup();
     const handlers = renderBoard([
       makePlayer({ dead: true, ghostVoteSpent: false }),
     ]);
 
+    await user.click(screen.getByText("Alice"));
     const marker = screen.getByRole("button", { name: /ghost vote/i });
-    expect(marker).toHaveTextContent(/available/i);
+    expect(marker).toHaveTextContent(/unused ghost vote/i);
+
+    // Directly below "Add reminder" in the popup hierarchy (issue #250).
+    const menuBody = marker.closest("div")!;
+    const buttons = within(menuBody).getAllByRole("button");
+    const addReminderIndex = buttons.findIndex(
+      (button) => button.textContent === "Add reminder",
+    );
+    expect(buttons[addReminderIndex + 1]).toBe(marker);
 
     await user.click(marker);
     expect(handlers.onToggleGhostVote).toHaveBeenCalledWith("p1");
   });
 
-  it("doesn't show a ghost vote marker for a living player", () => {
+  it("labels a spent ghost vote as used", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ dead: true, ghostVoteSpent: true })]);
+
+    await user.click(screen.getByText("Alice"));
+
+    expect(
+      screen.getByRole("button", { name: /used ghost vote/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("doesn't show a ghost vote toggle for a living player", async () => {
+    const user = userEvent.setup();
     renderBoard([makePlayer({ dead: false })]);
+
+    await user.click(screen.getByText("Alice"));
+
     expect(
       screen.queryByRole("button", { name: /ghost vote/i }),
     ).not.toBeInTheDocument();
@@ -2401,6 +2426,35 @@ describe("info tokens (issue #19)", () => {
     expect(
       within(controls).queryByRole("button", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("show token (issue #250)", () => {
+  it("shows the player's own character full-screen with name and ability but no player name", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+
+    const showMode = screen.getByRole("dialog", { name: "Imp" });
+    expect(within(showMode).getByText("Imp")).toBeInTheDocument();
+    expect(
+      within(showMode).getByText(getCharacter("imp")!.ability),
+    ).toBeInTheDocument();
+    expect(within(showMode).queryByText("Alice")).not.toBeInTheDocument();
+  });
+
+  it("returns to the board when done showing the token", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(screen.queryByRole("dialog", { name: "Imp" })).not.toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 });
 
