@@ -357,16 +357,30 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
   // livePlayerPosition, would otherwise persist/read that out-of-range
   // value verbatim (the exact class of bug issue #167 fixed) — so this is
   // the one point of use that must clamp before it's ever stored.
+  //
+  // Builds off gameRef.current (not the `game` this render closed over) —
+  // a drag can run long enough for other state (e.g. a live day timer tick)
+  // to update gameRef.current between this render and pointerup, the same
+  // stale-snapshot defense every other multi-moment handler in this file
+  // uses (Copilot review finding).
   function movePlayer(playerId: string, position: PlayerPosition) {
     const clamped = { x: clampPct(position.x), y: clampPct(position.y) };
-    update({ ...game, players: updatePlayer(playerId, { position: clamped }) });
+    const currentGame = gameRef.current;
+    update({
+      ...currentGame,
+      players: currentGame.players.map((player) =>
+        player.id === playerId ? { ...player, position: clamped } : player,
+      ),
+    });
   }
 
   // Reordering only swaps the two seats' numbers — the players array itself
   // stays in whatever order it was already in, since GrimoireBoard sorts by
-  // seat before rendering.
+  // seat before rendering. Builds off gameRef.current, same stale-snapshot
+  // defense as movePlayer above (Copilot review finding).
   function reorderSeat(playerId: string, direction: "earlier" | "later") {
-    const bySeat = [...game.players].sort((a, b) => a.seat - b.seat);
+    const currentGame = gameRef.current;
+    const bySeat = [...currentGame.players].sort((a, b) => a.seat - b.seat);
     const index = bySeat.findIndex((p) => p.id === playerId);
     const swapIndex = direction === "earlier" ? index - 1 : index + 1;
     if (index === -1 || swapIndex < 0 || swapIndex >= bySeat.length) return;
@@ -374,8 +388,8 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     const current = bySeat[index];
     const swapWith = bySeat[swapIndex];
     update({
-      ...game,
-      players: game.players.map((player) => {
+      ...currentGame,
+      players: currentGame.players.map((player) => {
         if (player.id === current.id)
           return { ...player, seat: swapWith.seat };
         if (player.id === swapWith.id)
