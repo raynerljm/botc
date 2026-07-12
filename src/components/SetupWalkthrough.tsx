@@ -190,7 +190,7 @@ function StepPanel({
           currentCharacterId={step.characterId}
           currentCharacterName={step.characterName}
           heldElsewhereIds={heldCharacterIds(otherPlayers)}
-          characterPool={characterPool}
+          scriptCharacters={game.scriptCharacters}
           onConfirm={(characterId) =>
             onReassignStandIn(step.playerId, characterId)
           }
@@ -563,7 +563,7 @@ function StandInReassignControls({
   currentCharacterId,
   currentCharacterName,
   heldElsewhereIds,
-  characterPool,
+  scriptCharacters,
   onConfirm,
 }: {
   // townsfolk for the Drunk, demon for the Lunatic.
@@ -574,23 +574,20 @@ function StandInReassignControls({
   // excluded from the picker (issue #52 AC: "not already in play as another
   // character").
   heldElsewhereIds: Set<string>;
-  characterPool: Character[];
+  // The full script's characters (game.scriptCharacters), not the narrower
+  // characterPool (already-selected/built characters only) — sourcing from
+  // characterPool collapsed this picker to just the current stand-in, since
+  // every other selected character of this team is already held by a seat
+  // (issue #242). The bag builder's own stand-in picker already sources from
+  // the full script pool for the same reason.
+  scriptCharacters: Character[];
   onConfirm: (characterId: string) => void;
 }) {
-  const { list, showAll, setShowAll } = useCandidateCharacters(
-    team,
-    characterPool,
+  const candidates = scriptCharacters.filter(
+    (c) => c.team === team && !heldElsewhereIds.has(c.id),
   );
-  const candidates = list.filter((c) => !heldElsewhereIds.has(c.id));
   const [characterId, setCharacterId] = useState("");
   const chosen = candidates.find((c) => c.id === characterId);
-
-  function handleShowAllChange(next: boolean) {
-    setShowAll(next);
-    if (!next && characterId && !characterPool.some((c) => c.id === characterId)) {
-      setCharacterId("");
-    }
-  }
 
   return (
     <div className={styles.controls}>
@@ -607,7 +604,6 @@ function StandInReassignControls({
           ]}
         />
       </label>
-      <ShowAllToggle showAll={showAll} onChange={handleShowAllChange} />
       <Button
         variant="primary"
         disabled={!chosen || chosen.id === currentCharacterId}
