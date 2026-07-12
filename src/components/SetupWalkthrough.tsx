@@ -175,6 +175,11 @@ function StepPanel({
     setForceEditing(false);
   }
 
+  // Every step kind's footer resolves Skip the same way — one binding
+  // reused at each kind's StepFooter, instead of repeating the closure at
+  // every call site below.
+  const onSkip = () => resolve("skipped");
+
   return (
     <fieldset className={styles.step} data-status={status}>
       <legend>{step.title}</legend>
@@ -209,7 +214,10 @@ function StepPanel({
       {editing && (
         <>
           {step.kind === "demonBluffs" && (
-            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+            <ConfirmOnlyControls
+              onConfirm={() => resolve("answered")}
+              onSkip={onSkip}
+            >
               <DemonBluffsFields
                 game={game}
                 onChange={onChangeGame}
@@ -237,6 +245,7 @@ function StepPanel({
                   },
                 ]);
               }}
+              onSkip={onSkip}
             />
           )}
 
@@ -280,6 +289,7 @@ function StepPanel({
                   },
                 ]);
               }}
+              onSkip={onSkip}
             />
           )}
 
@@ -306,11 +316,15 @@ function StepPanel({
                     : [],
                 )
               }
+              onSkip={onSkip}
             />
           )}
 
           {step.kind === "acknowledge" && (
-            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+            <ConfirmOnlyControls
+              onConfirm={() => resolve("answered")}
+              onSkip={onSkip}
+            >
               <p>{step.message}</p>
             </ConfirmOnlyControls>
           )}
@@ -321,7 +335,10 @@ function StepPanel({
               confirms, or it would duplicate that reminder. The Lunatic
               (issue #163) still places its own here, unaffected. */}
           {step.kind === "review" && step.disguiseId === DRUNK_ID && (
-            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+            <ConfirmOnlyControls
+              onConfirm={() => resolve("answered")}
+              onSkip={onSkip}
+            >
               <p>{`The "${step.reminderLabel}" reminder token is already on their seat.`}</p>
             </ConfirmOnlyControls>
           )}
@@ -348,6 +365,7 @@ function StepPanel({
                     : [],
                 )
               }
+              onSkip={onSkip}
             />
           )}
 
@@ -365,13 +383,34 @@ function StepPanel({
                   })),
                 )
               }
+              onSkip={onSkip}
             />
           )}
-
-          <Button onClick={() => resolve("skipped")}>Skip</Button>
         </>
       )}
     </fieldset>
+  );
+}
+
+// Confirm and Skip render together as one row, not Confirm inside a step's
+// own controls with Skip stacked full-width beneath it — every step kind's
+// controls end with this so alignment/spacing stay identical across kinds.
+function StepFooter({
+  onConfirm,
+  confirmDisabled,
+  onSkip,
+}: {
+  onConfirm: () => void;
+  confirmDisabled?: boolean;
+  onSkip: () => void;
+}) {
+  return (
+    <div className={styles.stepFooter}>
+      <Button variant="primary" disabled={confirmDisabled} onClick={onConfirm}>
+        Confirm
+      </Button>
+      <Button onClick={onSkip}>Skip</Button>
+    </div>
   );
 }
 
@@ -380,17 +419,17 @@ function StepPanel({
 // Confirm — no fields to gate it on, unlike every other kind's controls.
 function ConfirmOnlyControls({
   onConfirm,
+  onSkip,
   children,
 }: {
   onConfirm: () => void;
+  onSkip: () => void;
   children: ReactNode;
 }) {
   return (
     <div className={styles.controls}>
       {children}
-      <Button variant="primary" onClick={onConfirm}>
-        Confirm
-      </Button>
+      <StepFooter onConfirm={onConfirm} onSkip={onSkip} />
     </div>
   );
 }
@@ -399,10 +438,12 @@ function PlayerPickControls({
   otherPlayers,
   characterById,
   onConfirm,
+  onSkip,
 }: {
   otherPlayers: Player[];
   characterById: Map<string, Character>;
   onConfirm: (playerId: string) => void;
+  onSkip: () => void;
 }) {
   const [playerId, setPlayerId] = useState("");
   return (
@@ -422,13 +463,11 @@ function PlayerPickControls({
           ]}
         />
       </label>
-      <Button
-        variant="primary"
-        disabled={!playerId}
-        onClick={() => onConfirm(playerId)}
-      >
-        Confirm
-      </Button>
+      <StepFooter
+        confirmDisabled={!playerId}
+        onConfirm={() => onConfirm(playerId)}
+        onSkip={onSkip}
+      />
     </div>
   );
 }
@@ -454,6 +493,7 @@ function CharacterAndTwoPlayersControls({
   characterPool,
   characterById,
   onConfirm,
+  onSkip,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "characterAndTwoPlayers" }>;
   otherPlayers: Player[];
@@ -464,6 +504,7 @@ function CharacterAndTwoPlayersControls({
     truePlayerId: string,
     falsePlayerId: string,
   ) => void;
+  onSkip: () => void;
 }) {
   // A Drunk's believed-character step (issue #254) already receives the full
   // corrected pool from its caller (characterPool prop above) — narrowing it
@@ -560,13 +601,11 @@ function CharacterAndTwoPlayersControls({
           ]}
         />
       </label>
-      <Button
-        variant="primary"
-        disabled={!canConfirm}
-        onClick={() => character && onConfirm(character, truePlayerId, falsePlayerId)}
-      >
-        Confirm
-      </Button>
+      <StepFooter
+        confirmDisabled={!canConfirm}
+        onConfirm={() => character && onConfirm(character, truePlayerId, falsePlayerId)}
+        onSkip={onSkip}
+      />
     </div>
   );
 }
@@ -578,10 +617,12 @@ function ReminderToggleControls({
   note,
   reminderLabel,
   onConfirm,
+  onSkip,
 }: {
   note?: string;
   reminderLabel: string;
   onConfirm: (placeReminder: boolean) => void;
+  onSkip: () => void;
 }) {
   const [placeReminder, setPlaceReminder] = useState(true);
   return (
@@ -591,9 +632,7 @@ function ReminderToggleControls({
         <Checkbox checked={placeReminder} onChange={setPlaceReminder} />
         {`Place "${reminderLabel}" reminder`}
       </label>
-      <Button variant="primary" onClick={() => onConfirm(placeReminder)}>
-        Confirm
-      </Button>
+      <StepFooter onConfirm={() => onConfirm(placeReminder)} onSkip={onSkip} />
     </div>
   );
 }
@@ -663,9 +702,11 @@ function StandInReassignControls({
 function GenericControls({
   step,
   onConfirm,
+  onSkip,
 }: {
   step: Extract<SetupWalkthroughStep, { kind: "generic" }>;
   onConfirm: (labels: string[]) => void;
+  onSkip: () => void;
 }) {
   // Staged locally rather than added immediately on each click, so a step
   // that places several reminders still resolves through one onConfirm call —
@@ -696,9 +737,7 @@ function GenericControls({
           "Done", which would collide with the walkthrough's own footer Done
           button (issue #244 code review finding) whenever a homebrew step
           is still open. */}
-      <Button variant="primary" onClick={() => onConfirm(staged)}>
-        Confirm
-      </Button>
+      <StepFooter onConfirm={() => onConfirm(staged)} onSkip={onSkip} />
     </div>
   );
 }

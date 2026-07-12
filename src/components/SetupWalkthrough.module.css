@@ -103,6 +103,11 @@
   gap: 0.5rem;
 }
 
+.stepFooter {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .reminderOptions {
   display: flex;
   flex-wrap: wrap;
