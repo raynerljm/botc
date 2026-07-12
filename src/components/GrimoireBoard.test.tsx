@@ -215,7 +215,7 @@ describe("GrimoireBoard rendering", () => {
     expect(container.querySelectorAll("img")).toHaveLength(2);
   });
 
-  it("marks a Drunk stand-in as actually the Drunk (issue #252), alongside the auto-placed Drunk reminder", () => {
+  it("marks a Drunk stand-in as actually the Drunk (issue #252)", () => {
     renderBoard([makePlayer({ isDrunk: true })]);
 
     expect(screen.getByText(/actually the Drunk/i)).toBeInTheDocument();
