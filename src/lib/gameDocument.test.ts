@@ -364,6 +364,15 @@ describe("anchoredReminderPosition (issue #251)", () => {
     const points = new Set(positions.map((p) => `${p.x},${p.y}`));
     expect(points.size).toBe(positions.length);
   });
+
+  it("keeps several siblings distinct for a corner seat too, where every axis clamps (code review finding)", () => {
+    const anchor = { x: 94, y: 94 };
+    const positions = Array.from({ length: 6 }, (_, i) =>
+      anchoredReminderPosition(anchor, i),
+    );
+    const points = new Set(positions.map((p) => `${p.x},${p.y}`));
+    expect(points.size).toBe(positions.length);
+  });
 });
 
 describe("buildBagTokens", () => {

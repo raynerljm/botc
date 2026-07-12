@@ -413,7 +413,17 @@
 
 .menuBody {
   position: absolute;
-  top: calc(100% + 0.5rem);
+  /* .tokenSummary is sized to the icon alone now (issue #251) — .tokenLabels
+     (the name/claim/status stack) floats below it as an absolutely
+     positioned layer with no fixed height, so this can't measure "below the
+     labels" the way it could when labels were in-flow inside .tokenSummary.
+     4rem is a deliberate overshoot past a typical one-or-two-line label
+     stack, so the menu opens clear of the name it's most likely to sit
+     over instead of covering it (code review finding) — a seat carrying an
+     unusually tall label stack (claim + acts-as + notes) can still see the
+     menu open slightly over its own lower labels, but that's a smaller cost
+     than covering the name on every seat, which this replaces. */
+  top: calc(100% + 4rem);
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;
