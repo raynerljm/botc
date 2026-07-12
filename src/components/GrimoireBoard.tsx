@@ -108,8 +108,11 @@ export interface GrimoireBoardProps {
 // while the icon floor isn't. The real tap target is .tokenSummary, the
 // <summary> wrapping the icon and name text — that's widened to 44px
 // instead (below), leaving the icon's own visual size untouched.
-const MIN_TOKEN_REM = 1.9;
-const MAX_TOKEN_REM = 3.4;
+// Raised for issue #251: moving anchored reminders off the perimeter (see
+// anchoredReminderPosition in gameDocument.ts) frees the room this used to
+// have to stay small to avoid overlapping them.
+const MIN_TOKEN_REM = 2.3;
+const MAX_TOKEN_REM = 4.1;
 const MIN_TOKEN_COUNT = 5;
 const MAX_TOKEN_COUNT = 20;
 

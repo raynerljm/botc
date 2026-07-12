@@ -215,6 +215,32 @@ describe("GrimoireBoard rendering", () => {
     expect(container.querySelectorAll("img")).toHaveLength(2);
   });
 
+  it("sizes character tokens larger than before the radial reminder layout freed up perimeter space (issue #251)", () => {
+    const fewPlayers = renderBoard([makePlayer({ id: "p1" })]);
+    const fewBoard = fewPlayers.container.querySelector(
+      "[data-board]",
+    ) as HTMLElement;
+    const fewTokenSize = parseFloat(
+      fewBoard.style.getPropertyValue("--token-size"),
+    );
+    // Pre-#251 this topped out at 3.4rem for a low-population game.
+    expect(fewTokenSize).toBeGreaterThan(3.4);
+
+    const manyPlayers = renderBoard(
+      Array.from({ length: 20 }, (_, i) =>
+        makePlayer({ id: `p${i}`, seat: i + 1 }),
+      ),
+    );
+    const manyBoard = manyPlayers.container.querySelector(
+      "[data-board]",
+    ) as HTMLElement;
+    const manyTokenSize = parseFloat(
+      manyBoard.style.getPropertyValue("--token-size"),
+    );
+    // Pre-#251 this bottomed out at 1.9rem for a full 20-player game.
+    expect(manyTokenSize).toBeGreaterThan(1.9);
+  });
+
   it("doesn't annotate a Drunk stand-in's token with inline copy (issue #186) — a reminder token carries that instead", () => {
     renderBoard([makePlayer({ isDrunk: true })]);
 
@@ -1086,10 +1112,11 @@ describe("rotate the grimoire (issue #192)", () => {
     const reminderWrap = container.querySelector(
       "[data-reminder-id='r1']",
     ) as HTMLElement;
-    // The seat itself rotates to (95, 50); the reminder should still park
-    // directly beside it, not at its pre-rotation offset.
-    expect(parseFloat(reminderWrap.style.left)).toBeCloseTo(95);
-    expect(parseFloat(reminderWrap.style.top)).toBeCloseTo(62);
+    // The seat itself rotates to (95, 50) — level with the circle's centre,
+    // so anchoredReminderPosition (issue #251) steps it purely leftward,
+    // toward (50, 50), not at its pre-rotation offset.
+    expect(parseFloat(reminderWrap.style.left)).toBeCloseTo(77);
+    expect(parseFloat(reminderWrap.style.top)).toBeCloseTo(50);
   });
 
   it("stores a seat-anchored reminder's fallback position in the canonical (un-rotated) frame, not the rotated display frame", async () => {
@@ -1758,25 +1785,27 @@ describe("reminder placement (issue #71)", () => {
     );
   });
 
-  it("renders a reminder anchored to a seat below that seat's token, clear of its name label", () => {
+  it("renders a reminder anchored to a seat along the line toward the circle's centre, clear of its name label (issue #251)", () => {
     const reminder = makeReminder({
       id: "r1",
       anchorPlayerId: "p1",
       position: { x: 1, y: 1 },
     });
+    // Directly left of the circle's centre (50, 50), so "toward the
+    // centre" is purely rightward here — a clean seam for the assertion.
     const { container } = renderBoard(
-      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      [makePlayer({ id: "p1", position: { x: 30, y: 50 } })],
       { reminders: [reminder] },
     );
 
     const wrap = container.querySelector(
       "[data-reminder-id='r1']",
     ) as HTMLElement;
-    expect(wrap.style.left).toBe("30%");
-    expect(parseFloat(wrap.style.top)).toBeGreaterThan(40);
+    expect(parseFloat(wrap.style.left)).toBeGreaterThan(30);
+    expect(wrap.style.top).toBe("50%");
   });
 
-  it("stacks a second reminder anchored to the same seat further down, not on top of the first", () => {
+  it("steps a second reminder anchored to the same seat further along that line, not on top of the first (issue #251)", () => {
     const first = makeReminder({
       id: "r1",
       anchorPlayerId: "p1",
@@ -1788,19 +1817,19 @@ describe("reminder placement (issue #71)", () => {
       label: "Second",
     });
     const { container } = renderBoard(
-      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      [makePlayer({ id: "p1", position: { x: 30, y: 50 } })],
       { reminders: [first, second] },
     );
 
-    const firstTop = parseFloat(
+    const firstLeft = parseFloat(
       (container.querySelector("[data-reminder-id='r1']") as HTMLElement).style
-        .top,
+        .left,
     );
-    const secondTop = parseFloat(
+    const secondLeft = parseFloat(
       (container.querySelector("[data-reminder-id='r2']") as HTMLElement).style
-        .top,
+        .left,
     );
-    expect(secondTop).toBeGreaterThan(firstTop);
+    expect(secondLeft).toBeGreaterThan(firstLeft);
   });
 
   it("keeps an anchored reminder tracking its seat when that seat is dragged to a new position", () => {
@@ -1829,20 +1858,24 @@ describe("reminder placement (issue #71)", () => {
     expect(parseFloat(wrap.style.left)).toBeCloseTo(50);
   });
 
-  // Issue #167 AC: an anchored reminder renders offset below its seat (see
-  // "renders a reminder anchored to a seat below that seat's token" above),
-  // not at its own stale stored `position`. Dragging it must start from that
-  // displayed offset spot, not snap to the pointer on pickup.
+  // Issue #167 AC: an anchored reminder renders offset toward the centre of
+  // the circle (see "renders a reminder anchored to a seat along the line
+  // toward the circle's centre" above), not at its own stale stored
+  // `position`. Dragging it must start from that displayed offset spot, not
+  // snap to the pointer on pickup.
   it("starts dragging an anchored reminder from its displayed offset position, not its stale stored position", () => {
     const reminder = makeReminder({
       id: "r1",
       anchorPlayerId: "p1",
       // Deliberately stale/unrelated to where the reminder actually renders
-      // (below the seat) — proves the drag doesn't grab-offset against this.
+      // (toward the centre) — proves the drag doesn't grab-offset against
+      // this.
       position: { x: 1, y: 1 },
     });
+    // Directly left of centre (50, 50), so anchoredReminderPosition steps
+    // purely rightward: (48, 50), i.e. (192, 200) on the 400px board.
     const { container, onMoveReminder } = renderBoard(
-      [makePlayer({ id: "p1", position: { x: 30, y: 40 } })],
+      [makePlayer({ id: "p1", position: { x: 30, y: 50 } })],
       { reminders: [reminder] },
     );
     mockBoardRect(container);
@@ -1852,32 +1885,31 @@ describe("reminder placement (issue #71)", () => {
     const wrap = container.querySelector(
       "[data-reminder-id='r1']",
     ) as HTMLElement;
-    // Displayed anchored position: same x as the seat (30%), offset below
-    // it in y (30%/52% per anchoredReminderPosition, i.e. (120, 208) on the
-    // 400px board) — not the seat's own centre and not the stored (1, 1).
-    expect(wrap.style.left).toBe("30%");
-    expect(wrap.style.top).toBe("52%");
+    // Displayed anchored position — not the seat's own centre and not the
+    // stored (1, 1).
+    expect(wrap.style.left).toBe("48%");
+    expect(wrap.style.top).toBe("50%");
 
     fireEvent(
       reminderSummary,
-      pointerEvent("pointerdown", { pointerId: 1, clientX: 120, clientY: 208 }),
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 192, clientY: 200 }),
     );
     fireEvent(
       reminderSummary,
-      pointerEvent("pointermove", { pointerId: 1, clientX: 160, clientY: 208 }),
+      pointerEvent("pointermove", { pointerId: 1, clientX: 232, clientY: 200 }),
     );
 
     // Grabbed exactly at the displayed spot and moved 40px (10%) right, so
-    // the reminder should land at 40%/52% — not jump to the raw pointer
+    // the reminder should land at 58%/50% — not jump to the raw pointer
     // position, and not offset against the stale stored (1, 1).
-    expect(wrap.style.left).toBe("40%");
-    expect(wrap.style.top).toBe("52%");
+    expect(wrap.style.left).toBe("58%");
+    expect(wrap.style.top).toBe("50%");
 
     fireEvent(
       reminderSummary,
-      pointerEvent("pointerup", { pointerId: 1, clientX: 160, clientY: 208 }),
+      pointerEvent("pointerup", { pointerId: 1, clientX: 232, clientY: 200 }),
     );
-    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 40, y: 52 });
+    expect(onMoveReminder).toHaveBeenCalledWith("r1", { x: 58, y: 50 });
   });
 
   it("attaches an existing reminder to a seat by tapping it, without a drag gesture", async () => {
@@ -2699,9 +2731,9 @@ describe("token menu viewport clamping (issue #124)", () => {
     // A reminder's stored .position is stale once anchored — it tracks its
     // anchor seat's position via anchoredReminderPosition instead (see the
     // reminderWrap render logic). This anchor seat sits at the board's
-    // right edge with no vertical clamp in play, so the reminder parks
-    // beside it without any of anchoredReminderPosition's clearance-recovery
-    // shifting it back toward centre — it should still read as edge-parked.
+    // right edge, level with the centre — stepping toward the centre (issue
+    // #251) moves it purely leftward, so it still reads as right-of-centre
+    // but no longer as bottom-of-centre.
     const anchoredReminder = makeReminder({
       id: "r1",
       anchorPlayerId: "p1",
@@ -2715,7 +2747,7 @@ describe("token menu viewport clamping (issue #124)", () => {
       "[data-reminder-id='r1']",
     ) as HTMLElement;
     expect(reminderWrap).toHaveAttribute("data-side", "right");
-    expect(reminderWrap).toHaveAttribute("data-vside", "bottom");
+    expect(reminderWrap).not.toHaveAttribute("data-vside");
   });
 
   it("keeps a menu's anchor pinned to the token's resting position while dragging the same token, instead of flickering as the live drag preview crosses the side/vside thresholds", async () => {

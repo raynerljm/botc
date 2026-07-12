@@ -158,9 +158,18 @@
   content: none;
 }
 
+/* Anchors the token *icon* to the seat's (x, y), not the whole label stack
+   below it (issue #251). .tokenSummary lays the icon out as its first
+   child, exactly --token-size tall, so offsetting the box up by half that —
+   a fixed length, not -50% of the box's own (name/notes-dependent) height —
+   keeps the icon's centre pinned to the seat regardless of how many status
+   labels render underneath it. Centring X by -50% is still fine: the box's
+   width tracks its widest line of text, and a status label rarely being
+   wider than its neighbour's isn't the overlap this issue is about. */
 .tokenWrap {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%)
+    translateY(calc(var(--token-size, 3rem) / -2));
   touch-action: none;
 }
 

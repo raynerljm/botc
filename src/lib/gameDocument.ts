@@ -545,14 +545,32 @@ export function nextPadReminderPosition(
   return padSpiralPoint(existingPositions.length);
 }
 
-// Where a reminder anchored to a seat renders (issue #71): stacked straight
-// below that seat's own token+name block rather than beside it, so it never
-// covers the name label or intercepts a tap meant for the seat (AC), and a
-// second/third reminder on the same seat stacks further down instead of
-// overlapping the first.
-const ANCHOR_OFFSET_Y = 12;
-const ANCHOR_STACK_STEP_Y = 6;
-const ANCHOR_STACK_STEP_X = 3;
+// Where a reminder anchored to a seat renders (issue #251): out along the
+// short line from that seat's token toward the circle's centre, rather than
+// stacking straight down — freeing the perimeter for larger tokens and
+// pulling lower-seat reminders up out of the bottom sheet's occluded band
+// (ADR 0004) instead of stacking deeper into it. A second/third reminder on
+// the same seat steps further along that line, so it never overlaps the
+// first.
+// Sized to clear the larger #251 token plus its name label — a top-of-circle
+// seat's "toward the centre" direction is straight down, the same direction
+// its own character/player name already grows in, so too small a base
+// offset lands the first reminder right on top of that seat's own label
+// (caught visually while demoing this issue; the old, smaller straight-down
+// offset dates from before tokens grew).
+const ANCHOR_RADIAL_OFFSET = 18;
+const ANCHOR_RADIAL_STEP = 8;
+// Caps how far a seat's reminders reach toward the centre — without this,
+// a seat with enough reminders would eventually plant one exactly on the
+// centre and, past that, keep going and start overlapping the far side of
+// the circle.
+const ANCHOR_RADIAL_MAX = 34;
+// Once the radial cap is hit, further siblings fan out at this angle around
+// the capped point (alternating sides, widening every second one) instead
+// of continuing inward and piling up on the same spot at the centre.
+const ANCHOR_ARC_STEP_DEG = 24;
+
+const CIRCLE_CENTRE: PlayerPosition = { x: 50, y: 50 };
 
 export function anchoredReminderPosition(
   anchorPosition: PlayerPosition,
@@ -560,38 +578,35 @@ export function anchoredReminderPosition(
 ): PlayerPosition {
   // Defensive: every position this function is actually handed today
   // (circlePosition, a drag drop) is already within clampPct's range, but a
-  // hand-edited or pre-#117 exported game document isn't guaranteed to be —
-  // an anchor outside [4,96] would otherwise make verticalClearance exceed
-  // ANCHOR_OFFSET_Y and silently zero the recovery below (code review
-  // finding), reproducing the exact bug this function exists to fix.
+  // hand-edited or pre-#117 exported game document isn't guaranteed to be.
   const anchorX = clampPct(anchorPosition.x);
   const anchorY = clampPct(anchorPosition.y);
-  const y = clampPct(
-    anchorY + ANCHOR_OFFSET_Y + siblingIndex * ANCHOR_STACK_STEP_Y,
+
+  const toCentreX = CIRCLE_CENTRE.x - anchorX;
+  const toCentreY = CIRCLE_CENTRE.y - anchorY;
+  const toCentreLength = Math.hypot(toCentreX, toCentreY);
+  // A seat parked exactly on the centre has no meaningful direction toward
+  // it — fall back to the pre-#251 straight-down default.
+  const dirX = toCentreLength > 0 ? toCentreX / toCentreLength : 0;
+  const dirY = toCentreLength > 0 ? toCentreY / toCentreLength : 1;
+
+  const rawDistance = ANCHOR_RADIAL_OFFSET + siblingIndex * ANCHOR_RADIAL_STEP;
+  const distance = Math.min(rawDistance, ANCHOR_RADIAL_MAX);
+  const overflowSteps = Math.max(
+    0,
+    Math.ceil((rawDistance - ANCHOR_RADIAL_MAX) / ANCHOR_RADIAL_STEP),
   );
-  const verticalClearance = y - anchorY;
-  // A seat near the bottom of the circle clamps y before it reaches its full
-  // offset, which used to park the chip directly on the token instead of
-  // below it (issue #117). Recover the clearance the clamp ate as a
-  // horizontal push instead, so the chip ends up exactly as far from the
-  // token as an unclamped seat's chip would. Recovered against the *base*
-  // offset, not the growing per-sibling one — otherwise every sibling
-  // recomputes its own full recovery on top of the per-sibling fan below,
-  // and a handful of reminders on one clamped seat collapse back onto a
-  // single point far sooner than an unclamped seat would need before its
-  // own fan saturates (code review finding).
-  const recoveredX = Math.sqrt(
-    Math.max(ANCHOR_OFFSET_Y ** 2 - verticalClearance ** 2, 0),
-  );
-  // Fan toward the pad's horizontal centre, not off the nearer edge — scales
-  // the per-sibling step too, so later siblings keep receding from the edge
-  // instead of the unscaled step undoing part of the recovery above (code
-  // review finding).
-  const direction = anchorX > 50 ? -1 : 1;
-  const x = clampPct(
-    anchorX + direction * (recoveredX + siblingIndex * ANCHOR_STACK_STEP_X),
-  );
-  return { x, y };
+  const pairIndex = Math.ceil(overflowSteps / 2);
+  const arcSide = overflowSteps % 2 === 1 ? 1 : -1;
+  const arcDeg = overflowSteps === 0 ? 0 : arcSide * pairIndex * ANCHOR_ARC_STEP_DEG;
+  const arcRad = (arcDeg * Math.PI) / 180;
+  const fannedX = dirX * Math.cos(arcRad) - dirY * Math.sin(arcRad);
+  const fannedY = dirX * Math.sin(arcRad) + dirY * Math.cos(arcRad);
+
+  return {
+    x: clampPct(anchorX + fannedX * distance),
+    y: clampPct(anchorY + fannedY * distance),
+  };
 }
 
 // The Drunk's true character (CONTEXT.md: Stand-in) — its id, exported so
