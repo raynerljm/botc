@@ -1124,7 +1124,7 @@ export function GrimoireBoard({
                             <a
                               href={wikiUrl(character)}
                               target="_blank"
-                              rel="noreferrer"
+                              rel="noopener noreferrer"
                               className={styles.detailLink}
                             >
                               Official wiki page
@@ -1135,7 +1135,7 @@ export function GrimoireBoard({
                               <a
                                 href={almanacUrl}
                                 target="_blank"
-                                rel="noreferrer"
+                                rel="noopener noreferrer"
                                 className={styles.detailLink}
                               >
                                 Script almanac
