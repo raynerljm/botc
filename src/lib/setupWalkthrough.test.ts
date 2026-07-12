@@ -161,6 +161,26 @@ describe("buildSetupWalkthroughSteps (issue #26)", () => {
     });
   });
 
+  it("flags the Librarian's step as having no candidates in play when there are no Outsiders in the bag (issue #262)", () => {
+    const game = gameWithCharacters(["librarian", "imp", "chef"]);
+    const step = stepFor(game, "librarian");
+
+    expect(step).toMatchObject({
+      kind: "characterAndTwoPlayers",
+      noCandidatesInPlay: true,
+    });
+  });
+
+  it("does not flag the Librarian's step as having no candidates when an Outsider is in the bag", () => {
+    const game = gameWithCharacters(["librarian", "recluse", "imp", "chef"]);
+    const step = stepFor(game, "librarian");
+
+    expect(step).toMatchObject({
+      kind: "characterAndTwoPlayers",
+      noCandidatesInPlay: false,
+    });
+  });
+
   it("gives the Investigator a characterAndTwoPlayers step over Minions", () => {
     const game = gameWithCharacters(["investigator", "imp", "chef"]);
     const step = stepFor(game, "investigator");

@@ -579,6 +579,42 @@ describe("characterAndTwoPlayers step", () => {
     const trueSelect = within(step).getByLabelText(/shown as townsfolk/i);
     expect(trueSelect.dataset.value).toBe("");
   });
+
+  describe("with no candidates in play (issue #262, e.g. no Outsiders for the Librarian)", () => {
+    const librarianStep: SetupWalkthroughStep = {
+      id: "p1",
+      kind: "characterAndTwoPlayers",
+      characterId: "librarian",
+      characterName: "Librarian",
+      playerId: "p1",
+      playerName: "Alice",
+      title: "Librarian — character and two players",
+      ruleText: "Pick an Outsider character and two players; one of them holds it (or confirm there are none in play).",
+      candidateTeam: "outsider",
+      trueLabel: "Outsider",
+      falseLabel: "Wrong",
+      noCandidatesInPlay: true,
+    };
+
+    it("offers a shown-0 confirmation instead of character/player pickers", () => {
+      renderWalkthrough({ steps: [librarianStep] });
+      const step = screen.getByRole("group", { name: librarianStep.title });
+
+      expect(within(step).getByText(/no outsiders are in play/i)).toBeInTheDocument();
+      expect(within(step).queryByLabelText("Character")).not.toBeInTheDocument();
+      expect(within(step).queryByLabelText(/shown as/i)).not.toBeInTheDocument();
+    });
+
+    it("resolves as answered with no reminders on confirm — nothing misleading gets placed", async () => {
+      const user = userEvent.setup();
+      const { onResolveStep } = renderWalkthrough({ steps: [librarianStep] });
+      const step = screen.getByRole("group", { name: librarianStep.title });
+
+      await user.click(within(step).getByRole("button", { name: /confirm/i }));
+
+      expect(onResolveStep).toHaveBeenCalledWith("p1", "answered", []);
+    });
+  });
 });
 
 describe("characterAndTwoPlayers step for a Drunk's believed character (issue #254)", () => {

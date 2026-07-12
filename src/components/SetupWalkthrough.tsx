@@ -240,7 +240,20 @@ function StepPanel({
             />
           )}
 
-          {step.kind === "characterAndTwoPlayers" && (
+          {/* No candidates of this team are in the bag at all (issue #262,
+              e.g. no Outsiders for the Librarian) — the character/two-player
+              pick has nothing to offer, so this just confirms "shown 0" and
+              produces no reminders, rather than forcing a pick that would be
+              meaningless (or misleading, if made anyway). */}
+          {step.kind === "characterAndTwoPlayers" && step.noCandidatesInPlay && (
+            <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
+              <p>
+                {`No ${step.trueLabel}s are in play — ${step.characterName} is shown "0". No character or players to choose.`}
+              </p>
+            </ConfirmOnlyControls>
+          )}
+
+          {step.kind === "characterAndTwoPlayers" && !step.noCandidatesInPlay && (
             <CharacterAndTwoPlayersControls
               step={step}
               otherPlayers={otherPlayers}
