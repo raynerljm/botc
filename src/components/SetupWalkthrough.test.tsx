@@ -354,6 +354,125 @@ describe("SetupWalkthrough shell", () => {
   });
 });
 
+describe("step footer (issue #260)", () => {
+  const acknowledgeStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "acknowledge",
+    characterId: "damsel",
+    characterName: "Damsel",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Damsel — tell the Minions",
+    ruleText: "All Minions must be told the Damsel is in play.",
+    message: "Tell the Minions who the Damsel is.",
+  };
+
+  const demonBluffsStep: SetupWalkthroughStep = {
+    id: DEMON_BLUFFS_STEP_ID,
+    kind: "demonBluffs",
+    title: "Demon bluffs",
+    ruleText:
+      "Choose the three not-in-play good characters to show the Demon on the first night.",
+  };
+
+  const washerwomanStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "characterAndTwoPlayers",
+    characterId: "washerwoman",
+    characterName: "Washerwoman",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Washerwoman — character and two players",
+    ruleText: "Pick a Townsfolk character and two players.",
+    candidateTeam: "townsfolk",
+    trueLabel: "Townsfolk",
+    falseLabel: "Wrong",
+  };
+
+  const marionetteStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "neighborCheck",
+    characterId: "marionette",
+    characterName: "Marionette",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Marionette — seating check",
+    ruleText: "The Marionette must sit next to the Demon.",
+    reminderLabel: "Is the Marionette",
+    seatedCorrectly: true,
+  };
+
+  const drunkStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "review",
+    characterId: "washerwoman",
+    characterName: "Washerwoman",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Drunk — review the stand-in",
+    ruleText: "Alice believes they are the Washerwoman.",
+    reminderLabel: "Drunk",
+    disguiseId: "drunk",
+    standInTeam: "townsfolk",
+  };
+
+  const lunaticStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "review",
+    characterId: "imp",
+    characterName: "Imp",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Lunatic — review the stand-in",
+    ruleText: "Alice believes they are the Imp.",
+    reminderLabel: "Lunatic",
+    disguiseId: "lunatic",
+    standInTeam: "demon",
+  };
+
+  const genericStep: SetupWalkthroughStep = {
+    id: "p1",
+    kind: "generic",
+    characterId: "custom-oracle",
+    characterName: "Custom Oracle",
+    playerId: "p1",
+    playerName: "Alice",
+    title: "Custom Oracle — reminder tokens",
+    ruleText: "Custom Oracle isn't in the curated setup list.",
+    reminderOptions: ["Marked", "Foretold"],
+  };
+
+  it.each([
+    ["playerPick", fortuneTellerStep],
+    ["acknowledge", acknowledgeStep],
+    ["demonBluffs", demonBluffsStep],
+    ["characterAndTwoPlayers", washerwomanStep],
+    ["neighborCheck", marionetteStep],
+    ["review (Drunk)", drunkStep],
+    ["review (Lunatic)", lunaticStep],
+    ["generic", genericStep],
+  ])("sits Confirm and Skip side by side in one row for a %s step", async (_, step) => {
+    renderWalkthrough({ steps: [step] });
+    const group = screen.getByRole("group", { name: step.title });
+    const confirmButton = within(group).getByRole("button", { name: /^confirm$/i });
+    const skipButton = within(group).getByRole("button", { name: /^skip$/i });
+
+    // "Side by side in one row" (not Skip stacked full-width beneath
+    // Confirm) means the two buttons are siblings sharing one row
+    // container, rather than Skip being a separate block-level sibling of
+    // the step's fields.
+    expect(confirmButton.parentElement).toBe(skipButton.parentElement);
+  });
+
+  it("keeps Confirm disabled until the picker is ready, alongside an always-enabled Skip", () => {
+    renderWalkthrough({ steps: [fortuneTellerStep] });
+    const group = screen.getByRole("group", { name: fortuneTellerStep.title });
+
+    expect(within(group).getByRole("button", { name: /^confirm$/i })).toBeDisabled();
+    expect(within(group).getByRole("button", { name: /^skip$/i })).toBeEnabled();
+  });
+});
+
 describe("playerPick step", () => {
   it("places the reminder on the chosen player and marks the step answered", async () => {
     const user = userEvent.setup();
