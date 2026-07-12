@@ -248,7 +248,11 @@ function StepPanel({
           {step.kind === "characterAndTwoPlayers" && step.noCandidatesInPlay && (
             <ConfirmOnlyControls onConfirm={() => resolve("answered")}>
               <p>
-                {`No ${step.trueLabel}s are in play — ${step.characterName} is shown "0". No character or players to choose.`}
+                {/* "characters" (not a bare "s" suffix on trueLabel) keeps
+                    this grammatical for every table entry — "Townsfolk" is
+                    already plural on its own, so "Townsfolks" would read
+                    wrong the one time this branch is reachable for it. */}
+                {`No ${step.trueLabel} characters are in play — ${step.characterName} is shown "0". No character or players to choose.`}
               </p>
             </ConfirmOnlyControls>
           )}
