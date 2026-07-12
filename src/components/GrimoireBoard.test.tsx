@@ -241,10 +241,10 @@ describe("GrimoireBoard rendering", () => {
     expect(manyTokenSize).toBeGreaterThan(1.9);
   });
 
-  it("doesn't annotate a Drunk stand-in's token with inline copy (issue #186) — a reminder token carries that instead", () => {
+  it("marks a Drunk stand-in as actually the Drunk (issue #252)", () => {
     renderBoard([makePlayer({ isDrunk: true })]);
 
-    expect(screen.queryByText(/actually the Drunk/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/actually the Drunk/i)).toBeInTheDocument();
   });
 
   // Capitalize is opt-in (.noteCapitalized) rather than the .note default —
@@ -463,12 +463,11 @@ describe("token menu", () => {
     expect(summary).not.toHaveAttribute("data-dead");
   });
 
-  it("opens the character detail popover with ability text and an official wiki link", async () => {
+  it("shows character detail — name, ability, and an official wiki link — always visible at the top, no disclosure tap needed", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer({ characterId: "washerwoman" })]);
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     expect(
       screen.getByText(getCharacter("washerwoman")!.ability),
@@ -478,6 +477,7 @@ describe("token menu", () => {
       "href",
       expect.stringContaining("wiki.bloodontheclocktower.com"),
     );
+    expect(link).toHaveAttribute("target", "_blank");
   });
 
   it("links homebrew characters to the script's almanac instead of the wiki", async () => {
@@ -501,7 +501,6 @@ describe("token menu", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
@@ -529,7 +528,6 @@ describe("token menu", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
@@ -558,33 +556,36 @@ describe("token menu", () => {
     );
 
     await user.click(screen.getByText("Alice"));
-    await user.click(screen.getByText(/character detail/i));
 
     expect(screen.getByText(reskinned.ability)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /almanac/i });
     expect(link).toHaveAttribute("href", "https://example.com/almanac");
   });
 
-  it("styles the character-detail disclosure with a chevron affordance, not a bare native control", async () => {
+  it("styles the character detail block as the popup's promoted header, first in the menu", async () => {
     const user = userEvent.setup();
     renderBoard([makePlayer({ characterId: "washerwoman" })]);
 
     await user.click(screen.getByText("Alice"));
-    const summary = screen.getByText(/character detail/i);
 
-    expect(summary).toHaveClass(styles.detailSummary);
-    const chevron = summary.querySelector("[aria-hidden='true']");
-    expect(chevron).toBeInTheDocument();
-    expect(chevron).toHaveClass(styles.detailChevron);
-
-    await user.click(summary);
-
+    // The character name also renders in the (always-mounted) token
+    // summary, so disambiguate by picking the one inside the detail block.
+    const nameEls = screen.getAllByText(getCharacter("washerwoman")!.name);
+    const detailName = nameEls.find((el) =>
+      el.classList.contains(styles.detailName),
+    );
+    expect(detailName).toBeDefined();
     expect(screen.getByText(getCharacter("washerwoman")!.ability)).toHaveClass(
       styles.detailAbility,
     );
     expect(screen.getByRole("link", { name: /wiki/i })).toHaveClass(
       styles.detailLink,
     );
+
+    // Character detail is always first in the popup hierarchy (issue #250).
+    const detailBlock = detailName!.closest(`.${styles.detail}`) as HTMLElement;
+    const menuBody = detailBlock.parentElement as HTMLElement;
+    expect(menuBody.firstElementChild).toBe(detailBlock);
   });
 });
 
@@ -863,21 +864,45 @@ describe("acts-as team constraints (issue #245)", () => {
 });
 
 describe("ghost votes", () => {
-  it("shows a spent/unspent ghost vote marker only for dead players, toggleable with one tap", async () => {
+  it("shows a used/unused ghost vote toggle only for dead players, below Add reminder, toggleable with one tap", async () => {
     const user = userEvent.setup();
     const handlers = renderBoard([
       makePlayer({ dead: true, ghostVoteSpent: false }),
     ]);
 
+    await user.click(screen.getByText("Alice"));
     const marker = screen.getByRole("button", { name: /ghost vote/i });
-    expect(marker).toHaveTextContent(/available/i);
+    expect(marker).toHaveTextContent(/unused ghost vote/i);
+
+    // Directly below "Add reminder" in the popup hierarchy (issue #250).
+    const menuBody = marker.closest("div")!;
+    const buttons = within(menuBody).getAllByRole("button");
+    const addReminderIndex = buttons.findIndex(
+      (button) => button.textContent === "Add reminder",
+    );
+    expect(buttons[addReminderIndex + 1]).toBe(marker);
 
     await user.click(marker);
     expect(handlers.onToggleGhostVote).toHaveBeenCalledWith("p1");
   });
 
-  it("doesn't show a ghost vote marker for a living player", () => {
+  it("labels a spent ghost vote as used", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ dead: true, ghostVoteSpent: true })]);
+
+    await user.click(screen.getByText("Alice"));
+
+    expect(
+      screen.getByRole("button", { name: /used ghost vote/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("doesn't show a ghost vote toggle for a living player", async () => {
+    const user = userEvent.setup();
     renderBoard([makePlayer({ dead: false })]);
+
+    await user.click(screen.getByText("Alice"));
+
     expect(
       screen.queryByRole("button", { name: /ghost vote/i }),
     ).not.toBeInTheDocument();
@@ -2433,6 +2458,117 @@ describe("info tokens (issue #19)", () => {
     expect(
       within(controls).queryByRole("button", { name: "Info tokens" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("show token (issue #250)", () => {
+  it("shows the player's own character full-screen with name and ability but no player name", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+
+    const showMode = screen.getByRole("dialog", { name: "Imp" });
+    expect(within(showMode).getByText("Imp")).toBeInTheDocument();
+    expect(
+      within(showMode).getByText(getCharacter("imp")!.ability),
+    ).toBeInTheDocument();
+    expect(within(showMode).queryByText("Alice")).not.toBeInTheDocument();
+  });
+
+  it("returns to the board when done showing the token", async () => {
+    const user = userEvent.setup();
+    renderBoard([makePlayer({ name: "Alice", characterId: "imp" })]);
+
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(screen.queryByRole("dialog", { name: "Imp" })).not.toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("doesn't leave the seat's own menu stuck open on return (code review: matches Hide grimoire/Re-circle/info tokens' own cancelActiveDrag cleanup)", async () => {
+    const user = userEvent.setup();
+    const { container } = renderBoard([
+      makePlayer({ id: "p1", name: "Alice", characterId: "imp" }),
+    ]);
+
+    // The menu is open (that's how "Show token" is reached) when the board
+    // is replaced by the full-screen view — without the same cleanup every
+    // other board-replacing action performs, the closed-by-remount menu's
+    // stale `openMenu` state reopens it unprompted once back (issue #70).
+    // "Done" is fired via fireEvent, not userEvent — userEvent's click also
+    // synthesizes a pointerdown, which the pre-existing outside-tap-close
+    // effect would itself treat as "outside" the (now-stale) menu ref and
+    // close it independently of this fix; a bare click (matching a real
+    // keyboard/Enter activation, which fires no pointerdown) isolates what
+    // cancelActiveDrag's own closeMenu() is actually responsible for.
+    await user.click(screen.getByText("Alice"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    const details = container.querySelector(
+      "[data-player-id='p1'] details",
+    ) as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+  });
+
+  it("discards an in-progress drag before showing, so dragging isn't permanently stuck once back on the board", async () => {
+    const user = userEvent.setup();
+    const { container, onMove } = renderBoard([
+      makePlayer({ id: "p1", name: "Alice", characterId: "imp" }),
+      makePlayer({ id: "p2", name: "Bob", characterId: "empath" }),
+    ]);
+    mockBoardRect(container);
+    const summary = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+
+    // A drag is left mid-gesture on p1 (pointerdown + move, no pointerup) —
+    // e.g. a second finger opens p2's own menu and taps "Show token" while
+    // the first is still holding p1's token (same multi-touch risk issue
+    // #19's info token library already guards against). A distinct
+    // pointerId (9, not userEvent's default mouse pointerId of 1) models a
+    // genuine second touch — reusing 1 here would let the later
+    // `user.click` calls' own synthetic pointerup complete *this* drag by
+    // pointerId match alone, a test artifact no real multi-touch gesture
+    // could produce.
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 9, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 9, clientX: 140, clientY: 180 }),
+    );
+
+    await user.click(screen.getByText("Bob"));
+    await user.click(screen.getByRole("button", { name: "Show token" }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    expect(onMove).not.toHaveBeenCalled();
+    // The interrupted gesture's pointerId must have been released — a fresh
+    // drag with a new pointerId on p1 has to still work, not silently no-op
+    // against a dragRef stuck on the unmounted gesture.
+    mockBoardRect(container);
+    const summaryAfter = container.querySelector(
+      "[data-player-id='p1'] summary",
+    ) as HTMLElement;
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 }),
+    );
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointermove", { pointerId: 2, clientX: 140, clientY: 180 }),
+    );
+    fireEvent(
+      summaryAfter,
+      pointerEvent("pointerup", { pointerId: 2, clientX: 140, clientY: 180 }),
+    );
+    expect(onMove).toHaveBeenCalledWith("p1", { x: 60, y: 25 });
   });
 });
 

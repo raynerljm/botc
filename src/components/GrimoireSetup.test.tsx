@@ -1464,8 +1464,8 @@ describe("travellers addable at setup with alignment", () => {
   });
 });
 
-describe("Drunk seat display (stand-in identity, issue #186)", () => {
-  it("shows the stand-in identity without inline '(actually the Drunk)' copy — a reminder token carries that instead", async () => {
+describe("Drunk seat display (stand-in identity + actually the Drunk, issue #252)", () => {
+  it("shows both the stand-in identity and that they're actually the Drunk, alongside the auto-placed Drunk reminder", async () => {
     const user = userEvent.setup();
     const washerwoman = getCharacter("washerwoman")!;
     const game = createGame({
@@ -1493,10 +1493,14 @@ describe("Drunk seat display (stand-in identity, issue #186)", () => {
     ) as HTMLElement;
     expect(within(summary).getByText("Washerwoman")).toBeInTheDocument();
     expect(
-      within(summary).queryByText(/actually the Drunk/i),
-    ).not.toBeInTheDocument();
+      within(summary).getByText(/actually the Drunk/i),
+    ).toBeInTheDocument();
 
-    expect(loadGame()!.players[0].isDrunk).toBe(true);
+    const game2 = loadGame()!;
+    expect(game2.players[0].isDrunk).toBe(true);
+    // The note and the auto-placed reminder coexist (not a revert of #199).
+    expect(game2.reminders).toHaveLength(1);
+    expect(game2.reminders[0]).toMatchObject({ characterId: "drunk" });
   });
 
   it("doesn't show the Drunk note for a seat that really is the stand-in character", async () => {
@@ -1513,6 +1517,31 @@ describe("Drunk seat display (stand-in identity, issue #186)", () => {
     expect(
       within(seat1).queryByText(/actually the Drunk/i),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows '(actually the Drunk)' in the setup seat list too, before every seat is filled, matching the Lunatic note", async () => {
+    const user = userEvent.setup();
+    const washerwoman = getCharacter("washerwoman")!;
+    const game = createGame({
+      scriptId: "tb",
+      scriptName: "Trouble Brewing",
+      playerCount: 2,
+      selectedCharacters: [getCharacter("drunk")!, getCharacter("chef")!],
+      standIn: washerwoman,
+      extraCopies: {},
+    });
+    render(<GrimoireSetup game={game} />);
+
+    await selectOption(
+      user,
+      screen.getByLabelText("Assign seat 1 manually"),
+      "Washerwoman",
+    );
+
+    const seat1 = screen.getByLabelText("Seat 1 name").closest("li")!;
+    expect(
+      within(seat1).getByText("(actually the Drunk)"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -2864,11 +2893,31 @@ describe("the first visible grimoire (issue #12)", () => {
     // already on-token), and the custom Select's closed trigger itself
     // displays the currently-selected option's text too — so text matches
     // inside a combobox trigger (or a still-open listbox's <option>-role
-    // items) must be filtered out to stay unambiguous.
+    // items) must be filtered out to stay unambiguous. Each seat's own
+    // token menu — a native <details>, closed by default — also repeats
+    // the character's name in its always-visible character-detail header
+    // (issue #250): that header isn't itself a disclosure, but it's nested
+    // inside the closed menu, so a closed native <details>'s non-summary
+    // content is invisible right along with it. Its <summary> (the token
+    // itself) stays visible regardless, so walk up looking for whichever
+    // comes first.
+    const hiddenInClosedDetails = (el: Element) => {
+      for (let node: Element | null = el; node; node = node.parentElement) {
+        if (node.tagName === "SUMMARY") return false;
+        if (node.tagName === "DETAILS" && !node.hasAttribute("open")) {
+          return true;
+        }
+      }
+      return false;
+    };
     const named = (text: string) => {
       const matches = within(circle)
         .getAllByText(text)
-        .filter((el) => !el.closest("[role='combobox'], [role='option']"));
+        .filter(
+          (el) =>
+            !el.closest("[role='combobox'], [role='option']") &&
+            !hiddenInClosedDetails(el),
+        );
       expect(matches).toHaveLength(1);
       return matches[0];
     };
@@ -3697,8 +3746,8 @@ describe("automatic Drunk reminder token (issue #186)", () => {
     const circle = screen.getByRole("region", { name: "Grimoire circle" });
     expect(within(circle).getByText("Drunk")).toBeInTheDocument();
     expect(
-      within(circle).queryByText(/actually the Drunk/i),
-    ).not.toBeInTheDocument();
+      within(circle).getByText(/actually the Drunk/i),
+    ).toBeInTheDocument();
   });
 
   // Copilot review finding on this PR: withoutDrunkStandInReminder used to

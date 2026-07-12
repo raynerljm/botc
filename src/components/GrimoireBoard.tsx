@@ -461,8 +461,12 @@ export function GrimoireBoard({
   } | null>(null);
   const exitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [infoTokenShowing, setInfoTokenShowing] = useState<{
-    text: string;
+    text?: string;
     characterIds: string[];
+    // Set only for a player's own "Show token" (issue #250) — the info
+    // token library's cards never carry one, since their text is the
+    // reveal phrase itself, not a specific character's ability.
+    ability?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -763,6 +767,7 @@ export function GrimoireBoard({
     return (
       <InfoTokenShowMode
         text={infoTokenShowing.text}
+        ability={infoTokenShowing.ability}
         characters={infoTokenShowing.characterIds
           .map((id) => characterById.get(id))
           .filter(
@@ -1072,6 +1077,9 @@ export function GrimoireBoard({
                         <span className={styles.srOnly}> (dead)</span>
                       )}
                     </span>
+                    {isHiddenDrunk && (
+                      <span className={styles.note}>(actually the Drunk)</span>
+                    )}
                     {isHiddenLunatic && (
                       <span className={styles.note}>
                         (actually the Lunatic)
@@ -1109,80 +1117,83 @@ export function GrimoireBoard({
                   </summary>
 
                   <div className={styles.menuBody}>
-                    <label
-                      className={styles.field}
-                      htmlFor={`token-name-${player.id}`}
-                    >
-                      <span className={styles.srOnly}>Seat {player.seat} </span>
-                      Player name
-                      <input
-                        id={`token-name-${player.id}`}
-                        className={styles.textInput}
-                        type="text"
-                        value={player.name}
-                        onChange={(event) =>
-                          onRename(player.id, event.target.value)
-                        }
-                        onBlur={() => onRenameCommit(player.id)}
-                      />
-                    </label>
-
-                    <Button onClick={() => onToggleDead(player.id)}>
-                      {player.dead ? "Mark alive" : "Mark dead"}
-                    </Button>
-
-                    <label
-                      className={styles.field}
-                      htmlFor={`swap-character-${player.id}`}
-                    >
-                      Swap character
-                      <Select
-                        id={`swap-character-${player.id}`}
-                        className={styles.select}
-                        value={player.characterId ?? ""}
-                        onChange={(next) => onSwapCharacter(player.id, next)}
-                        entries={swapOptionsForPlayer.map((group) => ({
-                          label: teamNames[group.team],
-                          options: group.characters.map((c) => ({
-                            value: c.id,
-                            label: c.name,
-                          })),
-                        }))}
-                      />
-                    </label>
-
-                    {/* Bounds check against `index`/`total` (position in
-                        seat-sorted order), not `player.seat` directly —
-                        seat numbers can have gaps after a mid-game removal
-                        (removePlayer never renumbers survivors), so seat
-                        1/N isn't reliably first/last once that's happened. */}
-                    <div className={styles.seatControls}>
-                      <Button
-                        disabled={index === 0}
-                        onClick={() => onReorderSeat(player.id, "earlier")}
-                      >
-                        Move seat earlier
-                      </Button>
-                      <Button
-                        disabled={index === total - 1}
-                        onClick={() => onReorderSeat(player.id, "later")}
-                      >
-                        Move seat later
-                      </Button>
-                    </div>
-
-                    {isHiddenDrunk && (
-                      <Button onClick={() => onRevealDrunk(player.id)}>
-                        Reveal Drunk
-                      </Button>
+                    {character && (
+                      <div className={styles.detail}>
+                        <div className={styles.detailBody}>
+                          <p className={styles.detailName}>
+                            {character.name}
+                          </p>
+                          <p className={styles.detailAbility}>
+                            {character.ability}
+                          </p>
+                          {official ? (
+                            <a
+                              href={wikiUrl(character)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.detailLink}
+                            >
+                              Official wiki page
+                            </a>
+                          ) : (
+                            almanacUrl &&
+                            isHttpUrl(almanacUrl) && (
+                              <a
+                                href={almanacUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={styles.detailLink}
+                              >
+                                Script almanac
+                              </a>
+                            )
+                          )}
+                        </div>
+                      </div>
                     )}
 
-                    <Button
-                      variant="destructive"
-                      onClick={() => onRemovePlayer(player.id)}
-                    >
-                      Remove player
-                    </Button>
+                    {actsAsCapable && (
+                      <label
+                        className={styles.field}
+                        htmlFor={`token-acts-as-${player.id}`}
+                      >
+                        Acts as
+                        <Select
+                          id={`token-acts-as-${player.id}`}
+                          className={styles.select}
+                          value={player.actsAs ?? ""}
+                          onChange={(next) =>
+                            onSetActsAs(player.id, next || null)
+                          }
+                          entries={[
+                            { value: "", label: "Not acting as anyone" },
+                            // Same "keep an orphaned/off-spec value
+                            // selectable/visible" safeguard as the Claim
+                            // select elsewhere in this menu — an actsAs
+                            // target recorded before the script last
+                            // changed, or before this team filter existed,
+                            // can reference a character no longer offered
+                            // by the groups below.
+                            ...(actsAsOffSpecId
+                              ? [
+                                  {
+                                    value: actsAsOffSpecId,
+                                    label:
+                                      actsAsTarget?.name ?? actsAsOffSpecId,
+                                  },
+                                ]
+                              : []),
+                            ...actsAsGroups.map((group) => ({
+                              label: teamNames[group.team],
+                              options: group.characters.map((c) => ({
+                                value: c.id,
+                                label: c.name,
+                              })),
+                            })),
+                          ]}
+                        />
+                      </label>
+                    )}
 
                     {!activeOverlay && !placingReminderId && (
                       <Button
@@ -1203,6 +1214,22 @@ export function GrimoireBoard({
                         Add reminder
                       </Button>
                     )}
+
+                    {player.dead && (
+                      <Button
+                        className={styles.ghostVote}
+                        aria-pressed={player.ghostVoteSpent}
+                        onClick={() => onToggleGhostVote(player.id)}
+                      >
+                        {player.ghostVoteSpent
+                          ? "Used ghost vote"
+                          : "Unused ghost vote"}
+                      </Button>
+                    )}
+
+                    <Button onClick={() => onToggleDead(player.id)}>
+                      {player.dead ? "Mark alive" : "Mark dead"}
+                    </Button>
 
                     <label
                       className={styles.field}
@@ -1234,100 +1261,98 @@ export function GrimoireBoard({
                       />
                     </label>
 
-                    {actsAsCapable && (
-                      <label
-                        className={styles.field}
-                        htmlFor={`token-acts-as-${player.id}`}
+                    {character && (
+                      <Button
+                        onClick={() => {
+                          // Show mode replaces the whole board (see the
+                          // early return above) — same drag/menu cleanup as
+                          // Hide grimoire/Re-circle/the info token library's
+                          // own onShow, so a still-captured pointer or a
+                          // stale openMenu doesn't survive the remount
+                          // (issue #70 code review).
+                          cancelActiveDrag();
+                          setInfoTokenShowing({
+                            characterIds: [character.id],
+                            ability: character.ability,
+                          });
+                        }}
                       >
-                        Acts as
-                        <Select
-                          id={`token-acts-as-${player.id}`}
-                          className={styles.select}
-                          value={player.actsAs ?? ""}
-                          onChange={(next) =>
-                            onSetActsAs(player.id, next || null)
-                          }
-                          entries={[
-                            { value: "", label: "Not acting as anyone" },
-                            // Same "keep an orphaned/off-spec value
-                            // selectable/visible" safeguard as the Claim
-                            // select above — an actsAs target recorded
-                            // before the script last changed, or before this
-                            // team filter existed, can reference a character
-                            // no longer offered by the groups below.
-                            ...(actsAsOffSpecId
-                              ? [
-                                  {
-                                    value: actsAsOffSpecId,
-                                    label:
-                                      actsAsTarget?.name ?? actsAsOffSpecId,
-                                  },
-                                ]
-                              : []),
-                            ...actsAsGroups.map((group) => ({
-                              label: teamNames[group.team],
-                              options: group.characters.map((c) => ({
-                                value: c.id,
-                                label: c.name,
-                              })),
-                            })),
-                          ]}
-                        />
-                      </label>
+                        Show token
+                      </Button>
                     )}
 
-                    {character && (
-                      <details className={styles.detail}>
-                        <summary className={styles.detailSummary}>
-                          Character detail
-                          <span
-                            className={styles.detailChevron}
-                            aria-hidden="true"
-                          >
-                            ▸
-                          </span>
-                        </summary>
-                        <div className={styles.detailBody}>
-                          <p className={styles.detailAbility}>
-                            {character.ability}
-                          </p>
-                          {official ? (
-                            <a
-                              href={wikiUrl(character)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={styles.detailLink}
-                            >
-                              Official wiki page
-                            </a>
-                          ) : (
-                            almanacUrl &&
-                            isHttpUrl(almanacUrl) && (
-                              <a
-                                href={almanacUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className={styles.detailLink}
-                              >
-                                Script almanac
-                              </a>
-                            )
-                          )}
-                        </div>
-                      </details>
+                    <label
+                      className={styles.field}
+                      htmlFor={`swap-character-${player.id}`}
+                    >
+                      Swap character
+                      <Select
+                        id={`swap-character-${player.id}`}
+                        className={styles.select}
+                        value={player.characterId ?? ""}
+                        onChange={(next) => onSwapCharacter(player.id, next)}
+                        entries={swapOptionsForPlayer.map((group) => ({
+                          label: teamNames[group.team],
+                          options: group.characters.map((c) => ({
+                            value: c.id,
+                            label: c.name,
+                          })),
+                        }))}
+                      />
+                    </label>
+
+                    {isHiddenDrunk && (
+                      <Button onClick={() => onRevealDrunk(player.id)}>
+                        Reveal Drunk
+                      </Button>
                     )}
+
+                    {/* Bounds check against `index`/`total` (position in
+                        seat-sorted order), not `player.seat` directly —
+                        seat numbers can have gaps after a mid-game removal
+                        (removePlayer never renumbers survivors), so seat
+                        1/N isn't reliably first/last once that's happened. */}
+                    <div className={styles.seatControls}>
+                      <Button
+                        disabled={index === 0}
+                        onClick={() => onReorderSeat(player.id, "earlier")}
+                      >
+                        Move seat earlier
+                      </Button>
+                      <Button
+                        disabled={index === total - 1}
+                        onClick={() => onReorderSeat(player.id, "later")}
+                      >
+                        Move seat later
+                      </Button>
+                    </div>
+
+                    <label
+                      className={styles.field}
+                      htmlFor={`token-name-${player.id}`}
+                    >
+                      <span className={styles.srOnly}>Seat {player.seat} </span>
+                      Player name
+                      <input
+                        id={`token-name-${player.id}`}
+                        className={styles.textInput}
+                        type="text"
+                        value={player.name}
+                        onChange={(event) =>
+                          onRename(player.id, event.target.value)
+                        }
+                        onBlur={() => onRenameCommit(player.id)}
+                      />
+                    </label>
+
+                    <Button
+                      variant="destructive"
+                      onClick={() => onRemovePlayer(player.id)}
+                    >
+                      Remove player
+                    </Button>
                   </div>
                 </details>
-
-                {player.dead && (
-                  <Button
-                    className={styles.ghostVote}
-                    aria-pressed={player.ghostVoteSpent}
-                    onClick={() => onToggleGhostVote(player.id)}
-                  >
-                    Ghost vote: {player.ghostVoteSpent ? "spent" : "available"}
-                  </Button>
-                )}
               </div>
             );
           })}
