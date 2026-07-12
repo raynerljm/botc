@@ -8,12 +8,17 @@ export interface InfoTokenTemplate {
   // "The Damsel is in play" is noise outside a Damsel game) — omitted for
   // cards relevant to every script (issue #161, self-QA item 9).
   characterId?: string;
+  // Whether this card needs a character attached before its reveal (issue
+  // #246) — only "You are" genuinely does; every other card goes straight
+  // to the reveal. Omitted (falsy) elsewhere rather than spelled out as
+  // `false` on every entry.
+  attachesCharacter?: boolean;
 }
 
 export const STANDARD_INFO_TOKENS: InfoTokenTemplate[] = [
   { id: "these-are-your-minions", text: "These are your minions" },
   { id: "this-is-the-demon", text: "This is the Demon" },
-  { id: "you-are", text: "You are" },
+  { id: "you-are", text: "You are", attachesCharacter: true },
   { id: "did-you-nominate-today", text: "Did you nominate today?" },
   { id: "make-your-choice", text: "Make your choice" },
   { id: "use-your-ability", text: "Use your ability?" },

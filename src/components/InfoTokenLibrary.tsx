@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 
 import { groupByTeam, teamNames, type Character } from "@/lib/characters";
-import { visibleInfoTokens } from "@/lib/infoTokens";
+import { visibleInfoTokens, type InfoTokenTemplate } from "@/lib/infoTokens";
 
 import { Button } from "./Button";
 import { DialogOverlay } from "./DialogOverlay";
@@ -44,9 +44,21 @@ export function InfoTokenLibrary({
   // unreachable behind the new backdrop (issue #122).
   useDialogDismiss(dialogRef, cancelButtonRef, onCancel);
 
-  function chooseText(text: string) {
-    setSelectedCharacterIds([]);
-    setChosenText(text);
+  // Only cards that need a character attached (currently just "You are")
+  // stop on the attach step; everything else — including custom free text,
+  // which has no template and so nothing to attach — goes straight to the
+  // reveal (issue #246).
+  function chooseTemplate(template: InfoTokenTemplate) {
+    if (template.attachesCharacter) {
+      setSelectedCharacterIds([]);
+      setChosenText(template.text);
+    } else {
+      onShow({ text: template.text, characterIds: [] });
+    }
+  }
+
+  function chooseCustomText(text: string) {
+    onShow({ text, characterIds: [] });
   }
 
   function toggleCharacter(characterId: string) {
@@ -85,7 +97,7 @@ export function InfoTokenLibrary({
                 <button
                   key={template.id}
                   type="button"
-                  onClick={() => chooseText(template.text)}
+                  onClick={() => chooseTemplate(template)}
                 >
                   {template.text}
                 </button>
@@ -95,7 +107,7 @@ export function InfoTokenLibrary({
             <PickerCustomTextForm
               label="Custom info token text"
               submitLabel="Use this text"
-              onSubmit={chooseText}
+              onSubmit={chooseCustomText}
             />
           </>
         ) : (
