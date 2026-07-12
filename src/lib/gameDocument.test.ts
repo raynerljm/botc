@@ -298,76 +298,106 @@ describe("nextPadReminderPosition (issue #71)", () => {
   });
 });
 
-describe("anchoredReminderPosition (issue #71)", () => {
-  it("places the first reminder below the seat, clear of its token+name block", () => {
-    const position = anchoredReminderPosition({ x: 50, y: 50 }, 0);
-    expect(position.x).toBe(50);
-    expect(position.y).toBeGreaterThan(50 + 8);
+describe("anchoredReminderPosition (issue #251)", () => {
+  // (30, 50) sits directly left of the circle's centre (50, 50), so "toward
+  // the centre" is purely rightward here — a clean seam for asserting the
+  // line/step/cap behaviour without every assertion also fighting a diagonal.
+  const leftOfCentre = { x: 30, y: 50 };
+
+  it("places the first reminder on the line from the seat toward the circle's centre", () => {
+    const position = anchoredReminderPosition(leftOfCentre, 0);
+    // On the anchor->centre ray: displacement is a positive multiple of
+    // (centre - anchor), i.e. the cross product is ~0 and the dot product
+    // is positive.
+    const toCentre = { x: 50 - leftOfCentre.x, y: 50 - leftOfCentre.y };
+    const displacement = {
+      x: position.x - leftOfCentre.x,
+      y: position.y - leftOfCentre.y,
+    };
+    const cross =
+      toCentre.x * displacement.y - toCentre.y * displacement.x;
+    const dot = toCentre.x * displacement.x + toCentre.y * displacement.y;
+    expect(Math.abs(cross)).toBeLessThan(1e-6);
+    expect(dot).toBeGreaterThan(0);
   });
 
-  it("stacks a second reminder on the same seat further down, not on top of the first", () => {
-    const first = anchoredReminderPosition({ x: 50, y: 50 }, 0);
-    const second = anchoredReminderPosition({ x: 50, y: 50 }, 1);
-    expect(second.y).toBeGreaterThan(first.y);
-  });
-
-  it("clamps within the pad's bounds for a seat near the bottom edge", () => {
-    const position = anchoredReminderPosition({ x: 50, y: 94 }, 0);
-    expect(position.y).toBeLessThanOrEqual(96);
-  });
-
-  it("separates siblings by x when a near-bottom seat clamps every sibling's y to the same edge (code review finding)", () => {
-    const first = anchoredReminderPosition({ x: 50, y: 94 }, 0);
-    const second = anchoredReminderPosition({ x: 50, y: 94 }, 1);
-    expect(first.y).toBe(96);
-    expect(second.y).toBe(96);
-    expect(second.x).not.toBe(first.x);
-  });
-
-  it("recovers the vertical clearance a bottom-of-circle seat's clamp ate by pushing the chip sideways instead, so it clears the token rather than landing on it (issue #117)", () => {
-    const anchor = { x: 50, y: 94 };
-    const position = anchoredReminderPosition(anchor, 0);
-    const distanceFromAnchor = Math.hypot(
-      position.x - anchor.x,
-      position.y - anchor.y,
+  it("steps a second reminder further along that same line than the first, not on top of it", () => {
+    const first = anchoredReminderPosition(leftOfCentre, 0);
+    const second = anchoredReminderPosition(leftOfCentre, 1);
+    const firstDistance = Math.hypot(
+      first.x - leftOfCentre.x,
+      first.y - leftOfCentre.y,
     );
-    // A non-edge seat gets 12pts of clearance below it (the first test
-    // above); an edge seat whose y clamps must still end up this far from
-    // the token overall, just angled sideways instead of straight down.
-    expect(distanceFromAnchor).toBeGreaterThanOrEqual(11.99);
-  });
-
-  it("fans a second sibling further sideways than the first once y has clamped, preserving the stacking order (issue #117)", () => {
-    const anchor = { x: 50, y: 94 };
-    const first = anchoredReminderPosition(anchor, 0);
-    const second = anchoredReminderPosition(anchor, 1);
-    const firstDistance = Math.hypot(first.x - anchor.x, first.y - anchor.y);
-    const secondDistance = Math.hypot(second.x - anchor.x, second.y - anchor.y);
+    const secondDistance = Math.hypot(
+      second.x - leftOfCentre.x,
+      second.y - leftOfCentre.y,
+    );
     expect(secondDistance).toBeGreaterThan(firstDistance);
   });
 
-  it("pushes a clamped chip toward the pad's horizontal centre, not further off the edge, for a bottom-corner seat (issue #117)", () => {
-    const anchor = { x: 94, y: 94 };
-    const position = anchoredReminderPosition(anchor, 0);
-    expect(position.x).toBeLessThan(anchor.x);
-    expect(position.x).toBeGreaterThanOrEqual(4);
+  it("keeps a bottom-of-circle seat's reminder above the seat, clear of the bottom sheet's occluded band (ADR 0004)", () => {
+    const bottomSeat = { x: 50, y: 90 };
+    const position = anchoredReminderPosition(bottomSeat, 0);
+    expect(position.y).toBeLessThan(bottomSeat.y);
   });
 
-  it("keeps several siblings on a clamped seat distinct instead of collapsing them onto the same point (code review finding)", () => {
-    const anchor = { x: 50, y: 94 };
-    const positions = Array.from({ length: 6 }, (_, i) =>
-      anchoredReminderPosition(anchor, i),
+  it("caps how far a seat's reminders reach toward the centre instead of letting them converge on it", () => {
+    const far = anchoredReminderPosition(leftOfCentre, 40);
+    const distanceFromCentre = Math.hypot(far.x - 50, far.y - 50);
+    // The anchor itself is 20 units from centre; a sibling that had
+    // marched all the way in would land within a couple of units of it.
+    expect(distanceFromCentre).toBeGreaterThan(5);
+  });
+
+  it("curves later siblings around the capped point instead of piling them on the same spot", () => {
+    // 40, not 10: a fixed arc step that evenly divides 360° wraps back to an
+    // angle it's already used well before 40 overflow siblings (Copilot
+    // review finding on an earlier version of this function) — a short run
+    // wouldn't have caught it.
+    const positions = Array.from({ length: 40 }, (_, i) =>
+      anchoredReminderPosition(leftOfCentre, i),
     );
-    const xs = new Set(positions.map((p) => p.x));
-    expect(xs.size).toBe(positions.length);
+    const key = (p: { x: number; y: number }) =>
+      `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
+    const distinct = new Set(positions.map(key));
+    expect(distinct.size).toBe(positions.length);
   });
 
-  it("still recovers clearance for an anchor outside the pad's own bounds, e.g. a legacy or hand-edited position (code review finding)", () => {
+  it("keeps neighbouring seats' first reminders from crowding together even at the maximum 20-player count", () => {
+    // Every seat's line points at the same centre, so more seats sharing
+    // one radius narrows the gap between neighbours' reminders as they all
+    // step inward — this locks in a floor for that gap so a larger base
+    // offset doesn't silently shrink it to where reminders touch.
+    const seatCount = 20;
+    const reminders = Array.from({ length: seatCount }, (_, i) =>
+      anchoredReminderPosition(circlePosition(i, seatCount), 0),
+    );
+    let minGap = Infinity;
+    for (let i = 0; i < seatCount; i++) {
+      const next = reminders[(i + 1) % seatCount];
+      const gap = Math.hypot(reminders[i].x - next.x, reminders[i].y - next.y);
+      minGap = Math.min(minGap, gap);
+    }
+    expect(minGap).toBeGreaterThan(6);
+  });
+
+  it("stays within the pad's bounds for a seat near the edge", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 94 }, 0);
+    expect(position.y).toBeLessThanOrEqual(96);
+    expect(position.y).toBeGreaterThanOrEqual(4);
+  });
+
+  it("treats an anchor outside the pad's own bounds as clamped first, e.g. a legacy or hand-edited position (code review finding)", () => {
     const position = anchoredReminderPosition({ x: 50, y: 150 }, 0);
-    // Treated as clamped to y=96 before computing clearance, same as any
-    // other bottom-of-circle seat — not silently zeroed by a negative
-    // "clearance" from the out-of-range input.
-    expect(position.x).not.toBe(50);
+    expect(position.y).toBeLessThanOrEqual(96);
+    expect(position.y).toBeGreaterThanOrEqual(4);
+    expect(Number.isFinite(position.x)).toBe(true);
+  });
+
+  it("falls back to straight down for a seat parked exactly on the centre, where 'toward the centre' is undefined", () => {
+    const position = anchoredReminderPosition({ x: 50, y: 50 }, 0);
+    expect(position.x).toBe(50);
+    expect(position.y).toBeGreaterThan(50);
   });
 });
 
