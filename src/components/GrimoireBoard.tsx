@@ -66,6 +66,7 @@ export interface GrimoireBoardProps {
   onRenameCommit: (playerId: string) => void;
   onMove: (playerId: string, position: PlayerPosition) => void;
   onReCircle: () => void;
+  onReorderSeat: (playerId: string, direction: "earlier" | "later") => void;
   // Current orientation of the whole grimoire circle, in degrees clockwise
   // from its default layout (issue #192). Applied to every token's position
   // at render time only — never baked into a stored position.
@@ -220,6 +221,7 @@ export function GrimoireBoard({
   onRenameCommit,
   onMove,
   onReCircle,
+  onReorderSeat,
   rotation,
   onRotate,
   onToggleDead,
@@ -949,7 +951,7 @@ export function GrimoireBoard({
         style={{ "--token-size": `${tokenSize}rem` } as React.CSSProperties}
       >
         {!hidden &&
-          sorted.map((player) => {
+          sorted.map((player, index) => {
             const character = player.characterId
               ? characterById.get(player.characterId)
               : undefined;
@@ -1145,6 +1147,26 @@ export function GrimoireBoard({
                         }))}
                       />
                     </label>
+
+                    {/* Bounds check against `index`/`total` (position in
+                        seat-sorted order), not `player.seat` directly —
+                        seat numbers can have gaps after a mid-game removal
+                        (removePlayer never renumbers survivors), so seat
+                        1/N isn't reliably first/last once that's happened. */}
+                    <div className={styles.seatControls}>
+                      <Button
+                        disabled={index === 0}
+                        onClick={() => onReorderSeat(player.id, "earlier")}
+                      >
+                        Move seat earlier
+                      </Button>
+                      <Button
+                        disabled={index === total - 1}
+                        onClick={() => onReorderSeat(player.id, "later")}
+                      >
+                        Move seat later
+                      </Button>
+                    </div>
 
                     {isHiddenDrunk && (
                       <Button onClick={() => onRevealDrunk(player.id)}>

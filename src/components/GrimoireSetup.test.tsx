@@ -3028,7 +3028,7 @@ describe("share the script via QR from the grimoire (issue #22)", () => {
   });
 });
 
-describe("seat reordering by drag (issue #188)", () => {
+describe("seat reordering (issue #249)", () => {
   function mockBoardRect(circle: HTMLElement) {
     const board = circle.querySelector("[data-board]") as HTMLElement;
     vi.spyOn(board, "getBoundingClientRect").mockReturnValue({
@@ -3044,8 +3044,8 @@ describe("seat reordering by drag (issue #188)", () => {
     });
   }
 
-  it("renumbers every seat to match the new clockwise order once a dragged token is dropped, with no 'Move seat' buttons left to do it by hand", async () => {
-    const { user, circle } = await completeSetup(4, [
+  it("dragging a token repositions only that token — no seat number changes", async () => {
+    const { circle } = await completeSetup(4, [
       getCharacter("washerwoman")!,
       getCharacter("imp")!,
       getCharacter("empath")!,
@@ -3055,10 +3055,10 @@ describe("seat reordering by drag (issue #188)", () => {
 
     const wraps = circle.querySelectorAll("[data-player-id]");
     const seat1Wrap = wraps[0] as HTMLElement; // top
-    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!; // right
     const seat1Id = seat1Wrap.dataset.playerId!;
-    const seat3Id = (wraps[2] as HTMLElement).dataset.playerId!; // bottom
-    const seat4Id = (wraps[3] as HTMLElement).dataset.playerId!; // left
+    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!;
+    const seat3Id = (wraps[2] as HTMLElement).dataset.playerId!;
+    const seat4Id = (wraps[3] as HTMLElement).dataset.playerId!;
 
     // Drag seat 1 (top, 50%/5%) clockwise past seat 2 (right, 95%/50%) to
     // land between it and seat 3 (bottom, 50%/95%), i.e. 72.5%/72.5%.
@@ -3078,17 +3078,100 @@ describe("seat reordering by drag (issue #188)", () => {
 
     const reloaded = loadGame() as GameDocument;
     const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
-    expect(seatById.get(seat2Id)).toBe(1);
-    expect(seatById.get(seat1Id)).toBe(2);
+    // Every seat keeps its own number — only the dragged token's on-screen
+    // position changed.
+    expect(seatById.get(seat1Id)).toBe(1);
+    expect(seatById.get(seat2Id)).toBe(2);
     expect(seatById.get(seat3Id)).toBe(3);
     expect(seatById.get(seat4Id)).toBe(4);
-    // Contiguous and unique.
-    expect([...seatById.values()].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+    const movedPlayer = reloaded.players.find((p) => p.id === seat1Id)!;
+    expect(movedPlayer.position).toEqual({ x: 72.5, y: 72.5 });
+  });
+
+  it("reorders a seat earlier/later from its token menu's explicit control", async () => {
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+    ]);
+
+    const wraps = circle.querySelectorAll("[data-player-id]");
+    const seat2Wrap = wraps[1] as HTMLElement;
+    const seat1Id = (wraps[0] as HTMLElement).dataset.playerId!;
+    const seat2Id = seat2Wrap.dataset.playerId!;
+
+    await user.click(within(seat2Wrap).getByText("Player 2"));
+    await user.click(
+      within(seat2Wrap).getByRole("button", { name: /move seat earlier/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
+    expect(seatById.get(seat2Id)).toBe(1);
+    expect(seatById.get(seat1Id)).toBe(2);
+  });
+
+  it("reorders a seat later too, not just earlier", async () => {
+    const { user, circle } = await completeSetup(3, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+      getCharacter("empath")!,
+    ]);
+
+    const wraps = circle.querySelectorAll("[data-player-id]");
+    const seat1Wrap = wraps[0] as HTMLElement;
+    const seat1Id = seat1Wrap.dataset.playerId!;
+    const seat2Id = (wraps[1] as HTMLElement).dataset.playerId!;
 
     await user.click(within(seat1Wrap).getByText("Player 1"));
-    expect(
-      within(seat1Wrap).queryByRole("button", { name: /move seat/i }),
-    ).not.toBeInTheDocument();
+    await user.click(
+      within(seat1Wrap).getByRole("button", { name: /move seat later/i }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const seatById = new Map(reloaded.players.map((p) => [p.id, p.seat]));
+    expect(seatById.get(seat1Id)).toBe(2);
+    expect(seatById.get(seat2Id)).toBe(1);
+  });
+
+  it("clamps a dragged token's position to the pad's bounds before persisting it, even under a non-90-degree rotation", async () => {
+    const { user, circle } = await completeSetup(2, [
+      getCharacter("washerwoman")!,
+      getCharacter("imp")!,
+    ]);
+    mockBoardRect(circle);
+
+    await openBoardMenu(user);
+    await user.click(screen.getByRole("button", { name: "Rotate right" }));
+
+    const seat1Wrap = circle.querySelector(
+      "[data-player-id]",
+    ) as HTMLElement;
+    const seat1Id = seat1Wrap.dataset.playerId!;
+    const summary = seat1Wrap.querySelector("summary") as HTMLElement;
+
+    // Drag far past the corner — under a 45-degree rotation, unrotating a
+    // clamped-at-the-corner drop point lands well outside [4,96] unless the
+    // consumer re-clamps it before persisting (issue #167 class bug).
+    fireEvent(
+      summary,
+      pointerEvent("pointerdown", { pointerId: 1, clientX: 200, clientY: 200 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointermove", { pointerId: 1, clientX: 384, clientY: 384 }),
+    );
+    fireEvent(
+      summary,
+      pointerEvent("pointerup", { pointerId: 1, clientX: 384, clientY: 384 }),
+    );
+
+    const reloaded = loadGame() as GameDocument;
+    const movedPlayer = reloaded.players.find((p) => p.id === seat1Id)!;
+    expect(movedPlayer.position!.x).toBeGreaterThanOrEqual(4);
+    expect(movedPlayer.position!.x).toBeLessThanOrEqual(96);
+    expect(movedPlayer.position!.y).toBeGreaterThanOrEqual(4);
+    expect(movedPlayer.position!.y).toBeLessThanOrEqual(96);
   });
 });
 
