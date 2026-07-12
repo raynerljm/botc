@@ -157,7 +157,19 @@ export function Select({
         data-value={option.value}
         className={styles.option}
         onMouseEnter={() => setActiveValue(option.value)}
-        onClick={() => commit(option.value)}
+        // preventDefault (issue #259): every caller renders this trigger
+        // inside a <label> (e.g. `<label>Character<Select .../></label>`),
+        // and this option is a plain, non-interactive div — so the browser's
+        // native label-click-forwarding (an unlabeled click's default action)
+        // re-dispatches a second click straight at the label's implicit
+        // control, this trigger button, once commit() below has already
+        // closed the list. That second click reads the freshly-closed
+        // `open === false` and reopens it. Suppressing the default action
+        // here stops that forwarded click from ever firing.
+        onClick={(event) => {
+          event.preventDefault();
+          commit(option.value);
+        }}
       >
         {option.label}
       </div>
