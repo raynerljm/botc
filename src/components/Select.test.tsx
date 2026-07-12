@@ -70,14 +70,17 @@ describe("Select", () => {
   });
 
   it("closes the popup on option click even when rendered inside a <label>, not just in isolation (issue #259)", async () => {
-    // Every real caller renders this trigger inside a wrapping <label>
+    // Most real callers render this trigger inside a wrapping <label>
     // (e.g. `<label>Character<Select .../></label>`) — the option div isn't
     // itself an interactive element, so a real browser's default action for
     // an unhandled click inside a label is to re-dispatch a second click at
     // the label's implicit control (this trigger button). That forwarded
     // click used to land after commit() had already set open=false, and
     // read the fresh state to reopen the list — reproduced only with the
-    // <label> wrapper present, not on a bare Select (the test above).
+    // <label> wrapper present, not on a bare Select (the test above). A
+    // handful of callers associate a <label> by htmlFor/id instead of
+    // wrapping (e.g. BagBuilder.tsx's stand-in selects) and were never
+    // affected, since the click never bubbles through the label there.
     const user = userEvent.setup();
     render(
       <label>
