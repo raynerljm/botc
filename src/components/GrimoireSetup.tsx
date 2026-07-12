@@ -1655,6 +1655,11 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
                           {player.travellerAlignment}
                         </span>
                       )}
+                      {player.isDrunk && (
+                        <span className={styles.drunkNote}>
+                          (actually the Drunk)
+                        </span>
+                      )}
                       {player.isLunatic && (
                         <span className={styles.drunkNote}>
                           (actually the Lunatic)
