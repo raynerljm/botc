@@ -49,7 +49,7 @@ import {
   charEntryId,
   currentNightNumber,
 } from "@/lib/nightList";
-import { buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
+import { BELIEVED_STEP_ID_PREFIX, buildSetupWalkthroughSteps } from "@/lib/setupWalkthrough";
 
 import { Button } from "./Button";
 import { CharacterToken } from "./CharacterToken";
@@ -698,6 +698,22 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
     // charEntryId's below (Copilot review finding). Harmless when no
     // acts-as entry exists.
     const entryIds = [charEntryId(playerId), actsAsEntryId(playerId)];
+    // A believed-character step's whole identity — its kind, candidate team,
+    // even which curated table it comes from — is a function of the seat's
+    // current characterId (issue #254), yet it keeps the same id across a
+    // swap (buildSetupWalkthroughSteps regenerates it fresh every render).
+    // Any swap here, whether it ends the Drunk's disguise entirely or just
+    // changes which character within it (reassignStandIn), invalidates
+    // whatever that step last answered — left alone, the freshly-generated
+    // step (now a different character's picker) would inherit a stale
+    // "answered" status and hide behind Redo, while its old reminders
+    // (describing a belief that no longer holds) linger on the board (code
+    // review finding).
+    const believedStepId = `${BELIEVED_STEP_ID_PREFIX}${playerId}`;
+    const isStaleBelievedReminder = (r: ReminderToken) =>
+      r.id.startsWith(`setupwalkthrough:${believedStepId}:`);
+    const setupWalkthroughSteps = { ...game.setupWalkthroughSteps };
+    delete setupWalkthroughSteps[believedStepId];
     update({
       ...game,
       players: updatePlayer(playerId, {
@@ -710,10 +726,12 @@ export function GrimoireSetup({ game: initialGame }: GrimoireSetupProps) {
       // reveal, or a storyteller correction to some other character), it's
       // either redundant (the token now reads "Drunk" itself) or wrong (the
       // seat is a different character entirely).
-      reminders:
+      reminders: (
         endDisguise && wasDrunk
           ? withoutDrunkStandInReminder(game.reminders, playerId)
-          : game.reminders,
+          : game.reminders
+      ).filter((r) => !isStaleBelievedReminder(r)),
+      setupWalkthroughSteps,
       characterPool: withCharacterInPool(game.characterPool, character),
       // The night-list entry id doesn't encode which character it was for
       // (issue #128), so a mid-night swap would otherwise inherit whatever
